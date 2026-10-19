@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/Solution Files/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/Tests/" />
+  <Project Path="src/P4ServerManager.Cli/P4ServerManager.Cli.csproj" />
+  <Project Path="src/P4ServerManager.Daemon.UI/P4ServerManager.Daemon.UI.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="src/P4ServerManager.Daemon/P4ServerManager.Daemon.csproj" />
+</Solution>
