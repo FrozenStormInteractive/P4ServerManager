@@ -1,10 +1,11 @@
 // TSConfig for modules that run in Node.js environment via either transpilation or type-stripping.
 {
-  "extends": "@tsconfig/node24/tsconfig.json",
+  "extends": "@tsconfig/node26/tsconfig.json",
   "include": [
     "vite.config.*",
     "vitest.config.*",
     "cypress.config.*",
+    "nightwatch.conf.*",
     "playwright.config.*",
     "eslint.config.*"
   ],
@@ -13,10 +14,12 @@
     // Bundler mode provides a smoother developer experience.
     "module": "preserve",
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
 
     // Include Node.js types and avoid accidentally including other `@types/*` packages.
     "types": ["node"],
+
+    // Lets the configs import each other with their extension, as the native config loader of Vite expects.
+    "allowImportingTsExtensions": true,
 
     // Disable emitting output during `vue-tsc --build`, which is used for type-checking only.
     "noEmit": true,

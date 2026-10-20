@@ -1,23 +1,12 @@
-import { globalIgnores } from 'eslint/config'
-import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
-import pluginVue from 'eslint-plugin-vue'
+import vuetify from 'eslint-config-vuetify'
 import pluginOxlint from 'eslint-plugin-oxlint'
 
-// To allow more languages other than `ts` in `.vue` files, uncomment the following lines:
-// import { configureVueProject } from '@vue/eslint-config-typescript'
-// configureVueProject({ scriptLangs: ['ts', 'tsx'] })
-// More info at https://github.com/vuejs/eslint-config-typescript/#advanced-setup
-
-export default defineConfigWithVueTs(
+// eslint-config-vuetify already sets up Vue (vue-eslint-parser + eslint-plugin-vue), TypeScript
+// (typescript-eslint, scripts in .vue files limited to `lang="ts"`) and ignores what .gitignore lists.
+// The oxlint config goes last so it turns off the ESLint rules that oxlint already checks.
+export default vuetify(
   {
-    name: 'app/files-to-lint',
-    files: ['**/*.{vue,ts,mts,tsx}'],
+    ts: true,
   },
-
-  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
-
-  ...pluginVue.configs['flat/essential'],
-  vueTsConfigs.recommended,
-
-  ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
+  pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
 )

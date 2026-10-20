@@ -1,4 +1,4 @@
-# p4servermanager.client
+# P4ServerManager.Daemon.UI
 
 This template should help get you started developing with Vue 3 in Vite.
 
@@ -41,8 +41,16 @@ npm run dev
 npm run build
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+### Lint with [Oxlint](https://oxc.rs/docs/guide/usage/linter) and [ESLint](https://eslint.org/)
+
+Report the problems without changing the files:
 
 ```sh
 npm run lint
+```
+
+Apply the fixes:
+
+```sh
+npm run lint:fix
 ```

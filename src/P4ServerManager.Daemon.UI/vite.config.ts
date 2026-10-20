@@ -1,61 +1,52 @@
-import { fileURLToPath, URL } from 'node:url';
+import {fileURLToPath, URL} from 'node:url'
+import Vue from '@vitejs/plugin-vue'
+import Fonts from 'unplugin-fonts/vite'
+import {defineConfig} from 'vite'
+import Vuetify, {transformAssetUrls} from 'vite-plugin-vuetify'
 
-import { defineConfig } from 'vite';
-import plugin from '@vitejs/plugin-vue';
-import fs from 'fs';
-import path from 'path';
-import child_process from 'child_process';
-import { env } from 'process';
-
-const baseFolder =
-    env.APPDATA !== undefined && env.APPDATA !== ''
-        ? `${env.APPDATA}/ASP.NET/https`
-        : `${env.HOME}/.aspnet/https`;
-
-const certificateName = "p4servermanager.client";
-const certFilePath = path.join(baseFolder, `${certificateName}.pem`);
-const keyFilePath = path.join(baseFolder, `${certificateName}.key`);
-
-if (!fs.existsSync(baseFolder)) {
-    fs.mkdirSync(baseFolder, { recursive: true });
-}
-
-if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
-    if (0 !== child_process.spawnSync('dotnet', [
-        'dev-certs',
-        'https',
-        '--export-path',
-        certFilePath,
-        '--format',
-        'Pem',
-        '--no-password',
-    ], { stdio: 'inherit', }).status) {
-        throw new Error("Could not create certificate.");
-    }
-}
-
-const target = env.ASPNETCORE_HTTPS_PORT ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}` :
-    env.ASPNETCORE_URLS ? env.ASPNETCORE_URLS.split(';')[0] : 'https://localhost:7278';
+const serverUrl = process.env.SERVER_HTTP || process.env.SERVER_HTTPS || 'https://localhost:7145'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    plugins: [plugin()],
-    resolve: {
-        alias: {
-            '@': fileURLToPath(new URL('./src', import.meta.url))
-        }
-    },
-    server: {
-        proxy: {
-            '^/weatherforecast': {
-                target,
-                secure: false
-            }
+  plugins: [
+    Vue({
+      template: {transformAssetUrls},
+    }),
+    // https://github.com/vuetifyjs/vuetify-loader/tree/master/packages/vite-plugin#readme
+    Vuetify({
+      autoImport: true,
+      // The unit tests do not look at the styles: Vitest cannot load the ones built from the settings.
+      styles: process.env.VITEST
+        ? 'none'
+        : {
+          configFile: 'src/styles/settings.scss',
         },
-        port: parseInt(env.DEV_SERVER_PORT || '50084'),
-        https: {
-            key: fs.readFileSync(keyFilePath),
-            cert: fs.readFileSync(certFilePath),
-        }
+    }),
+    Fonts({
+      fontsource: {
+        families: [
+          {
+            name: 'Roboto',
+            weights: [100, 300, 400, 500, 700, 900],
+            styles: ['normal', 'italic'],
+          },
+        ],
+      },
+    }),
+  ],
+  define: {'process.env': {}},
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('src', import.meta.url)),
     }
+  },
+  server: {
+    proxy: {
+      '^/weatherforecast': {
+        target: serverUrl,
+        secure: false,
+        changeOrigin: false,
+      }
+    },
+  }
 })
