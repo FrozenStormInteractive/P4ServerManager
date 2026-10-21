@@ -1,0 +1,4 @@
+﻿- One SPK per architecture. DSM resources: `data-share`, `port-config` (UI port plus an instance port range), `usr-local-linker` (exposes the CLI).
+- Uninstall wizard asks whether to keep Perforce data and the database.
+- If it detects files from a previous installation of the HelixCoreServer package (https://github.com/FrozenStormInteractive/Perforce-Synology) that contain server instance profiles, the install wizard asks whether to import the profiles
+- Check the minimum glibc of target DSM versions against the .NET requirement before fixing the supported model list.
