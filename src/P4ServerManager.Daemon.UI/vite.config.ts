@@ -4,7 +4,7 @@ import Fonts from 'unplugin-fonts/vite'
 import {defineConfig} from 'vite'
 import Vuetify, {transformAssetUrls} from 'vite-plugin-vuetify'
 
-const serverUrl = process.env.SERVER_HTTP || process.env.SERVER_HTTPS || 'https://localhost:7145'
+const serverUrl = process.env.SERVER_HTTP || process.env.SERVER_HTTPS || 'https://localhost:7278'
 
 // https://vitejs.dev/config/
 export default defineConfig({
