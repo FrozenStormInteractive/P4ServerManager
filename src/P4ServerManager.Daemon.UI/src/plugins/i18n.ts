@@ -1,21 +1,24 @@
 ﻿import { createI18n } from 'vue-i18n'
+import en from '@/locales/en.json'
 
-const messages = {
-  en: {
-    message: {
-      hello: 'hello world',
-    },
-  },
-  ja: {
-    message: {
-      hello: 'こんにちは、世界',
-    },
-  },
-}
+export type MessageSchema = typeof en
 
-export default createI18n({
+export default createI18n<[MessageSchema], 'en'>({
   legacy: false,
   locale: 'en',
   fallbackLocale: 'en',
-  messages,
+  messages: {
+    en,
+  },
+  datetimeFormats: {
+    en: {
+      long: {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      },
+    },
+  },
 })

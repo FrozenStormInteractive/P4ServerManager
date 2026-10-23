@@ -1,0 +1,125 @@
+{
+  "app": {
+    "title": "P4 Server Manager"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "instances": "Instances",
+    "settings": "Settings",
+    "noInstances": "No instances yet",
+    "toggle": "Toggle navigation"
+  },
+  "actions": {
+    "newServer": "New server",
+    "cancel": "Cancel",
+    "create": "Create",
+    "retry": "Retry",
+    "start": "Start",
+    "stop": "Stop"
+  },
+  "status": {
+    "provisioning": "Provisioning",
+    "failed": "Failed",
+    "running": "Running",
+    "stopped": "Stopped",
+    "unknown": "Unknown"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "total": "Instances",
+    "running": "Running",
+    "stopped": "Stopped",
+    "failed": "Failed",
+    "emptyTitle": "No servers yet",
+    "emptyText": "Create a p4d server to get started.",
+    "createServer": "Create a server",
+    "instanceSummary": "p4d {version} · port {port}"
+  },
+  "instances": {
+    "title": "Instances",
+    "loadError": "The instances could not be loaded: {message}",
+    "headers": {
+      "name": "Name",
+      "status": "Status",
+      "version": "p4d version",
+      "port": "Port",
+      "root": "Root directory"
+    },
+    "noData": "No instances yet"
+  },
+  "instance": {
+    "notFound": "This instance does not exist.",
+    "details": "Details",
+    "version": "p4d version",
+    "pendingVersion": "Not resolved yet",
+    "port": "Port",
+    "root": "Root directory",
+    "caseHandling": "Case handling",
+    "caseSensitive": "Case-sensitive",
+    "caseInsensitive": "Case-insensitive",
+    "unicode": "Unicode",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "createdAt": "Created",
+    "lastError": "Last error"
+  },
+  "operations": {
+    "kinds": {
+      "provision": "Provisioning"
+    },
+    "steps": {
+      "resolve-build": "Get the p4d build",
+      "prepare-directories": "Prepare the directories",
+      "initialize-database": "Initialize the database",
+      "start-server": "Start the server",
+      "create-super-user": "Create the super user"
+    },
+    "skipped": "Skipped"
+  },
+  "createInstance": {
+    "title": "New server",
+    "name": "Name",
+    "nameHint": "Also used as the server ID.",
+    "description": "Description",
+    "version": "p4d version",
+    "versionsError": "The p4d versions could not be loaded: {message}",
+    "noVersions": "No p4d version available",
+    "cached": "cached",
+    "port": "Port",
+    "rootPath": "Root directory",
+    "rootPathHint": "Leave empty to use a folder managed by the daemon.",
+    "caseSensitive": "Case-sensitive",
+    "caseSensitiveHint": "Cannot be changed once the server exists.",
+    "unicode": "Unicode mode",
+    "unicodeHint": "Cannot be undone once the server exists.",
+    "superUser": "Super user",
+    "superUserHint": "The administrator of the new server. Until you add other users, it is the only account that can manage it.",
+    "superUserName": "User name",
+    "password": "Password",
+    "confirmPassword": "Confirm the password",
+    "passwordHint": "Only given to p4d, never stored by the daemon.",
+    "showPassword": "Show the password",
+    "error": "The server could not be created: {message}",
+    "rules": {
+      "nameRequired": "Enter a name.",
+      "nameFormat": "Start with a letter, then up to 31 letters, digits, '-' or '_'.",
+      "descriptionLength": "Use at most 512 characters.",
+      "versionRequired": "Choose a p4d version.",
+      "portRange": "Enter a port between 1024 and 65535.",
+      "rootPathAbsolute": "Enter an absolute path.",
+      "userNameRequired": "Enter a user name.",
+      "userNameFormat": "Start with a letter, then up to 63 letters, digits, '.', '-' or '_'.",
+      "passwordLength": "Use at least 8 characters.",
+      "passwordMatch": "The passwords do not match."
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "placeholder": "The settings of the daemon will be available here."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "This page does not exist.",
+    "back": "Back to the dashboard"
+  }
+}

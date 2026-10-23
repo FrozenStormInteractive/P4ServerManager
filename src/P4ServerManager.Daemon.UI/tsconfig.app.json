@@ -6,6 +6,9 @@
     // Extra safety for array and object lookups, but may have false positives.
     "noUncheckedIndexedAccess": true,
 
+    // ES2023 adds the non-mutating array methods (toSorted...), supported by the browsers Vite targets.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+
     // Path mapping for cleaner imports.
     "paths": {
       "@/*": ["./src/*"]

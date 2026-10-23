@@ -1,0 +1,147 @@
+<template>
+  <v-container max-width="1200">
+    <template v-if="instance">
+      <div class="d-flex flex-wrap align-center ga-4 mb-2">
+        <h1 class="text-headline-small">{{ instance.name }}</h1>
+        <InstanceStatusChip :instance="instance" />
+        <v-spacer />
+
+        <v-btn
+          v-if="status === 'running'"
+          :disabled="instance.state !== 'Ready'"
+          :loading="busy"
+          prepend-icon="mdi-stop"
+          :text="t('actions.stop')"
+          variant="tonal"
+          @click="run(instances.stop)"
+        />
+
+        <v-btn
+          v-else
+          color="primary"
+          :disabled="instance.state !== 'Ready'"
+          :loading="busy"
+          prepend-icon="mdi-play"
+          :text="t('actions.start')"
+          variant="flat"
+          @click="run(instances.start)"
+        />
+      </div>
+
+      <p v-if="instance.description" class="text-body-medium text-medium-emphasis mb-4">
+        {{ instance.description }}
+      </p>
+
+      <v-alert
+        v-if="actionError"
+        class="mb-4"
+        closable
+        density="compact"
+        type="error"
+        variant="tonal"
+        @click:close="actionError = null"
+      >
+        {{ actionError }}
+      </v-alert>
+
+      <v-row>
+        <v-col v-if="showOperation" cols="12" md="6">
+          <OperationProgress :instance="instance" :snapshot="snapshot" />
+        </v-col>
+
+        <v-col cols="12" :md="showOperation ? 6 : 12">
+          <v-card :title="t('instance.details')">
+            <v-list density="compact">
+              <v-list-item v-for="detail in details" :key="detail.label" :subtitle="detail.value" :title="t(detail.label)" />
+            </v-list>
+          </v-card>
+
+          <v-alert
+            v-if="instance.lastError && !showOperation"
+            class="mt-4"
+            density="compact"
+            :title="t('instance.lastError')"
+            type="warning"
+            variant="tonal"
+          >
+            {{ instance.lastError }}
+          </v-alert>
+        </v-col>
+      </v-row>
+    </template>
+
+    <v-empty-state
+      v-else-if="instances.loaded"
+      icon="mdi-server-off"
+      :title="t('instance.notFound')"
+    />
+  </v-container>
+</template>
+
+<script lang="ts" setup>
+  // Composables
+  import { computed, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
+
+  // Components, stores and utilities
+  import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
+  import OperationProgress from '@/components/instances/OperationProgress.vue'
+  import { useInstancesStore } from '@/stores/instances'
+  import { getInstanceStatus } from '@/utils/instanceStatus'
+
+  const props = defineProps<{
+    id: string
+  }>()
+
+  const { t, d } = useI18n()
+  const instances = useInstancesStore()
+
+  const busy = ref(false)
+  const actionError = ref<string | null>(null)
+
+  const instance = computed(() => instances.getInstance(props.id))
+  const snapshot = computed(() => instances.operations[props.id] ?? null)
+  const status = computed(() => instance.value ? getInstanceStatus(instance.value) : null)
+  const showOperation = computed(() =>
+    instance.value?.state !== 'Ready' || snapshot.value?.status === 'Running',
+  )
+
+  const details = computed(() => {
+    const value = instance.value
+    if (!value) {
+      return []
+    }
+    return [
+      {
+        label: 'instance.version',
+        value: value.version ? `${value.version}/${value.build} (${value.release})` : t('instance.pendingVersion'),
+      },
+      { label: 'instance.port', value: String(value.port) },
+      { label: 'instance.root', value: value.rootPath },
+      {
+        label: 'instance.caseHandling',
+        value: value.caseSensitive ? t('instance.caseSensitive') : t('instance.caseInsensitive'),
+      },
+      { label: 'instance.unicode', value: value.unicode ? t('instance.enabled') : t('instance.disabled') },
+      { label: 'instance.createdAt', value: d(new Date(value.createdAt), 'long') },
+    ]
+  })
+
+  // The snapshot is kept by the daemon in memory: it is read once, then the hub keeps it up to date.
+  watch(() => props.id, id => {
+    actionError.value = null
+    void instances.fetchOperation(id).catch(() => {})
+  }, { immediate: true })
+
+  async function run (action: (id: string) => Promise<void>) {
+    busy.value = true
+    actionError.value = null
+    try {
+      await action(props.id)
+    } catch (error) {
+      actionError.value = error instanceof Error ? error.message : String(error)
+    } finally {
+      busy.value = false
+    }
+  }
+</script>
