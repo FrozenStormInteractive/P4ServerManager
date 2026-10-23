@@ -1,10 +1,13 @@
 using System.Text.Json.Serialization;
 
+using FluentValidation;
+
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 using P4ServerManager.Daemon.Database;
+using P4ServerManager.Daemon.Filters;
 using P4ServerManager.Daemon.Hubs;
 using P4ServerManager.Daemon.Options;
 using P4ServerManager.Daemon.Services;
@@ -48,11 +51,15 @@ builder.Services.AddHostedService(services => services.GetRequiredService<Instan
 builder.Services.AddSingleton<OperationTracker>();
 builder.Services.AddSingleton<OperationRunner>();
 builder.Services.AddProvisioning();
-builder.Services.AddScoped<CreateInstanceValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
-// Keys the validation errors by the JSON names, as CreateInstanceValidator does.
 builder.Services.AddControllers(options =>
-        options.ModelMetadataDetailsProviders.Add(new SystemTextJsonValidationMetadataProvider()))
+    {
+        // Keys the validation errors by the JSON names, as RequestValidationFilter does.
+        options.ModelMetadataDetailsProviders.Add(new SystemTextJsonValidationMetadataProvider());
+        options.Filters.Add<RequestValidationFilter>(RequestValidationFilter.Order);
+        options.Filters.Add<PerforceFtpExceptionFilter>();
+    })
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));

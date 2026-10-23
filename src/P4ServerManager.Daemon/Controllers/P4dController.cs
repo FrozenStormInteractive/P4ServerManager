@@ -30,17 +30,8 @@ public sealed class P4dController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway, "application/problem+json")]
     public async Task<ActionResult<IReadOnlyList<P4ServerVersionDto>>> GetVersions(CancellationToken cancellationToken)
     {
-        IReadOnlyList<P4ServerRelease> releases;
-        try
-        {
-            releases = await releaseCatalog.GetReleasesAsync(cancellationToken);
-        }
-        catch (HttpRequestException)
-        {
-            return Problem(
-                "The list of p4d releases could not be read from the Perforce FTP.",
-                statusCode: StatusCodes.Status502BadGateway);
-        }
+        // A Perforce FTP that cannot be read is answered by PerforceFtpExceptionFilter.
+        IReadOnlyList<P4ServerRelease> releases = await releaseCatalog.GetReleasesAsync(cancellationToken);
 
         List<P4ServerBuild> cached = await db.Builds
             .AsNoTracking()

@@ -61,7 +61,7 @@ npx vitest run -t "test name"          # tests matching a name
 
 ## Tech stack
 
-- Backend and CLI: C#, .NET, ASP.NET Core, EF Core + SQLite, SignalR, Cronos for cron expressions.
+- Backend and CLI: C#, .NET, ASP.NET Core, EF Core + SQLite, SignalR, FluentValidation, Cronos for cron expressions.
 - CLI: C#, .NET, System.CommandLine.
 - UI: Vue 3 (`<script setup>`, TypeScript), Vuetify 4, Vue Router, Pinia, vue-i18n, `@microsoft/signalr`.
 - Publication: self-contained, `linux-x64` and `linux-arm64`. Perforce provides no 32-bit ARM p4d, so no 32-bit ARM target.
@@ -79,6 +79,7 @@ Frontend-specific rules live in `src/P4ServerManager.Daemon.UI/AGENTS.md`. Befor
 - Nullable reference types enabled.
 - Async all the way, always pass `CancellationToken`. No blocking calls on the request path.
 - No new API endpoint without its OpenAPI description.
+- Request validation: one FluentValidation `AbstractValidator<T>` per request type. Validators are registered from the assembly and run by `RequestValidationFilter`, so controllers never call them. Keep `[Required]` on the contracts: it shapes the OpenAPI schema, and MVC checks it before the validators run.
 
 ## Do not
 

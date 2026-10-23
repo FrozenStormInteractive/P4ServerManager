@@ -65,8 +65,7 @@ public sealed class InstancesController(
     /// background: follow it with <c>GET /api/instances/{id}/operation</c> or the <c>OperationProgress</c> event
     /// of the <c>/hubs/instances</c> hub.
     /// </summary>
-    /// <param name="request">Settings of the instance.</param>
-    /// <param name="validator">Checks the settings.</param>
+    /// <param name="request">Settings of the instance, checked by <see cref="CreateInstanceRequestValidator"/>.</param>
     /// <param name="queue">Queue of the provisionings.</param>
     /// <param name="paths">Paths of the data directory.</param>
     /// <param name="cancellationToken">Aborts the request.</param>
@@ -79,34 +78,10 @@ public sealed class InstancesController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway, "application/problem+json")]
     public async Task<ActionResult<InstanceDto>> CreateInstance(
         CreateInstanceRequest request,
-        [FromServices] CreateInstanceValidator validator,
         [FromServices] ProvisioningQueue queue,
         [FromServices] DaemonPaths paths,
         CancellationToken cancellationToken)
     {
-        Dictionary<string, string[]> errors;
-        try
-        {
-            errors = await validator.ValidateAsync(request, cancellationToken);
-        }
-        catch (HttpRequestException)
-        {
-            return Problem(
-                "The list of p4d releases could not be read from the Perforce FTP.",
-                statusCode: StatusCodes.Status502BadGateway);
-        }
-        if (errors.Count > 0)
-        {
-            foreach ((string field, string[] messages) in errors)
-            {
-                foreach (string message in messages)
-                {
-                    ModelState.AddModelError(field, message);
-                }
-            }
-            return ValidationProblem(ModelState);
-        }
-
         Guid id = Guid.NewGuid();
         P4ServerInstance instance = new()
         {

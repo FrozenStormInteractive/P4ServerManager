@@ -9,6 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
+using NSubstitute.ExceptionExtensions;
+
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Perforce;
 
@@ -17,13 +19,13 @@ namespace P4ServerManager.Daemon.Tests.Api;
 public sealed class InstancesApiTests : IAsyncLifetime
 {
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "p4sm-tests", Guid.NewGuid().ToString("N"));
+    private readonly IP4ServerReleaseCatalog _catalog = Substitute.For<IP4ServerReleaseCatalog>();
     private WebApplicationFactory<Program> _factory = null!;
     private HttpClient _client = null!;
 
     public ValueTask InitializeAsync()
     {
-        IP4ServerReleaseCatalog catalog = Substitute.For<IP4ServerReleaseCatalog>();
-        catalog.GetReleasesAsync(Arg.Any<CancellationToken>()).Returns([Release("r25.1"), Release("r24.2")]);
+        _catalog.GetReleasesAsync(Arg.Any<CancellationToken>()).Returns([Release("r25.1"), Release("r24.2")]);
 
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -31,7 +33,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
             builder.UseSetting("Daemon:DataDirectory", _dataDirectory);
             builder.ConfigureServices(services =>
             {
-                services.Replace(ServiceDescriptor.Singleton(catalog));
+                services.Replace(ServiceDescriptor.Singleton(_catalog));
                 // The tests only check the API: nothing is downloaded or started.
                 services.RemoveAll<IHostedService>();
             });
@@ -92,6 +94,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
     [Theory]
     [InlineData("1abc", 0, "r25.1", "admin", "secret-password", "name")]
     [InlineData("main", 80, "r25.1", "admin", "secret-password", "port")]
+    [InlineData("main", 70000, "r25.1", "admin", "secret-password", "port")]
     [InlineData("main", 0, "r12.1", "admin", "secret-password", "release")]
     [InlineData("main", 0, "r25.1", "admin", "short", "superUser.password")]
     [InlineData("main", 0, "r25.1", "9admin", "secret-password", "superUser.name")]
@@ -122,6 +125,8 @@ public sealed class InstancesApiTests : IAsyncLifetime
         JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
             TestContext.Current.CancellationToken);
         problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).ShouldBe([field]);
+        // The placeholders of the messages, such as {MinLength}, are filled in.
+        problem.GetProperty("errors").GetProperty(field)[0].GetString().ShouldNotContain("{");
     }
 
     [Theory]
@@ -171,6 +176,24 @@ public sealed class InstancesApiTests : IAsyncLifetime
         JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
             TestContext.Current.CancellationToken);
         problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).Order().ShouldBe(["name", "port"]);
+    }
+
+    [Theory]
+    [InlineData("GET", "/api/p4d/versions")]
+    [InlineData("POST", "/api/instances")]
+    public async Task ReadingTheReleases_FailsWithBadGatewayWhenThePerforceFtpIsDown(string method, string url)
+    {
+        _catalog.GetReleasesAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new HttpRequestException("Unreachable"));
+        using HttpRequestMessage request = new(new HttpMethod(method), url);
+        if (method == "POST")
+        {
+            request.Content = JsonContent.Create(ValidRequest("main", GetFreePort()));
+        }
+
+        HttpResponseMessage response = await _client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
     }
 
     [Fact]
