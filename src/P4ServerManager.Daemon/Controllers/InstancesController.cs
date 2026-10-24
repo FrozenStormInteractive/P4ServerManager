@@ -209,12 +209,52 @@ public sealed class InstancesController(
         return RunOperationAsync(() => supervisor.RestartInstanceAsync(id, cancellationToken));
     }
 
+    /// <summary>
+    /// Deletes an instance: stops its p4d if it runs, then removes it from the daemon. The instance is
+    /// <c>Deleting</c> meanwhile, and the <c>InstanceDeleted</c> event of the <c>/hubs/instances</c> hub tells the
+    /// clients once it is gone. A failed instance can be deleted too.
+    /// </summary>
+    /// <param name="id">Identifier of the instance.</param>
+    /// <param name="deleteFiles">
+    /// Also deletes the files of the instance in the data directory: its logs and, when the daemon chose it, its root
+    /// with the depots. A root directory given at creation is always kept. False by default: the files stay on disk.
+    /// </param>
+    /// <param name="supervisor">Stops the process and deletes the instance.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
+    /// </param>
+    /// <response code="204">The instance is deleted.</response>
+    /// <response code="404">No instance has this identifier.</response>
+    /// <response code="409">The instance is being provisioned, or another operation is in progress.</response>
+    /// <response code="500">p4d did not stop, or the files could not be deleted. The instance is kept.</response>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    public Task<ActionResult> DeleteInstance(
+        Guid id,
+        [FromServices] InstanceSupervisor supervisor,
+        CancellationToken cancellationToken,
+        [FromQuery] bool deleteFiles = false)
+    {
+        return HandleOperationErrorsAsync(async () =>
+        {
+            await supervisor.DeleteInstanceAsync(id, deleteFiles, cancellationToken);
+            return NoContent();
+        });
+    }
+
     private async Task<ActionResult<InstanceDto>> RunOperationAsync(Func<Task<P4ServerInstance>> operation)
+    {
+        return await HandleOperationErrorsAsync(async () => Accepted(ToDto(await operation())));
+    }
+
+    private async Task<ActionResult> HandleOperationErrorsAsync(Func<Task<ActionResult>> operation)
     {
         try
         {
-            P4ServerInstance instance = await operation();
-            return Accepted(ToDto(instance));
+            return await operation();
         }
         catch (KeyNotFoundException)
         {

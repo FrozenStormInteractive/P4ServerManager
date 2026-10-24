@@ -4,7 +4,7 @@
 
 export type InstanceState = 'Provisioning' | 'Ready' | 'Failed'
 
-export type RuntimeStatus = 'Unknown' | 'Running' | 'Stopped' | 'Starting' | 'Stopping' | 'Restarting'
+export type RuntimeStatus = 'Unknown' | 'Running' | 'Stopped' | 'Starting' | 'Stopping' | 'Restarting' | 'Deleting'
 
 export interface Instance {
   id: string

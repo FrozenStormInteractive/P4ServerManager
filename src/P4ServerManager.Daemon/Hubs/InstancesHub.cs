@@ -17,5 +17,7 @@ public interface IInstancesClient
 {
     Task InstanceUpdated(InstanceDto instance);
 
+    Task InstanceDeleted(Guid instanceId);
+
     Task OperationProgress(OperationSnapshot snapshot);
 }

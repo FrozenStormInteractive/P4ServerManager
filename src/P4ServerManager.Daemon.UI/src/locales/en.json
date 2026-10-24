@@ -16,7 +16,8 @@
     "retry": "Retry",
     "start": "Start",
     "stop": "Stop",
-    "restart": "Restart"
+    "restart": "Restart",
+    "delete": "Delete"
   },
   "status": {
     "provisioning": "Provisioning",
@@ -26,6 +27,7 @@
     "starting": "Starting",
     "stopping": "Stopping",
     "restarting": "Restarting",
+    "deleting": "Deleting",
     "unknown": "Unknown"
   },
   "dashboard": {
@@ -116,6 +118,17 @@
       "passwordLength": "Use at least 8 characters.",
       "passwordMatch": "The passwords do not match."
     }
+  },
+  "deleteInstance": {
+    "title": "Delete {name}?",
+    "text": "The server is stopped if it runs, then removed from the daemon. This cannot be undone.",
+    "filesChoice": "Files of the server",
+    "keepFiles": "Keep the files",
+    "deleteFiles": "Delete the files",
+    "deleteFilesHint": "Deletes the logs and, when the daemon chose it, the root directory with the depots. A root directory you gave at creation is kept.",
+    "keptFiles": "The files stay on disk, in {path}.",
+    "confirmName": "Type {name} to confirm",
+    "error": "The server could not be deleted: {message}"
   },
   "settings": {
     "title": "Settings",

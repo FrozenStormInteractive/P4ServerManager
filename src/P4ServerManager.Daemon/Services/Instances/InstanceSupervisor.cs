@@ -4,23 +4,27 @@ using Microsoft.EntityFrameworkCore;
 
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Operations;
 
 namespace P4ServerManager.Daemon.Services.Instances;
 
 /// <summary>
 /// Keeps track of the p4d processes. At startup it adopts the instances that still run, without restarting them, then
-/// checks them periodically. It also starts and stops them on request.
+/// checks them periodically. It also starts, stops and deletes them on request.
 /// </summary>
 public sealed class InstanceSupervisor(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
     P4ServerLauncher launcher,
     InstanceRuntimeRegistry runtimeRegistry,
+    OperationTracker operationTracker,
     InstanceNotifier notifier,
+    DaemonPaths paths,
     IHostApplicationLifetime lifetime,
     ILogger<InstanceSupervisor> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(10);
 
+    // The lock of a deleted instance is kept: a caller may still wait on it.
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> instanceLocks = new();
 
     public override async Task StartAsync(CancellationToken cancellationToken)
@@ -33,6 +37,7 @@ public sealed class InstanceSupervisor(
     {
         return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
         {
+            EnsureReady(instance);
             if (runtimeRegistry.Get(instance.Id) == InstanceRuntimeStatus.Running)
             {
                 throw new InstanceConflictException($"Instance {instance.Name} is already running.");
@@ -53,6 +58,7 @@ public sealed class InstanceSupervisor(
     {
         return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
         {
+            EnsureReady(instance);
             await TransitionAsync(db, instance, InstanceRuntimeStatus.Restarting, async stoppingToken =>
             {
                 await launcher.StopAsync(instance, stoppingToken);
@@ -65,6 +71,7 @@ public sealed class InstanceSupervisor(
     {
         return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
         {
+            EnsureReady(instance);
             if (runtimeRegistry.Get(instance.Id) != InstanceRuntimeStatus.Running)
             {
                 throw new InstanceConflictException($"Instance {instance.Name} is not running.");
@@ -74,6 +81,67 @@ public sealed class InstanceSupervisor(
             {
                 await launcher.StopAsync(instance, stoppingToken);
             });
+        });
+    }
+
+    /// <summary>
+    /// Stops the p4d of an instance if it runs, then removes the instance. The instance stays
+    /// <see cref="InstanceRuntimeStatus.Deleting"/> meanwhile. A failed instance can be deleted, but not one that is
+    /// being provisioned. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
+    /// </summary>
+    /// <param name="instanceId">Identifier of the instance.</param>
+    /// <param name="deleteFiles">
+    /// Also deletes the directory of the instance in the data directory: its logs, its client state and the default
+    /// root. A root chosen at creation is always kept: it may hold files the daemon did not create.
+    /// </param>
+    /// <param name="cancellationToken">Aborts the wait for the instance to be free.</param>
+    /// <returns>The instance as it was before it was deleted.</returns>
+    public async Task<P4ServerInstance> DeleteInstanceAsync(
+        Guid instanceId,
+        bool deleteFiles,
+        CancellationToken cancellationToken)
+    {
+        return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
+        {
+            if (instance.State == P4ServerInstanceState.Provisioning)
+            {
+                throw new InstanceConflictException($"Instance {instance.Name} is being provisioned.");
+            }
+
+            runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.Deleting);
+            await notifier.InstanceChangedAsync(instance);
+            bool deleted = false;
+            try
+            {
+                await launcher.StopAsync(instance, lifetime.ApplicationStopping);
+                if (deleteFiles)
+                {
+                    DeleteFiles(instance);
+                }
+
+                // Out of the change tracker, so that a failure here leaves the entity as it was.
+                await db.Instances.Where(i => i.Id == instance.Id).ExecuteDeleteAsync(CancellationToken.None);
+                deleted = true;
+            }
+            catch (InstanceOperationException exception)
+            {
+                instance.LastError = exception.Message;
+                throw;
+            }
+            finally
+            {
+                if (!deleted)
+                {
+                    runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
+                    await db.SaveChangesAsync(CancellationToken.None);
+                    await notifier.InstanceChangedAsync(instance);
+                }
+            }
+
+            runtimeRegistry.Remove(instance.Id);
+            operationTracker.Remove(instance.Id);
+            await notifier.InstanceDeletedAsync(instance.Id);
+            logger.LogInformation("Deleted instance {Name}", instance.Name);
         });
     }
 
@@ -150,6 +218,12 @@ public sealed class InstanceSupervisor(
 
             try
             {
+                if (!await db.Instances.AnyAsync(i => i.Id == instance.Id, cancellationToken))
+                {
+                    // Deleted since the list was read.
+                    continue;
+                }
+
                 InstanceRuntimeStatus status = ReadRuntimeStatus(instance);
                 InstanceRuntimeStatus previous = runtimeRegistry.Get(instance.Id);
                 if (runtimeRegistry.Set(instance.Id, status))
@@ -224,10 +298,6 @@ public sealed class InstanceSupervisor(
                 .Include(i => i.Build)
                 .FirstOrDefaultAsync(i => i.Id == instanceId, cancellationToken)
                 ?? throw new KeyNotFoundException($"Instance {instanceId} does not exist.");
-            if (instance.State != P4ServerInstanceState.Ready)
-            {
-                throw new InstanceConflictException($"Instance {instance.Name} is not ready.");
-            }
 
             await operation(db, instance);
             return instance;
@@ -235,6 +305,48 @@ public sealed class InstanceSupervisor(
         finally
         {
             instanceLock.Release();
+        }
+    }
+
+    private static void EnsureReady(P4ServerInstance instance)
+    {
+        if (instance.State != P4ServerInstanceState.Ready)
+        {
+            throw new InstanceConflictException($"Instance {instance.Name} is not ready.");
+        }
+    }
+
+    private void DeleteFiles(P4ServerInstance instance)
+    {
+        string directory = paths.GetInstanceDirectory(instance.Id);
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                if (OperatingSystem.IsWindows())
+                {
+                    // p4 makes its tickets file read-only, and Windows does not delete a read-only file.
+                    foreach (string file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+                    {
+                        File.SetAttributes(file, FileAttributes.Normal);
+                    }
+                }
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InstanceOperationException(
+                $"The files of instance {instance.Name} could not be deleted: {exception.Message}",
+                exception);
+        }
+
+        if (instance.RootPath != paths.GetDefaultRootPath(instance.Id))
+        {
+            logger.LogInformation(
+                "Kept the root {RootPath} of instance {Name}: it was chosen at creation",
+                instance.RootPath,
+                instance.Name);
         }
     }
 

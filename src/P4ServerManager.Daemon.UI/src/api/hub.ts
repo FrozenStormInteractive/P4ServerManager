@@ -6,6 +6,7 @@ import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/s
 
 export interface InstancesHubHandlers {
   onInstanceUpdated: (instance: Instance) => void
+  onInstanceDeleted: (instanceId: string) => void
   onOperationProgress: (snapshot: OperationSnapshot) => void
   /**
    * Called on the first connection and after each reconnection: events may have been missed until then.
@@ -49,6 +50,7 @@ export function connectInstancesHub (handlers: InstancesHubHandlers): InstancesH
   }
 
   connection.on('InstanceUpdated', handlers.onInstanceUpdated)
+  connection.on('InstanceDeleted', handlers.onInstanceDeleted)
   connection.on('OperationProgress', handlers.onOperationProgress)
   connection.onreconnected(() => handlers.onConnected())
   connection.onclose(() => scheduleStart())

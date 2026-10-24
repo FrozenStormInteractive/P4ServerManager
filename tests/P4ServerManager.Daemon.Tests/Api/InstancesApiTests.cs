@@ -5,12 +5,16 @@ using System.Text.Json;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 using NSubstitute.ExceptionExtensions;
 
+using P4ServerManager.Daemon.Database;
+using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Perforce;
 
@@ -235,6 +239,114 @@ public sealed class InstancesApiTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task DeleteInstance_ConflictsWhileTheInstanceIsProvisioning()
+    {
+        HttpResponseMessage created = await _client.PostAsJsonAsync(
+            "/api/instances",
+            ValidRequest("main", GetFreePort()),
+            TestContext.Current.CancellationToken);
+        JsonElement instance = await created.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await _client.DeleteAsync(
+            $"/api/instances/{instance.GetProperty("id").GetString()}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task DeleteInstance_ReturnsNotFoundForAnUnknownInstance()
+    {
+        HttpResponseMessage response = await _client.DeleteAsync(
+            $"/api/instances/{Guid.NewGuid()}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeleteInstance_RemovesAFailedInstanceAndItsFilesOnlyWhenAsked(bool deleteFiles)
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+        string directory = _factory.Services.GetRequiredService<DaemonPaths>().GetInstanceDirectory(id);
+        Directory.CreateDirectory(Path.Combine(directory, "root"));
+        await File.WriteAllTextAsync(
+            Path.Combine(directory, "root", "db.counters"),
+            "data",
+            TestContext.Current.CancellationToken);
+        // p4 makes its tickets file read-only.
+        string tickets = Path.Combine(directory, "client", ".p4tickets");
+        Directory.CreateDirectory(Path.GetDirectoryName(tickets)!);
+        await File.WriteAllTextAsync(tickets, "ticket", TestContext.Current.CancellationToken);
+        File.SetAttributes(tickets, FileAttributes.ReadOnly);
+
+        HttpResponseMessage response = await _client.DeleteAsync(
+            $"/api/instances/{id}?deleteFiles={deleteFiles}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await _client.GetAsync($"/api/instances/{id}", TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        Directory.Exists(directory).ShouldBe(!deleteFiles);
+        if (!deleteFiles)
+        {
+            // Lets DisposeAsync delete the kept files.
+            File.SetAttributes(tickets, FileAttributes.Normal);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteInstance_KeepsARootChosenAtCreation()
+    {
+        string rootPath = Path.Combine(_dataDirectory, "custom-root");
+        Guid id = await CreateFailedInstanceAsync("main", rootPath);
+        Directory.CreateDirectory(rootPath);
+
+        HttpResponseMessage response = await _client.DeleteAsync(
+            $"/api/instances/{id}?deleteFiles=true",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        Directory.Exists(rootPath).ShouldBeTrue();
+    }
+
+    private async Task<Guid> CreateFailedInstanceAsync(string name, string? rootPath = null)
+    {
+        HttpResponseMessage created = await _client.PostAsJsonAsync(
+            "/api/instances",
+            new
+            {
+                name,
+                release = "r25.1",
+                port = GetFreePort(),
+                rootPath,
+                caseSensitive = true,
+                unicode = false,
+                superUser = new { name = "admin", password = "secret-password" },
+            },
+            TestContext.Current.CancellationToken);
+        created.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await created.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        Guid id = instance.GetProperty("id").GetGuid();
+
+        // The provisioning does not run in these tests: it is marked failed by hand.
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(
+            TestContext.Current.CancellationToken);
+        await db.Instances
+            .Where(i => i.Id == id)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(i => i.State, P4ServerInstanceState.Failed),
+                TestContext.Current.CancellationToken);
+        return id;
     }
 
     private static object ValidRequest(string name, int port)

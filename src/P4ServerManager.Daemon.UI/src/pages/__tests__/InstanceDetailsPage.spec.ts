@@ -1,5 +1,5 @@
 // Types
-import type { RuntimeStatus } from '@/api/types'
+import type { InstanceState, RuntimeStatus } from '@/api/types'
 
 // Utilities
 import { flushPromises } from '@vue/test-utils'
@@ -15,9 +15,9 @@ const instance = createInstance()
 
 // The state of the instance comes from the daemon only: a page loaded in the middle of an operation, or opened by
 // another client, shows it the same way.
-async function mountWith (runtimeStatus: RuntimeStatus) {
+async function mountWith (runtimeStatus: RuntimeStatus, state: InstanceState = 'Ready') {
   const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, { props: { id: instance.id } })
-  useInstancesStore(pinia).upsertInstance({ ...instance, runtimeStatus })
+  useInstancesStore(pinia).upsertInstance({ ...instance, state, runtimeStatus })
   await flushPromises()
 
   return wrapper.findAll('button').map(button => ({
@@ -40,6 +40,7 @@ describe('InstanceDetailsPage', () => {
     expect(await mountWith('Running')).toEqual([
       { text: 'Restart', loading: false, disabled: false },
       { text: 'Stop', loading: false, disabled: false },
+      { text: 'Delete', loading: false, disabled: false },
     ])
   })
 
@@ -47,6 +48,7 @@ describe('InstanceDetailsPage', () => {
     expect(await mountWith('Restarting')).toEqual([
       { text: 'Restart', loading: true, disabled: true },
       { text: 'Stop', loading: false, disabled: true },
+      { text: 'Delete', loading: false, disabled: true },
     ])
   })
 
@@ -54,18 +56,42 @@ describe('InstanceDetailsPage', () => {
     expect(await mountWith('Stopping')).toEqual([
       { text: 'Restart', loading: false, disabled: true },
       { text: 'Stop', loading: true, disabled: true },
+      { text: 'Delete', loading: false, disabled: true },
     ])
   })
 
   it('shows the start in progress', async () => {
     expect(await mountWith('Starting')).toEqual([
       { text: 'Start', loading: true, disabled: true },
+      { text: 'Delete', loading: false, disabled: true },
     ])
   })
 
   it('offers a start while p4d is stopped', async () => {
     expect(await mountWith('Stopped')).toEqual([
       { text: 'Start', loading: false, disabled: false },
+      { text: 'Delete', loading: false, disabled: false },
+    ])
+  })
+
+  it('shows the deletion in progress', async () => {
+    expect(await mountWith('Deleting')).toEqual([
+      { text: 'Start', loading: false, disabled: true },
+      { text: 'Delete', loading: true, disabled: true },
+    ])
+  })
+
+  it('offers to delete a failed instance', async () => {
+    expect(await mountWith('Stopped', 'Failed')).toEqual([
+      { text: 'Start', loading: false, disabled: true },
+      { text: 'Delete', loading: false, disabled: false },
+    ])
+  })
+
+  it('does not offer to delete an instance being provisioned', async () => {
+    expect(await mountWith('Unknown', 'Provisioning')).toEqual([
+      { text: 'Start', loading: false, disabled: true },
+      { text: 'Delete', loading: false, disabled: true },
     ])
   })
 })

@@ -14,6 +14,11 @@ public sealed class OperationTracker
         return snapshots.GetValueOrDefault(instanceId);
     }
 
+    public void Remove(Guid instanceId)
+    {
+        snapshots.TryRemove(instanceId, out _);
+    }
+
     public OperationSnapshot Begin(Guid instanceId, string kind, IEnumerable<OperationStepState> steps)
     {
         OperationSnapshot snapshot = new(instanceId, kind, OperationStatus.Running, steps.ToList(), null, null, null);

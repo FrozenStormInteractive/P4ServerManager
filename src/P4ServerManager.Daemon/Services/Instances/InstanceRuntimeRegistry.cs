@@ -21,4 +21,9 @@ public sealed class InstanceRuntimeRegistry
         statuses[instanceId] = status;
         return previous != status;
     }
+
+    public void Remove(Guid instanceId)
+    {
+        statuses.TryRemove(instanceId, out _);
+    }
 }

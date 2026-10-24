@@ -36,7 +36,19 @@
           variant="flat"
           @click="run(instances.start)"
         />
+
+        <v-btn
+          color="error"
+          :disabled="!canDelete"
+          :loading="status === 'deleting'"
+          prepend-icon="mdi-delete"
+          :text="t('actions.delete')"
+          variant="text"
+          @click="deleteDialog = true"
+        />
       </div>
+
+      <DeleteInstanceDialog v-model="deleteDialog" :instance="instance" @deleted="onDeleted" />
 
       <p v-if="instance.description" class="text-body-medium text-medium-emphasis mb-4">
         {{ instance.description }}
@@ -92,8 +104,10 @@
   // Composables
   import { computed, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
+  import { useRouter } from 'vue-router'
 
   // Components, stores and utilities
+  import DeleteInstanceDialog from '@/components/instances/DeleteInstanceDialog.vue'
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
   import OperationProgress from '@/components/instances/OperationProgress.vue'
   import { useInstancesStore } from '@/stores/instances'
@@ -104,18 +118,25 @@
   }>()
 
   const { t, d } = useI18n()
+  const router = useRouter()
   const instances = useInstancesStore()
 
   // True from the click to the answer of the daemon. What is in progress comes from the daemon: it is shared with the
   // other clients and survives a reload of the page.
   const sending = ref(false)
   const actionError = ref<string | null>(null)
+  const deleteDialog = ref(false)
 
   const instance = computed(() => instances.getInstance(props.id))
   const snapshot = computed(() => instances.operations[props.id] ?? null)
   const status = computed(() => instance.value ? getInstanceStatus(instance.value) : null)
   const canAct = computed(() =>
     instance.value?.state === 'Ready' && !sending.value && !!status.value && !isInstanceStatusInProgress(status.value),
+  )
+  // A failed instance can be deleted too, but not one being provisioned.
+  const canDelete = computed(() =>
+    instance.value?.state !== 'Provisioning' && !sending.value && !!status.value
+    && !isInstanceStatusInProgress(status.value),
   )
   const showOperation = computed(() =>
     instance.value?.state !== 'Ready' || snapshot.value?.status === 'Running',
@@ -147,6 +168,10 @@
     actionError.value = null
     void instances.fetchOperation(id).catch(() => {})
   }, { immediate: true })
+
+  function onDeleted () {
+    void router.push({ name: 'instances' })
+  }
 
   async function run (action: (id: string) => Promise<void>) {
     sending.value = true

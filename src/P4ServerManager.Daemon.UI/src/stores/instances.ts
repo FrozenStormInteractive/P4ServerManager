@@ -33,6 +33,11 @@ export const useInstancesStore = defineStore('instances', () => {
     instances.value[instance.id] = instance
   }
 
+  function removeInstance (id: string) {
+    delete instances.value[id]
+    delete operations.value[id]
+  }
+
   function setOperation (snapshot: OperationSnapshot) {
     operations.value[snapshot.instanceId] = snapshot
   }
@@ -76,9 +81,15 @@ export const useInstancesStore = defineStore('instances', () => {
     upsertInstance(await api.restartInstance(id))
   }
 
+  async function remove (id: string, deleteFiles: boolean) {
+    await api.deleteInstance(id, deleteFiles)
+    removeInstance(id)
+  }
+
   function connect () {
     hub ??= connectInstancesHub({
       onInstanceUpdated: upsertInstance,
+      onInstanceDeleted: removeInstance,
       onOperationProgress: setOperation,
       onConnected: () => void fetchAll(),
     })
@@ -98,6 +109,7 @@ export const useInstancesStore = defineStore('instances', () => {
     sortedInstances,
     getInstance,
     upsertInstance,
+    removeInstance,
     setOperation,
     fetchAll,
     fetchOperation,
@@ -105,6 +117,7 @@ export const useInstancesStore = defineStore('instances', () => {
     start,
     stop,
     restart,
+    remove,
     connect,
     disconnect,
   }

@@ -70,6 +70,28 @@ describe('instances store', () => {
     expect(store.getInstance('a')?.lastError).toBeNull()
   })
 
+  it('forgets an instance deleted by another client', () => {
+    const store = useInstancesStore()
+    store.connect()
+    handlers.onInstanceUpdated(createInstance({ id: 'a', name: 'alpha' }))
+    handlers.onOperationProgress(createSnapshot('a'))
+
+    handlers.onInstanceDeleted('a')
+
+    expect(store.getInstance('a')).toBeUndefined()
+    expect(store.operations.a).toBeUndefined()
+  })
+
+  it('forgets an instance once the daemon has deleted it', async () => {
+    server.use(http.delete('/api/instances/a', () => new HttpResponse(null, { status: 204 })))
+    const store = useInstancesStore()
+    store.upsertInstance(createInstance({ id: 'a', name: 'alpha' }))
+
+    await store.remove('a', false)
+
+    expect(store.getInstance('a')).toBeUndefined()
+  })
+
   it('connects to the hub only once', () => {
     const store = useInstancesStore()
 

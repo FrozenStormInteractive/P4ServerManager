@@ -30,6 +30,18 @@ public sealed class InstanceNotifier(
         }
     }
 
+    public async Task InstanceDeletedAsync(Guid instanceId)
+    {
+        try
+        {
+            await hubContext.Clients.All.InstanceDeleted(instanceId);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not push the deletion of instance {Id}", instanceId);
+        }
+    }
+
     public async Task OperationChangedAsync(OperationSnapshot snapshot)
     {
         try
