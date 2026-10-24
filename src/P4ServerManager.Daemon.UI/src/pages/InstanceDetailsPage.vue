@@ -6,21 +6,31 @@
         <InstanceStatusChip :instance="instance" />
         <v-spacer />
 
-        <v-btn
-          v-if="status === 'running'"
-          :disabled="instance.state !== 'Ready'"
-          :loading="busy"
-          prepend-icon="mdi-stop"
-          :text="t('actions.stop')"
-          variant="tonal"
-          @click="run(instances.stop)"
-        />
+        <template v-if="status === 'running' || status === 'restarting' || status === 'stopping'">
+          <v-btn
+            :disabled="!canAct"
+            :loading="status === 'restarting'"
+            prepend-icon="mdi-restart"
+            :text="t('actions.restart')"
+            variant="tonal"
+            @click="run(instances.restart)"
+          />
+
+          <v-btn
+            :disabled="!canAct"
+            :loading="status === 'stopping'"
+            prepend-icon="mdi-stop"
+            :text="t('actions.stop')"
+            variant="tonal"
+            @click="run(instances.stop)"
+          />
+        </template>
 
         <v-btn
           v-else
           color="primary"
-          :disabled="instance.state !== 'Ready'"
-          :loading="busy"
+          :disabled="!canAct"
+          :loading="status === 'starting'"
           prepend-icon="mdi-play"
           :text="t('actions.start')"
           variant="flat"
@@ -87,7 +97,7 @@
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
   import OperationProgress from '@/components/instances/OperationProgress.vue'
   import { useInstancesStore } from '@/stores/instances'
-  import { getInstanceStatus } from '@/utils/instanceStatus'
+  import { getInstanceStatus, isInstanceStatusInProgress } from '@/utils/instanceStatus'
 
   const props = defineProps<{
     id: string
@@ -96,12 +106,17 @@
   const { t, d } = useI18n()
   const instances = useInstancesStore()
 
-  const busy = ref(false)
+  // True from the click to the answer of the daemon. What is in progress comes from the daemon: it is shared with the
+  // other clients and survives a reload of the page.
+  const sending = ref(false)
   const actionError = ref<string | null>(null)
 
   const instance = computed(() => instances.getInstance(props.id))
   const snapshot = computed(() => instances.operations[props.id] ?? null)
   const status = computed(() => instance.value ? getInstanceStatus(instance.value) : null)
+  const canAct = computed(() =>
+    instance.value?.state === 'Ready' && !sending.value && !!status.value && !isInstanceStatusInProgress(status.value),
+  )
   const showOperation = computed(() =>
     instance.value?.state !== 'Ready' || snapshot.value?.status === 'Running',
   )
@@ -134,14 +149,14 @@
   }, { immediate: true })
 
   async function run (action: (id: string) => Promise<void>) {
-    busy.value = true
+    sending.value = true
     actionError.value = null
     try {
       await action(props.id)
     } catch (error) {
       actionError.value = error instanceof Error ? error.message : String(error)
     } finally {
-      busy.value = false
+      sending.value = false
     }
   }
 </script>

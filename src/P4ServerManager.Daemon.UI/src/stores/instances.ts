@@ -72,6 +72,10 @@ export const useInstancesStore = defineStore('instances', () => {
     upsertInstance(await api.stopInstance(id))
   }
 
+  async function restart (id: string) {
+    upsertInstance(await api.restartInstance(id))
+  }
+
   function connect () {
     hub ??= connectInstancesHub({
       onInstanceUpdated: upsertInstance,
@@ -100,6 +104,7 @@ export const useInstancesStore = defineStore('instances', () => {
     create,
     start,
     stop,
+    restart,
     connect,
     disconnect,
   }

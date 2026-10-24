@@ -15,13 +15,17 @@
     "create": "Create",
     "retry": "Retry",
     "start": "Start",
-    "stop": "Stop"
+    "stop": "Stop",
+    "restart": "Restart"
   },
   "status": {
     "provisioning": "Provisioning",
     "failed": "Failed",
     "running": "Running",
     "stopped": "Stopped",
+    "starting": "Starting",
+    "stopping": "Stopping",
+    "restarting": "Restarting",
     "unknown": "Unknown"
   },
   "dashboard": {

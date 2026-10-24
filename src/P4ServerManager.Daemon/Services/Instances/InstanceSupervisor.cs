@@ -16,6 +16,7 @@ public sealed class InstanceSupervisor(
     P4ServerLauncher launcher,
     InstanceRuntimeRegistry runtimeRegistry,
     InstanceNotifier notifier,
+    IHostApplicationLifetime lifetime,
     ILogger<InstanceSupervisor> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(10);
@@ -37,38 +38,42 @@ public sealed class InstanceSupervisor(
                 throw new InstanceConflictException($"Instance {instance.Name} is already running.");
             }
 
-            try
+            await TransitionAsync(db, instance, InstanceRuntimeStatus.Starting, async stoppingToken =>
             {
-                await launcher.StartAsync(instance, cancellationToken);
-                instance.LastError = null;
-                runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.Running);
-            }
-            catch (InstanceOperationException exception)
+                await launcher.StartAsync(instance, stoppingToken);
+            });
+        });
+    }
+
+    /// <summary>
+    /// Stops the p4d of an instance if it runs, then starts it again. The instance stays
+    /// <see cref="InstanceRuntimeStatus.Restarting"/> from the stop to the start.
+    /// </summary>
+    public async Task<P4ServerInstance> RestartInstanceAsync(Guid instanceId, CancellationToken cancellationToken)
+    {
+        return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
+        {
+            await TransitionAsync(db, instance, InstanceRuntimeStatus.Restarting, async stoppingToken =>
             {
-                instance.LastError = exception.Message;
-                runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.Stopped);
-                throw;
-            }
-            finally
-            {
-                await db.SaveChangesAsync(CancellationToken.None);
-                await notifier.InstanceChangedAsync(instance);
-            }
+                await launcher.StopAsync(instance, stoppingToken);
+                await launcher.StartAsync(instance, stoppingToken);
+            });
         });
     }
 
     public async Task<P4ServerInstance> StopInstanceAsync(Guid instanceId, CancellationToken cancellationToken)
     {
-        return await RunExclusiveAsync(instanceId, cancellationToken, async (_, instance) =>
+        return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
         {
             if (runtimeRegistry.Get(instance.Id) != InstanceRuntimeStatus.Running)
             {
                 throw new InstanceConflictException($"Instance {instance.Name} is not running.");
             }
 
-            await launcher.StopAsync(instance, cancellationToken);
-            runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.Stopped);
-            await notifier.InstanceChangedAsync(instance);
+            await TransitionAsync(db, instance, InstanceRuntimeStatus.Stopping, async stoppingToken =>
+            {
+                await launcher.StopAsync(instance, stoppingToken);
+            });
         });
     }
 
@@ -119,11 +124,7 @@ public sealed class InstanceSupervisor(
                     }
                     break;
                 case P4ServerInstanceState.Failed:
-                    runtimeRegistry.Set(
-                        instance.Id,
-                        launcher.GetRunningPid(instance) is null
-                            ? InstanceRuntimeStatus.Stopped
-                            : InstanceRuntimeStatus.Running);
+                    runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
                     break;
             }
         }
@@ -149,9 +150,7 @@ public sealed class InstanceSupervisor(
 
             try
             {
-                InstanceRuntimeStatus status = launcher.GetRunningPid(instance) is null
-                    ? InstanceRuntimeStatus.Stopped
-                    : InstanceRuntimeStatus.Running;
+                InstanceRuntimeStatus status = ReadRuntimeStatus(instance);
                 InstanceRuntimeStatus previous = runtimeRegistry.Get(instance.Id);
                 if (runtimeRegistry.Set(instance.Id, status))
                 {
@@ -169,13 +168,55 @@ public sealed class InstanceSupervisor(
         }
     }
 
+    /// <summary>
+    /// Runs a start, a stop or a restart. The transitional <paramref name="status"/> is pushed to every client first,
+    /// so that it survives a reload of the page. Once begun, the operation runs to its end even if the request that
+    /// asked for it is aborted: only the shutdown of the daemon cancels it. The status is then read back from the
+    /// process, whatever the outcome.
+    /// </summary>
+    private async Task TransitionAsync(
+        DaemonDbContext db,
+        P4ServerInstance instance,
+        InstanceRuntimeStatus status,
+        Func<CancellationToken, Task> operation)
+    {
+        runtimeRegistry.Set(instance.Id, status);
+        await notifier.InstanceChangedAsync(instance);
+        try
+        {
+            await operation(lifetime.ApplicationStopping);
+            instance.LastError = null;
+        }
+        catch (InstanceOperationException exception)
+        {
+            instance.LastError = exception.Message;
+            throw;
+        }
+        finally
+        {
+            runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
+            await db.SaveChangesAsync(CancellationToken.None);
+            await notifier.InstanceChangedAsync(instance);
+        }
+    }
+
     private async Task<P4ServerInstance> RunExclusiveAsync(
         Guid instanceId,
         CancellationToken cancellationToken,
         Func<DaemonDbContext, P4ServerInstance, Task> operation)
     {
         SemaphoreSlim instanceLock = GetLock(instanceId);
-        await instanceLock.WaitAsync(cancellationToken);
+        if (!await instanceLock.WaitAsync(0, cancellationToken))
+        {
+            if (runtimeRegistry.Get(instanceId).IsTransitional())
+            {
+                throw new InstanceConflictException("Another operation is in progress on this instance.");
+            }
+
+            // Only the periodic check holds the lock, for a moment.
+            await instanceLock.WaitAsync(cancellationToken);
+        }
+
         try
         {
             await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -195,6 +236,11 @@ public sealed class InstanceSupervisor(
         {
             instanceLock.Release();
         }
+    }
+
+    private InstanceRuntimeStatus ReadRuntimeStatus(P4ServerInstance instance)
+    {
+        return launcher.IsRunning(instance) ? InstanceRuntimeStatus.Running : InstanceRuntimeStatus.Stopped;
     }
 
     private SemaphoreSlim GetLock(Guid instanceId)

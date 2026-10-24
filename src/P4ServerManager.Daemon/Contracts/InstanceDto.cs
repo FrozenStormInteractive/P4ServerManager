@@ -17,7 +17,7 @@ namespace P4ServerManager.Daemon.Contracts;
 /// <param name="CaseSensitive">False when p4d runs case-insensitive (<c>-C1</c>).</param>
 /// <param name="Unicode">True when the server runs in Unicode mode.</param>
 /// <param name="State">Lifecycle state.</param>
-/// <param name="RuntimeStatus">Whether the p4d process runs.</param>
+/// <param name="RuntimeStatus">Whether the p4d process runs, or is being started, stopped or restarted.</param>
 /// <param name="LastError">Error of the last failed operation.</param>
 /// <param name="CreatedAt">Creation date.</param>
 public sealed record InstanceDto(

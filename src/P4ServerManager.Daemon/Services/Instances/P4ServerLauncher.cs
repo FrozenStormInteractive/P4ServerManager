@@ -37,6 +37,14 @@ public sealed class P4ServerLauncher(
     }
 
     /// <summary>
+    /// Whether the p4d of the instance runs.
+    /// </summary>
+    public bool IsRunning(P4ServerInstance instance)
+    {
+        return GetRunningPid(instance) is not null;
+    }
+
+    /// <summary>
     /// Pid of the p4d of the instance when it runs, otherwise null.
     /// </summary>
     public int? GetRunningPid(P4ServerInstance instance)
@@ -64,7 +72,7 @@ public sealed class P4ServerLauncher(
     {
         P4ServerBuild build = instance.Build
             ?? throw new InstanceConflictException($"Instance {instance.Name} has no p4d build yet.");
-        if (GetRunningPid(instance) is not null)
+        if (IsRunning(instance))
         {
             throw new InstanceConflictException($"Instance {instance.Name} is already running.");
         }

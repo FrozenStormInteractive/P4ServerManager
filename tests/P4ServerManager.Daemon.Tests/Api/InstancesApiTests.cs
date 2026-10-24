@@ -206,8 +206,10 @@ public sealed class InstancesApiTests : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
-    [Fact]
-    public async Task StartInstance_ConflictsWhileTheInstanceIsProvisioning()
+    [Theory]
+    [InlineData("start")]
+    [InlineData("restart")]
+    public async Task Operation_ConflictsWhileTheInstanceIsProvisioning(string operation)
     {
         HttpResponseMessage created = await _client.PostAsJsonAsync(
             "/api/instances",
@@ -217,11 +219,22 @@ public sealed class InstancesApiTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         HttpResponseMessage response = await _client.PostAsync(
-            $"/api/instances/{instance.GetProperty("id").GetString()}/start",
+            $"/api/instances/{instance.GetProperty("id").GetString()}/{operation}",
             null,
             TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task RestartInstance_ReturnsNotFoundForAnUnknownInstance()
+    {
+        HttpResponseMessage response = await _client.PostAsync(
+            $"/api/instances/{Guid.NewGuid()}/restart",
+            null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     private static object ValidRequest(string name, int port)

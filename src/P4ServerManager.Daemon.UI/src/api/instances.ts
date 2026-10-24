@@ -33,3 +33,7 @@ export function startInstance (id: string): Promise<Instance> {
 export function stopInstance (id: string): Promise<Instance> {
   return request('POST', `/api/instances/${encodeURIComponent(id)}/stop`)
 }
+
+export function restartInstance (id: string): Promise<Instance> {
+  return request('POST', `/api/instances/${encodeURIComponent(id)}/restart`)
+}

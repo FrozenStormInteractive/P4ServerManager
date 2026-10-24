@@ -59,6 +59,17 @@ describe('instances store', () => {
     expect(store.loaded).toBe(true)
   })
 
+  it('restarts an instance and keeps the state returned by the daemon', async () => {
+    server.use(http.post('/api/instances/a/restart', () =>
+      HttpResponse.json(createInstance({ id: 'a', name: 'alpha', lastError: null }), { status: 202 })))
+    const store = useInstancesStore()
+    store.upsertInstance(createInstance({ id: 'a', name: 'alpha', lastError: 'Old error' }))
+
+    await store.restart('a')
+
+    expect(store.getInstance('a')?.lastError).toBeNull()
+  })
+
   it('connects to the hub only once', () => {
     const store = useInstancesStore()
 

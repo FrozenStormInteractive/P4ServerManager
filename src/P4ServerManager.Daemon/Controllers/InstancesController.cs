@@ -134,14 +134,16 @@ public sealed class InstancesController(
     }
 
     /// <summary>
-    /// Starts the p4d of an instance and waits until it accepts connections.
+    /// Starts the p4d of an instance and waits until it accepts connections. The instance is <c>Starting</c> meanwhile.
     /// </summary>
     /// <param name="id">Identifier of the instance.</param>
     /// <param name="supervisor">Starts the process.</param>
-    /// <param name="cancellationToken">Aborts the request.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
+    /// </param>
     /// <response code="202">p4d runs.</response>
     /// <response code="404">No instance has this identifier.</response>
-    /// <response code="409">The instance is not ready, or already runs.</response>
+    /// <response code="409">The instance is not ready, already runs, or another operation is in progress.</response>
     /// <response code="500">p4d did not start.</response>
     [HttpPost("{id:guid}/start")]
     [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
@@ -157,14 +159,16 @@ public sealed class InstancesController(
     }
 
     /// <summary>
-    /// Stops the p4d of an instance and waits until it exits.
+    /// Stops the p4d of an instance and waits until it exits. The instance is <c>Stopping</c> meanwhile.
     /// </summary>
     /// <param name="id">Identifier of the instance.</param>
     /// <param name="supervisor">Stops the process.</param>
-    /// <param name="cancellationToken">Aborts the request.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
+    /// </param>
     /// <response code="202">p4d is stopped.</response>
     /// <response code="404">No instance has this identifier.</response>
-    /// <response code="409">The instance is not ready, or does not run.</response>
+    /// <response code="409">The instance is not ready, does not run, or another operation is in progress.</response>
     /// <response code="500">p4d did not stop.</response>
     [HttpPost("{id:guid}/stop")]
     [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
@@ -177,6 +181,32 @@ public sealed class InstancesController(
         CancellationToken cancellationToken)
     {
         return RunOperationAsync(() => supervisor.StopInstanceAsync(id, cancellationToken));
+    }
+
+    /// <summary>
+    /// Restarts the p4d of an instance: stops it if it runs, then starts it and waits until it accepts connections.
+    /// The instance is <c>Restarting</c> meanwhile.
+    /// </summary>
+    /// <param name="id">Identifier of the instance.</param>
+    /// <param name="supervisor">Restarts the process.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
+    /// </param>
+    /// <response code="202">p4d runs again.</response>
+    /// <response code="404">No instance has this identifier.</response>
+    /// <response code="409">The instance is not ready, or another operation is in progress.</response>
+    /// <response code="500">p4d did not stop, or did not start again.</response>
+    [HttpPost("{id:guid}/restart")]
+    [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    public Task<ActionResult<InstanceDto>> RestartInstance(
+        Guid id,
+        [FromServices] InstanceSupervisor supervisor,
+        CancellationToken cancellationToken)
+    {
+        return RunOperationAsync(() => supervisor.RestartInstanceAsync(id, cancellationToken));
     }
 
     private async Task<ActionResult<InstanceDto>> RunOperationAsync(Func<Task<P4ServerInstance>> operation)

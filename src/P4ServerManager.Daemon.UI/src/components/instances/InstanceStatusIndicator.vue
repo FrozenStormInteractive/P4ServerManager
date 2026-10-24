@@ -1,10 +1,10 @@
 <template>
   <v-progress-circular
-    v-if="status === 'provisioning'"
-    :aria-label="t('status.provisioning')"
-    color="info"
+    v-if="isInstanceStatusInProgress(status)"
+    :aria-label="t(`status.${status}`)"
+    :color="getInstanceStatusColor(status)"
     indeterminate
-    size="14"
+    size="10"
     width="2"
   />
 
@@ -27,7 +27,7 @@
   import { useI18n } from 'vue-i18n'
 
   // Utilities
-  import { getInstanceStatus, getInstanceStatusColor } from '@/utils/instanceStatus'
+  import { getInstanceStatus, getInstanceStatusColor, isInstanceStatusInProgress } from '@/utils/instanceStatus'
 
   const props = defineProps<{
     instance: Instance
