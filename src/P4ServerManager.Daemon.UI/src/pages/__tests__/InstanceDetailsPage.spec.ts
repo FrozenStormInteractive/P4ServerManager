@@ -88,6 +88,26 @@ describe('InstanceDetailsPage', () => {
     ])
   })
 
+  it('turns the auto-start off and shows the setting saved by the daemon', async () => {
+    let body: unknown
+    server.use(http.patch(`/api/instances/${instance.id}`, async ({ request }) => {
+      body = await request.json()
+      return HttpResponse.json({ ...instance, autoStart: false })
+    }))
+    const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, { props: { id: instance.id } })
+    useInstancesStore(pinia).upsertInstance({ ...instance, autoStart: true })
+    await flushPromises()
+    const autoStart = wrapper.find<HTMLInputElement>('input[name="autoStart"]')
+    expect(autoStart.element.checked).toBe(true)
+
+    await autoStart.setValue(false)
+    await flushPromises()
+
+    expect(body).toEqual({ autoStart: false })
+    expect(useInstancesStore(pinia).getInstance(instance.id)?.autoStart).toBe(false)
+    expect(autoStart.element.checked).toBe(false)
+  })
+
   it('does not offer to delete an instance being provisioned', async () => {
     expect(await mountWith('Unknown', 'Provisioning')).toEqual([
       { text: 'Start', loading: false, disabled: true },

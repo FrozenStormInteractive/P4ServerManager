@@ -43,6 +43,11 @@ public sealed record CreateInstanceRequest
     public bool Unicode { get; init; }
 
     /// <summary>
+    /// True to start p4d when the daemon starts. True when missing. It can be changed later.
+    /// </summary>
+    public bool AutoStart { get; init; } = true;
+
+    /// <summary>
     /// Absolute P4ROOT, empty or missing. Defaults to a folder of the instance.
     /// </summary>
     public string? RootPath { get; init; }

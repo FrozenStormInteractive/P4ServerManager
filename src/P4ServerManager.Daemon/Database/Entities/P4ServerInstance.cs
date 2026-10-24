@@ -43,6 +43,11 @@ public sealed class P4ServerInstance
 
     public bool Unicode { get; set; }
 
+    /// <summary>
+    /// Whether the daemon starts p4d when it starts, if p4d does not already run.
+    /// </summary>
+    public bool AutoStart { get; set; }
+
     public P4ServerInstanceState State { get; set; }
 
     public string? LastError { get; set; }

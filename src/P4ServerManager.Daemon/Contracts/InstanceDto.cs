@@ -16,6 +16,7 @@ namespace P4ServerManager.Daemon.Contracts;
 /// <param name="Build">Build number of the pinned p4d build. Null until resolved.</param>
 /// <param name="CaseSensitive">False when p4d runs case-insensitive (<c>-C1</c>).</param>
 /// <param name="Unicode">True when the server runs in Unicode mode.</param>
+/// <param name="AutoStart">True when the daemon starts p4d when it starts.</param>
 /// <param name="State">Lifecycle state.</param>
 /// <param name="RuntimeStatus">Whether the p4d process runs, or is being started, stopped, restarted or deleted.</param>
 /// <param name="LastError">Error of the last failed operation.</param>
@@ -31,6 +32,7 @@ public sealed record InstanceDto(
     string? Build,
     bool CaseSensitive,
     bool Unicode,
+    bool AutoStart,
     P4ServerInstanceState State,
     InstanceRuntimeStatus RuntimeStatus,
     string? LastError,
@@ -49,6 +51,7 @@ public sealed record InstanceDto(
             instance.Build?.BuildNumber,
             instance.CaseSensitive,
             instance.Unicode,
+            instance.AutoStart,
             instance.State,
             runtimeStatus,
             instance.LastError,

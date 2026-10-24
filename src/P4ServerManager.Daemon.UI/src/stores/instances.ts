@@ -1,6 +1,6 @@
 // Types
 import type { InstancesHub } from '@/api/hub'
-import type { CreateInstanceRequest, Instance, OperationSnapshot } from '@/api/types'
+import type { CreateInstanceRequest, Instance, OperationSnapshot, UpdateInstanceRequest } from '@/api/types'
 
 // Utilities
 import { defineStore } from 'pinia'
@@ -69,6 +69,10 @@ export const useInstancesStore = defineStore('instances', () => {
     return instance
   }
 
+  async function update (id: string, request: UpdateInstanceRequest) {
+    upsertInstance(await api.updateInstance(id, request))
+  }
+
   async function start (id: string) {
     upsertInstance(await api.startInstance(id))
   }
@@ -114,6 +118,7 @@ export const useInstancesStore = defineStore('instances', () => {
     fetchAll,
     fetchOperation,
     create,
+    update,
     start,
     stop,
     restart,

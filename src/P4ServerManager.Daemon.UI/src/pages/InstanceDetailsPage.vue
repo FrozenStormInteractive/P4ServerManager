@@ -75,6 +75,22 @@
           <v-card :title="t('instance.details')">
             <v-list density="compact">
               <v-list-item v-for="detail in details" :key="detail.label" :subtitle="detail.value" :title="t(detail.label)" />
+
+              <v-list-item :subtitle="t('instance.autoStartHint')" :title="t('instance.autoStart')">
+                <template #append>
+                  <v-switch
+                    :aria-label="t('instance.autoStart')"
+                    color="primary"
+                    density="compact"
+                    :disabled="savingAutoStart || status === 'deleting'"
+                    hide-details
+                    :loading="savingAutoStart"
+                    :model-value="instance.autoStart"
+                    name="autoStart"
+                    @update:model-value="setAutoStart"
+                  />
+                </template>
+              </v-list-item>
             </v-list>
           </v-card>
 
@@ -126,6 +142,7 @@
   const sending = ref(false)
   const actionError = ref<string | null>(null)
   const deleteDialog = ref(false)
+  const savingAutoStart = ref(false)
 
   const instance = computed(() => instances.getInstance(props.id))
   const snapshot = computed(() => instances.operations[props.id] ?? null)
@@ -171,6 +188,19 @@
 
   function onDeleted () {
     void router.push({ name: 'instances' })
+  }
+
+  async function setAutoStart (value: boolean | null) {
+    savingAutoStart.value = true
+    actionError.value = null
+    try {
+      await instances.update(props.id, { autoStart: !!value })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      actionError.value = t('instance.autoStartError', { message })
+    } finally {
+      savingAutoStart.value = false
+    }
   }
 
   async function run (action: (id: string) => Promise<void>) {

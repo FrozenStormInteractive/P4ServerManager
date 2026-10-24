@@ -70,6 +70,21 @@ describe('instances store', () => {
     expect(store.getInstance('a')?.lastError).toBeNull()
   })
 
+  it('sends the changed settings and keeps the instance returned by the daemon', async () => {
+    let body: unknown
+    server.use(http.patch('/api/instances/a', async ({ request }) => {
+      body = await request.json()
+      return HttpResponse.json(createInstance({ id: 'a', name: 'alpha', autoStart: false }))
+    }))
+    const store = useInstancesStore()
+    store.upsertInstance(createInstance({ id: 'a', name: 'alpha', autoStart: true }))
+
+    await store.update('a', { autoStart: false })
+
+    expect(body).toEqual({ autoStart: false })
+    expect(store.getInstance('a')?.autoStart).toBe(false)
+  })
+
   it('forgets an instance deleted by another client', () => {
     const store = useInstancesStore()
     store.connect()

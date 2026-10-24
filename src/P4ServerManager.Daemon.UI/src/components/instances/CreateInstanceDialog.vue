@@ -159,6 +159,30 @@
             :type="showPassword ? 'text' : 'password'"
           />
 
+          <v-btn
+            :append-icon="showAdvanced ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+            :aria-expanded="showAdvanced"
+            block
+            class="mt-2"
+            name="advanced"
+            :text="t('createInstance.advanced')"
+            variant="tonal"
+            @click="showAdvanced = !showAdvanced"
+          />
+
+          <v-expand-transition>
+            <div v-if="showAdvanced">
+              <v-switch
+                v-model="fields.autoStart"
+                color="primary"
+                :hint="t('createInstance.autoStartHint')"
+                :label="t('createInstance.autoStart')"
+                name="autoStart"
+                persistent-hint
+              />
+            </div>
+          </v-expand-transition>
+
           <v-alert
             v-if="submitError"
             class="mt-4"
@@ -227,6 +251,7 @@
       rootPath: '',
       caseSensitive: true,
       unicode: false,
+      autoStart: true,
       superUserName: 'admin',
       password: '',
       confirmPassword: '',
@@ -238,6 +263,8 @@
   const submitError = ref<string | null>(null)
   const submitting = ref(false)
   const showPassword = ref(false)
+  // The advanced settings have sensible defaults: they stay folded unless asked for.
+  const showAdvanced = ref(false)
 
   const versions = ref<P4dVersion[]>([])
   const versionsLoading = ref(false)
@@ -307,6 +334,7 @@
       serverErrors.value = {}
       submitError.value = null
       showPassword.value = false
+      showAdvanced.value = false
       void loadVersions()
     }
   }, { immediate: true })
@@ -342,6 +370,7 @@
       port: Number(fields.port),
       caseSensitive: fields.caseSensitive,
       unicode: fields.unicode,
+      autoStart: fields.autoStart,
       rootPath: fields.rootPath.trim() || null,
       superUser: { name: fields.superUserName, password: fields.password },
     }

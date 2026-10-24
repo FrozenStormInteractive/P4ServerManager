@@ -10,7 +10,8 @@ namespace P4ServerManager.Daemon.Services.Instances;
 
 /// <summary>
 /// Keeps track of the p4d processes. At startup it adopts the instances that still run, without restarting them, then
-/// checks them periodically. It also starts, stops and deletes them on request.
+/// starts the stopped ones marked for auto-start and checks them periodically. It also starts, stops and deletes them
+/// on request.
 /// </summary>
 public sealed class InstanceSupervisor(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
@@ -150,6 +151,7 @@ public sealed class InstanceSupervisor(
         using PeriodicTimer timer = new(CheckInterval);
         try
         {
+            await AutoStartAsync(stoppingToken);
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 await CheckInstancesAsync(stoppingToken);
@@ -197,6 +199,46 @@ public sealed class InstanceSupervisor(
             }
         }
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Starts the ready instances marked for auto-start whose p4d was not adopted. It runs once, after the adoption and
+    /// outside the startup of the host, so that the API answers while p4d starts. A failed start is logged and kept as
+    /// the last error of the instance; it does not stop the other starts.
+    /// </summary>
+    private async Task AutoStartAsync(CancellationToken stoppingToken)
+    {
+        List<Guid> instanceIds;
+        await using (DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(stoppingToken))
+        {
+            instanceIds = await db.Instances
+                .Where(i => i.State == P4ServerInstanceState.Ready && i.AutoStart)
+                .Select(i => i.Id)
+                .ToListAsync(stoppingToken);
+        }
+
+        await Task.WhenAll(instanceIds
+            .Where(id => runtimeRegistry.Get(id) == InstanceRuntimeStatus.Stopped)
+            .Select(id => AutoStartInstanceAsync(id, stoppingToken)));
+    }
+
+    private async Task AutoStartInstanceAsync(Guid instanceId, CancellationToken stoppingToken)
+    {
+        try
+        {
+            P4ServerInstance instance = await StartInstanceAsync(instanceId, stoppingToken);
+            logger.LogInformation("Auto-started instance {Name}", instance.Name);
+        }
+        catch (Exception exception) when (exception is InstanceConflictException or KeyNotFoundException)
+        {
+            // Started, stopped, changed or deleted by a request in the meantime.
+            logger.LogDebug(exception, "Skipped the auto-start of instance {Id}", instanceId);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Any failure is caught: one escaping ExecuteAsync would stop the daemon.
+            logger.LogError(exception, "Could not auto-start instance {Id}", instanceId);
+        }
     }
 
     private async Task CheckInstancesAsync(CancellationToken cancellationToken)

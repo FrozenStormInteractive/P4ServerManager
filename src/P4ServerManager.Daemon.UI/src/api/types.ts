@@ -17,6 +17,7 @@ export interface Instance {
   build: string | null
   caseSensitive: boolean
   unicode: boolean
+  autoStart: boolean
   state: InstanceState
   runtimeStatus: RuntimeStatus
   lastError: string | null
@@ -35,8 +36,16 @@ export interface CreateInstanceRequest {
   port: number
   caseSensitive: boolean
   unicode: boolean
+  autoStart: boolean
   rootPath?: string | null
   superUser: SuperUser
+}
+
+/**
+ * Settings that can change after the creation. A missing setting is left as it is.
+ */
+export interface UpdateInstanceRequest {
+  autoStart?: boolean
 }
 
 export interface CachedBuild {

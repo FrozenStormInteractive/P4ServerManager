@@ -95,6 +95,7 @@ public sealed class InstancesController(
             Release = request.Release,
             CaseSensitive = request.CaseSensitive,
             Unicode = request.Unicode,
+            AutoStart = request.AutoStart,
             State = P4ServerInstanceState.Provisioning,
             CreatedAt = timeProvider.GetUtcNow(),
         };
@@ -116,6 +117,44 @@ public sealed class InstancesController(
         await notifier.InstanceChangedAsync(instance);
 
         return AcceptedAtAction(nameof(GetInstance), new { id }, ToDto(instance));
+    }
+
+    /// <summary>
+    /// Changes the settings of an instance that can change after its creation. The settings left out are kept. The
+    /// change takes effect without a restart of p4d.
+    /// </summary>
+    /// <param name="id">Identifier of the instance.</param>
+    /// <param name="request">Settings to change, checked by <see cref="UpdateInstanceRequestValidator"/>.</param>
+    /// <param name="cancellationToken">Aborts the request.</param>
+    /// <response code="200">The instance with its new settings.</response>
+    /// <response code="400">No setting is given, or one is not valid. The errors are keyed by field.</response>
+    /// <response code="404">No instance has this identifier.</response>
+    [HttpPatch("{id:guid}")]
+    [ProducesResponseType<InstanceDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    public async Task<ActionResult<InstanceDto>> UpdateInstance(
+        Guid id,
+        UpdateInstanceRequest request,
+        CancellationToken cancellationToken)
+    {
+        P4ServerInstance? instance = await db.Instances
+            .Include(i => i.Build)
+            .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+        if (instance is null)
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound);
+        }
+
+        if (request.AutoStart is bool autoStart)
+        {
+            instance.AutoStart = autoStart;
+        }
+
+        // Only the changed columns are written: an operation running on the instance keeps its own changes.
+        await db.SaveChangesAsync(cancellationToken);
+        await notifier.InstanceChangedAsync(instance);
+        return ToDto(instance);
     }
 
     /// <summary>

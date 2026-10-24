@@ -1,5 +1,5 @@
 // Types
-import type { CreateInstanceRequest, Instance, OperationSnapshot } from './types'
+import type { CreateInstanceRequest, Instance, OperationSnapshot, UpdateInstanceRequest } from './types'
 
 // Utilities
 import { ApiError, request } from './client'
@@ -10,6 +10,10 @@ export function listInstances (): Promise<Instance[]> {
 
 export function createInstance (body: CreateInstanceRequest): Promise<Instance> {
   return request('POST', '/api/instances', body)
+}
+
+export function updateInstance (id: string, body: UpdateInstanceRequest): Promise<Instance> {
+  return request('PATCH', `/api/instances/${encodeURIComponent(id)}`, body)
 }
 
 /**

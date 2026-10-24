@@ -65,6 +65,9 @@ namespace P4ServerManager.Daemon.Database.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("AutoStart")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("BuildId")
                         .HasColumnType("TEXT");
 

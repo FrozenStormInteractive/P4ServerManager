@@ -116,10 +116,30 @@ describe('CreateInstanceDialog', () => {
       port: 1777,
       caseSensitive: true,
       unicode: false,
+      autoStart: true,
       rootPath: null,
       superUser: { name: 'admin', password: 'Sup3r-Secret!' },
     }])
     expect(wrapper.emitted('update:modelValue')).toEqual([[false]])
+  })
+
+  it('folds the advanced settings and sends the auto-start turned off there', async () => {
+    await mountDialog()
+    expect(document.querySelector('[name="autoStart"]')).toBeNull()
+    await type('name', 'main')
+    await type('password', 'Sup3r-Secret!')
+    await type('confirmPassword', 'Sup3r-Secret!')
+
+    document.querySelector<HTMLButtonElement>('button[name="advanced"]')!.click()
+    await vi.waitFor(() => expect(document.querySelector('[name="autoStart"]')).not.toBeNull())
+    const autoStart = input('autoStart') as HTMLInputElement
+    expect(autoStart.checked).toBe(true)
+    autoStart.click()
+    await flushPromises()
+    await submit()
+
+    await vi.waitFor(() => expect(requests).toHaveLength(1))
+    expect(requests[0]!.autoStart).toBe(false)
   })
 
   it('shows the errors returned by the daemon next to their field', async () => {

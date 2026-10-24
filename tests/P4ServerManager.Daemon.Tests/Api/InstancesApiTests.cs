@@ -96,6 +96,82 @@ public sealed class InstancesApiTests : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData(null, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task CreateInstance_EnablesTheAutoStartUnlessTurnedOff(bool? autoStart, bool expected)
+    {
+        Dictionary<string, object?> request = new()
+        {
+            ["name"] = "main",
+            ["release"] = "r25.1",
+            ["port"] = GetFreePort(),
+            ["superUser"] = new { name = "admin", password = "secret-password" },
+        };
+        if (autoStart is not null)
+        {
+            request["autoStart"] = autoStart;
+        }
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            "/api/instances",
+            request,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        instance.GetProperty("autoStart").GetBoolean().ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task UpdateInstance_TurnsTheAutoStartOffAndOnAgain()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+
+        foreach (bool autoStart in new[] { false, true })
+        {
+            HttpResponseMessage response = await _client.PatchAsJsonAsync(
+                $"/api/instances/{id}",
+                new { autoStart },
+                TestContext.Current.CancellationToken);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            JsonElement instance = await _client.GetFromJsonAsync<JsonElement>(
+                $"/api/instances/{id}",
+                TestContext.Current.CancellationToken);
+            instance.GetProperty("autoStart").GetBoolean().ShouldBe(autoStart);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateInstance_RejectsARequestWithoutSetting()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+
+        HttpResponseMessage response = await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new { },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).ShouldBe(["autoStart"]);
+    }
+
+    [Fact]
+    public async Task UpdateInstance_ReturnsNotFoundForAnUnknownInstance()
+    {
+        HttpResponseMessage response = await _client.PatchAsJsonAsync(
+            $"/api/instances/{Guid.NewGuid()}",
+            new { autoStart = false },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Theory]
     [InlineData("1abc", 0, "r25.1", "admin", "secret-password", "name")]
     [InlineData("main", 80, "r25.1", "admin", "secret-password", "port")]
     [InlineData("main", 70000, "r25.1", "admin", "secret-password", "port")]

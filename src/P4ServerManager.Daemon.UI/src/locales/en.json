@@ -67,7 +67,10 @@
     "enabled": "Enabled",
     "disabled": "Disabled",
     "createdAt": "Created",
-    "lastError": "Last error"
+    "lastError": "Last error",
+    "autoStart": "Start with the manager",
+    "autoStartHint": "Starts the server whenever the manager starts, unless it already runs.",
+    "autoStartError": "The setting could not be saved: {message}"
   },
   "operations": {
     "kinds": {
@@ -93,17 +96,20 @@
     "cached": "cached",
     "port": "Port",
     "rootPath": "Root directory",
-    "rootPathHint": "Leave empty to use a folder managed by the daemon.",
+    "rootPathHint": "Leave empty to let the manager choose a folder.",
     "caseSensitive": "Case-sensitive",
     "caseSensitiveHint": "Cannot be changed once the server exists.",
     "unicode": "Unicode mode",
     "unicodeHint": "Cannot be undone once the server exists.",
+    "advanced": "Advanced",
+    "autoStart": "Start with the manager",
+    "autoStartHint": "Starts the server whenever the manager starts. Can be changed later.",
     "superUser": "Super user",
     "superUserHint": "The administrator of the new server. Until you add other users, it is the only account that can manage it.",
     "superUserName": "User name",
     "password": "Password",
     "confirmPassword": "Confirm the password",
-    "passwordHint": "Only given to p4d, never stored by the daemon.",
+    "passwordHint": "Only given to p4d, never stored by the manager.",
     "showPassword": "Show the password",
     "error": "The server could not be created: {message}",
     "rules": {
@@ -121,18 +127,18 @@
   },
   "deleteInstance": {
     "title": "Delete {name}?",
-    "text": "The server is stopped if it runs, then removed from the daemon. This cannot be undone.",
+    "text": "The server is stopped if it runs, then removed from the manager. This cannot be undone.",
     "filesChoice": "Files of the server",
     "keepFiles": "Keep the files",
     "deleteFiles": "Delete the files",
-    "deleteFilesHint": "Deletes the logs and, when the daemon chose it, the root directory with the depots. A root directory you gave at creation is kept.",
+    "deleteFilesHint": "Deletes the logs and, when the manager chose it, the root directory with the depots. A root directory you gave at creation is kept.",
     "keptFiles": "The files stay on disk, in {path}.",
     "confirmName": "Type {name} to confirm",
     "error": "The server could not be deleted: {message}"
   },
   "settings": {
     "title": "Settings",
-    "placeholder": "The settings of the daemon will be available here."
+    "placeholder": "The settings of the manager will be available here."
   },
   "notFound": {
     "title": "Page not found",

@@ -13,6 +13,7 @@ export function createInstance (overrides: Partial<Instance> = {}): Instance {
     build: '3086021',
     caseSensitive: true,
     unicode: false,
+    autoStart: true,
     state: 'Ready',
     runtimeStatus: 'Running',
     lastError: null,
