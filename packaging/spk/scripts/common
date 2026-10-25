@@ -1,0 +1,218 @@
+# Shared by the package scripts, which source it. DSM runs them as the package user.
+
+PKG_NAME="${SYNOPKG_PKGNAME:-P4ServerManager}"
+PKG_DIR="/var/packages/$PKG_NAME"
+TARGET_DIR="${SYNOPKG_PKGDEST:-$PKG_DIR/target}"
+VAR_DIR="${SYNOPKG_PKGVAR:-$PKG_DIR/var}"
+# Kept by DSM after an uninstallation, unlike the var folder.
+ETC_DIR="$PKG_DIR/etc"
+
+SHARE_NAME="P4ServerManager"
+UI_PORT="@UI_PORT@"
+
+DAEMON_DIR="$TARGET_DIR/daemon"
+DAEMON_BIN="$DAEMON_DIR/P4ServerManager.Daemon"
+DAEMON_PID_FILE="$VAR_DIR/daemon.pid"
+DAEMON_LOG_FILE="$VAR_DIR/daemon.log"
+DATA_DIR_FILE="$ETC_DIR/data-dir"
+
+# Package whose p4dctl-ng profiles the daemon offers to import.
+LEGACY_PACKAGE="HelixCoreServer"
+
+DAEMON_START_TIMEOUT=60
+DAEMON_STOP_TIMEOUT=30
+# As long as the daemon waits for a p4d to stop.
+P4D_STOP_TIMEOUT=60
+
+# Shows a message in Package Center when the script fails, and keeps it in the log of the daemon.
+report() {
+    [ -n "$SYNOPKG_TEMP_LOGFILE" ] && echo "$1" >>"$SYNOPKG_TEMP_LOGFILE"
+    [ -d "$VAR_DIR" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') [package] $1" >>"$DAEMON_LOG_FILE"
+    return 0
+}
+
+# Path of the shared folder, through the link DSM makes for the data-share resource. It is saved, so that
+# postuninst still finds it once the link is gone.
+resolve_data_dir() {
+    data_dir=$(readlink -f "$PKG_DIR/shares/$SHARE_NAME" 2>/dev/null)
+    if [ -z "$data_dir" ] || [ ! -d "$data_dir" ]; then
+        return 1
+    fi
+    if [ -d "$ETC_DIR" ] && [ "$(cat "$DATA_DIR_FILE" 2>/dev/null)" != "$data_dir" ]; then
+        echo "$data_dir" >"$DATA_DIR_FILE"
+    fi
+    echo "$data_dir"
+}
+
+saved_data_dir() {
+    resolve_data_dir || cat "$DATA_DIR_FILE" 2>/dev/null
+}
+
+# True when the pid runs the given executable. The pid may have been reused since the pid file was written.
+pid_runs() {
+    [ -n "$1" ] && [ -d "/proc/$1" ] || return 1
+    [ "$(basename "$(readlink "/proc/$1/exe" 2>/dev/null)")" = "$2" ]
+}
+
+daemon_pid() {
+    pid=$(cat "$DAEMON_PID_FILE" 2>/dev/null)
+    pid_runs "$pid" "P4ServerManager.Daemon" && echo "$pid"
+}
+
+# Waits up to $2 seconds for the process $1 to exit.
+wait_for_exit() {
+    waited=0
+    while [ -d "/proc/$1" ]; do
+        [ "$waited" -ge "$2" ] && return 1
+        sleep 1
+        waited=$((waited + 1))
+    done
+    return 0
+}
+
+start_daemon() {
+    if [ -n "$(daemon_pid)" ]; then
+        return 0
+    fi
+
+    data_dir=$(resolve_data_dir)
+    if [ -z "$data_dir" ]; then
+        report "The shared folder $SHARE_NAME is missing. Check it in Control Panel > Shared Folder, then repair the package."
+        return 1
+    fi
+
+    copy_legacy_profiles "$data_dir"
+
+    # One previous log is kept.
+    [ -f "$DAEMON_LOG_FILE" ] && mv -f "$DAEMON_LOG_FILE" "$DAEMON_LOG_FILE.1"
+
+    # The content root is the folder of the daemon: it holds the static files of the UI.
+    cd "$DAEMON_DIR" || return 1
+    HOME="$VAR_DIR" \
+    ASPNETCORE_ENVIRONMENT=Production \
+    ASPNETCORE_URLS="http://+:$UI_PORT" \
+    Daemon__DataDirectory="$data_dir" \
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
+        nohup "$DAEMON_BIN" >>"$DAEMON_LOG_FILE" 2>&1 </dev/null &
+    echo $! >"$DAEMON_PID_FILE"
+
+    # The daemon migrates the database and adopts the running servers before it listens.
+    waited=0
+    while [ "$waited" -lt "$DAEMON_START_TIMEOUT" ]; do
+        if [ -z "$(daemon_pid)" ]; then
+            report "P4 Server Manager stopped while it started. See $DAEMON_LOG_FILE."
+            rm -f "$DAEMON_PID_FILE"
+            return 1
+        fi
+        if daemon_listens; then
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    report "P4 Server Manager did not answer on port $UI_PORT within $DAEMON_START_TIMEOUT seconds. See $DAEMON_LOG_FILE."
+    return 1
+}
+
+daemon_listens() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fs -o /dev/null --max-time 2 "http://127.0.0.1:$UI_PORT/api/instances"
+    else
+        # Without curl, a daemon that ran a few seconds is taken as started.
+        [ "$waited" -ge 5 ]
+    fi
+}
+
+stop_daemon() {
+    pid=$(daemon_pid)
+    if [ -n "$pid" ]; then
+        kill -TERM "$pid"
+        if ! wait_for_exit "$pid" "$DAEMON_STOP_TIMEOUT"; then
+            # The p4d servers do not depend on the daemon: killing it does not touch them.
+            report "P4 Server Manager did not stop within $DAEMON_STOP_TIMEOUT seconds. It was killed."
+            kill -KILL "$pid"
+            wait_for_exit "$pid" 5
+        fi
+    fi
+    rm -f "$DAEMON_PID_FILE"
+}
+
+# Pids of the p4d servers that run, one per line, read from the pid files the daemon keeps.
+running_p4d_pids() {
+    data_dir=$(saved_data_dir)
+    [ -n "$data_dir" ] || return 0
+    for pid_file in "$data_dir"/instances/*/p4d.pid; do
+        [ -f "$pid_file" ] || continue
+        pid=$(cat "$pid_file" 2>/dev/null)
+        pid_runs "$pid" "p4d" && echo "$pid"
+    done
+}
+
+# Stops the p4d servers the way the daemon does: SIGTERM, which p4d handles as a clean shutdown. Done when the
+# package stops, so that DSM never kills a p4d along with the processes of the package. The servers marked for
+# auto-start start again with the package.
+stop_p4d_servers() {
+    pids=$(running_p4d_pids)
+    [ -n "$pids" ] || return 0
+    for pid in $pids; do
+        kill -TERM "$pid"
+    done
+
+    result=0
+    for pid in $pids; do
+        if ! wait_for_exit "$pid" "$P4D_STOP_TIMEOUT"; then
+            report "p4d (pid $pid) did not stop within $P4D_STOP_TIMEOUT seconds. It is left running."
+            result=1
+        fi
+    done
+    return $result
+}
+
+# Folders that may hold p4dctl-ng profiles. A copy of the detection in WIZARD_UIFILES/install_uifile.sh, keep both
+# in sync.
+legacy_profile_dirs() {
+    for etc_dir in "/var/packages/$LEGACY_PACKAGE/etc" /volume*/@appconf/"$LEGACY_PACKAGE"; do
+        [ -d "$etc_dir" ] || continue
+        echo "$etc_dir/p4dctl-ng.conf.d"
+        legacy_includes "$etc_dir/p4dctl-ng.conf"
+    done
+    legacy_includes /etc/perforce/p4dctlng.conf
+}
+
+legacy_includes() {
+    [ -r "$1" ] && command -v jq >/dev/null 2>&1 || return 0
+    jq -r '.Includes[]? // empty' "$1" 2>/dev/null
+}
+
+legacy_profile_files() {
+    legacy_profile_dirs | while IFS= read -r dir; do
+        [ -d "$dir" ] || continue
+        for file in "$dir"/*; do
+            [ -f "$file" ] && [ -r "$file" ] && grep -q 'P4ROOT' "$file" && readlink -f "$file"
+        done
+    done | sort -u
+}
+
+# Copies the profiles of the HelixCoreServer package to <data>/import/HelixCoreServer, where the daemon looks for
+# servers to import. A profile already there, imported or not, or dismissed from the web interface, is not copied
+# again: the copy runs at each start, so that profiles created after the installation are found too.
+copy_legacy_profiles() {
+    import_dir="$1/import/$LEGACY_PACKAGE"
+    legacy_profile_files | {
+        seen=" "
+        while IFS= read -r file; do
+            name=$(basename "$file")
+            # Two included folders may hold files of the same name: the next ones are named after their path.
+            case "$seen" in
+                *" $name "*) name="$(printf '%s' "$file" | cksum | cut -d ' ' -f 1)-$name" ;;
+            esac
+            seen="$seen$(basename "$file") "
+            if [ -e "$import_dir/$name" ] || [ -e "$import_dir/dismissed/$name" ]; then
+                continue
+            fi
+            mkdir -p "$import_dir" && cp "$file" "$import_dir/$name" \
+                || report "The profile $file of the $LEGACY_PACKAGE package could not be copied to $import_dir."
+        done
+    }
+    return 0
+}

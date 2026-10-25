@@ -1,0 +1,4 @@
+# DSM runs these files as is: keep LF line endings, whatever the checkout settings.
+* text eol=lf
+*.png binary
+*.PNG binary

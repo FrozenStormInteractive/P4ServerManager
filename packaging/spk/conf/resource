@@ -1,0 +1,18 @@
+{
+    "data-share": {
+        "shares": [
+            {
+                "name": "P4ServerManager",
+                "permission": {
+                    "rw": ["Perforce"]
+                }
+            }
+        ]
+    },
+    "port-config": {
+        "protocol-file": "conf/P4ServerManager.sc"
+    },
+    "usr-local-linker": {
+        "bin": ["bin/p4sm"]
+    }
+}

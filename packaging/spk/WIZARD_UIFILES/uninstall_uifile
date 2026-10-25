@@ -1,0 +1,24 @@
+[
+    {
+        "step_title": "Perforce data",
+        "invalid_next_disabled": true,
+        "items": [
+            {
+                "type": "singleselect",
+                "desc": "The P4ServerManager shared folder holds the database of the package, the downloaded p4d builds and the P4 servers created in their default location. What do you want to do with them?<br><br>The shared folder itself is always kept, and so are the servers whose root was chosen outside of it.",
+                "subitems": [
+                    {
+                        "key": "wizard_keep_data",
+                        "desc": "Keep them. A later installation finds the servers again.",
+                        "defaultValue": true
+                    },
+                    {
+                        "key": "wizard_delete_data",
+                        "desc": "<b style=\"color: red\">Delete them, with every depot and journal they hold. This cannot be undone.</b>",
+                        "defaultValue": false
+                    }
+                ]
+            }
+        ]
+    }
+]

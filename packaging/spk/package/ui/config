@@ -1,0 +1,16 @@
+{
+    ".url": {
+        "com.FrozenStormInteractive.P4ServerManager": {
+            "type": "url",
+            "title": "P4 Server Manager",
+            "desc": "Create, run and maintain P4 servers",
+            "icon": "images/icon_{0}.png",
+            "protocol": "http",
+            "port": "@UI_PORT@",
+            "url": "/",
+            "allUsers": false,
+            "grantPrivilege": "local",
+            "advanceGrantPrivilege": true
+        }
+    }
+}

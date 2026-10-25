@@ -1,0 +1,4 @@
+#!/bin/sh
+# Before the files of the package are removed, on an uninstallation and an upgrade. DSM stops the package first.
+
+exit 0

@@ -1,0 +1,5 @@
+#!/bin/sh
+# After the files of the package are installed, on an installation and an upgrade. Nothing to do: the profiles of
+# the HelixCoreServer package are copied when the package starts.
+
+exit 0
