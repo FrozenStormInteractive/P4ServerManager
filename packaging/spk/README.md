@@ -34,7 +34,6 @@ The packages land in `artifacts/spk/`, named `P4ServerManager-<arch>-<version>-<
 | `WIZARD_UIFILES/` | `WIZARD_UIFILES/` of the SPK | Install wizard (a script, because its steps depend on the NAS) and uninstall wizard. |
 | `package/` | `/var/packages/P4ServerManager/target` | UI entry of the DSM main menu, firewall service file, `bin/p4sm`. |
 | `PACKAGE_ICON*.PNG`, `package/ui/images/` | | Icons of Package Center and of the DSM main menu. |
-| `icon/` | | SVG sources of the icons. `render.py` writes the PNG files from them, with ImageMagick 7. |
 
 ## On the NAS
 
