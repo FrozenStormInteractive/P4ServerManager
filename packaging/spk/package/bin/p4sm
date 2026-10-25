@@ -2,4 +2,4 @@
 # Entry point of the CLI, linked to /usr/local/bin/p4sm by the usr-local-linker resource.
 
 TARGET_DIR="$(dirname "$(readlink -f "$0")")/.."
-exec "$TARGET_DIR/cli/P4ServerManager.Cli" "$@"
+exec "$TARGET_DIR/app/P4ServerManager.Cli" "$@"

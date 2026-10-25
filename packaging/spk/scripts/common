@@ -10,8 +10,8 @@ ETC_DIR="$PKG_DIR/etc"
 SHARE_NAME="P4ServerManager"
 UI_PORT="@UI_PORT@"
 
-DAEMON_DIR="$TARGET_DIR/daemon"
-DAEMON_BIN="$DAEMON_DIR/P4ServerManager.Daemon"
+APP_DIR="$TARGET_DIR/app"
+DAEMON_BIN="$APP_DIR/P4ServerManager.Daemon"
 DAEMON_PID_FILE="$VAR_DIR/daemon.pid"
 DAEMON_LOG_FILE="$VAR_DIR/daemon.log"
 DATA_DIR_FILE="$ETC_DIR/data-dir"
@@ -86,8 +86,8 @@ start_daemon() {
     # One previous log is kept.
     [ -f "$DAEMON_LOG_FILE" ] && mv -f "$DAEMON_LOG_FILE" "$DAEMON_LOG_FILE.1"
 
-    # The content root is the folder of the daemon: it holds the static files of the UI.
-    cd "$DAEMON_DIR" || return 1
+    # The content root is the folder of the app: it holds the static files of the UI.
+    cd "$APP_DIR" || return 1
     HOME="$VAR_DIR" \
     ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_URLS="http://+:$UI_PORT" \

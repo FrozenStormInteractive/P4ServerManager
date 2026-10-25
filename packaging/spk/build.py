@@ -10,6 +10,7 @@ modes and line endings of the package do not depend on the host.
 """
 
 import argparse
+import filecmp
 import gzip
 import hashlib
 import io
@@ -78,9 +79,10 @@ def main() -> int:
         if not args.skip_publish:
             publish(rid, args.configuration, publish_dir)
         check_publish_output(publish_dir)
+        cli_files = cli_only_files(publish_dir)
 
         spk_path = args.output / f"{PACKAGE_NAME}-{arch}-{version}.spk"
-        build_spk(arch, version, args.ui_port, args.beta, placeholders, publish_dir, spk_path)
+        build_spk(arch, version, args.ui_port, args.beta, placeholders, publish_dir, cli_files, spk_path)
         print(f"Built {spk_path}")
 
     return 0
@@ -109,9 +111,33 @@ def check_publish_output(publish_dir: Path) -> None:
         sys.exit("The publish output is incomplete. Missing:\n  " + "\n  ".join(missing))
 
 
+def cli_only_files(publish_dir: Path) -> list:
+    """The files of the CLI that the daemon does not have.
+
+    The daemon and the CLI are installed in one folder, so that they share the files of the .NET runtime. A self-
+    contained app only loads what its own deps.json lists, so both run from there as long as the files they have in
+    common are the same. They stop being the same when the two projects use different versions of a package: the
+    build fails then, instead of installing a file one of the apps cannot load.
+    """
+    daemon_dir, cli_dir = publish_dir / "daemon", publish_dir / "cli"
+    own, conflicts = [], []
+    for path in sorted(cli_dir.rglob("*")):
+        if path.is_dir():
+            continue
+        twin = daemon_dir / path.relative_to(cli_dir)
+        if not twin.exists():
+            own.append(path)
+        elif not filecmp.cmp(path, twin, shallow=False):
+            conflicts.append(path.relative_to(cli_dir).as_posix())
+    if conflicts:
+        sys.exit("The daemon and the CLI publish different versions of the same files, so they cannot share one "
+                 "folder. Align the package versions of the two projects:\n  " + "\n  ".join(conflicts))
+    return own
+
+
 def build_spk(arch: str, version: str, ui_port: int, beta: bool, placeholders: dict, publish_dir: Path,
-              spk_path: Path) -> None:
-    package_tgz, extract_size = build_package_tgz(publish_dir, placeholders)
+              cli_files: list, spk_path: Path) -> None:
+    package_tgz, extract_size = build_package_tgz(publish_dir, cli_files, placeholders)
 
     # Package Center checks the MD5 of package.tgz against the checksum of INFO.
     checksum = hashlib.md5(package_tgz).hexdigest()
@@ -130,14 +156,16 @@ def build_spk(arch: str, version: str, ui_port: int, beta: bool, placeholders: d
                  executable=lambda path: path.suffix == ".sh")
 
 
-def build_package_tgz(publish_dir: Path, placeholders: dict) -> tuple:
+def build_package_tgz(publish_dir: Path, cli_files: list, placeholders: dict) -> tuple:
     """The files installed in /var/packages/P4ServerManager/target, and their size in bytes."""
     buffer = io.BytesIO()
     # A fixed mtime in the gzip header keeps two builds of the same files identical.
     with gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=9, mtime=0) as compressed:
         with tarfile.open(fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT) as package:
-            add_tree(package, publish_dir / "daemon", "daemon", None, executable=is_elf)
-            add_tree(package, publish_dir / "cli", "cli", None, executable=is_elf)
+            add_tree(package, publish_dir / "daemon", "app", None, executable=is_elf)
+            for path in cli_files:
+                name = "app/" + path.relative_to(publish_dir / "cli").as_posix()
+                add_file(package, path, name, None, 0o755 if is_elf(path) else 0o644)
             add_tree(package, SPK_DIR / "package", ".", placeholders,
                      executable=lambda path: path.parent.name == "bin")
             extract_size = sum(member.size for member in package.getmembers())
