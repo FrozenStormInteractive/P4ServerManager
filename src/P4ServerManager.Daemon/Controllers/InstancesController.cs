@@ -113,7 +113,7 @@ public sealed class InstancesController(
         }
 
         SuperUserCredentials superUser = new(request.SuperUser.Name, request.SuperUser.Password);
-        await queue.EnqueueAsync(new ProvisioningRequest(id, superUser), cancellationToken);
+        await queue.EnqueueAsync(new ProvisioningRequest(id, ProvisioningKind.Create, superUser), cancellationToken);
         await notifier.InstanceChangedAsync(instance);
 
         return AcceptedAtAction(nameof(GetInstance), new { id }, ToDto(instance));

@@ -27,6 +27,17 @@ public sealed class DaemonPaths
 
     public string InstancesDirectory => Path.Combine(DataDirectory, "instances");
 
+    /// <summary>
+    /// Profiles of the p4dctl-ng servers of the HelixCoreServer Synology package, copied there by the package of the
+    /// daemon, to be imported.
+    /// </summary>
+    public string LegacyProfilesDirectory => Path.Combine(DataDirectory, "import", "HelixCoreServer");
+
+    /// <summary>
+    /// Profiles the user chose not to import.
+    /// </summary>
+    public string DismissedLegacyProfilesDirectory => Path.Combine(LegacyProfilesDirectory, "dismissed");
+
     public string GetBuildDirectory(string platform, string version, string build)
     {
         return Path.Combine(BuildsDirectory, platform, version, build);
@@ -53,6 +64,14 @@ public sealed class DaemonPaths
     public string GetStartOutputPath(Guid instanceId)
     {
         return Path.Combine(GetInstanceDirectory(instanceId), "logs", "p4d-start.log");
+    }
+
+    /// <summary>
+    /// Checkpoint of the database of an imported server, taken before the daemon upgrades it.
+    /// </summary>
+    public string GetImportCheckpointPath(Guid instanceId)
+    {
+        return Path.Combine(GetInstanceDirectory(instanceId), "checkpoint-before-import.gz");
     }
 
     public string GetPidFilePath(Guid instanceId)
