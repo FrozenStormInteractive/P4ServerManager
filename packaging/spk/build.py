@@ -11,6 +11,7 @@ modes and line endings of the package do not depend on the host.
 
 import argparse
 import gzip
+import hashlib
 import io
 import shutil
 import subprocess
@@ -112,7 +113,9 @@ def build_spk(arch: str, version: str, ui_port: int, beta: bool, placeholders: d
               spk_path: Path) -> None:
     package_tgz, extract_size = build_package_tgz(publish_dir, placeholders)
 
-    info = make_info(arch, version, ui_port, beta, extract_size)
+    # Package Center checks the MD5 of package.tgz against the checksum of INFO.
+    checksum = hashlib.md5(package_tgz).hexdigest()
+    info = make_info(arch, version, ui_port, beta, extract_size, checksum)
 
     spk_path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(spk_path, "w", format=tarfile.GNU_FORMAT) as spk:
@@ -141,7 +144,7 @@ def build_package_tgz(publish_dir: Path, placeholders: dict) -> tuple:
     return buffer.getvalue(), extract_size
 
 
-def make_info(arch: str, version: str, ui_port: int, beta: bool, extract_size: int) -> str:
+def make_info(arch: str, version: str, ui_port: int, beta: bool, extract_size: int, checksum: str) -> str:
     info = {
         "package": PACKAGE_NAME,
         "version": version,
@@ -165,6 +168,7 @@ def make_info(arch: str, version: str, ui_port: int, beta: bool, extract_size: i
         "install_dep_services": "syno-share.target",
         "start_dep_services": "network-online.target syno-share.target",
         "extractsize": str(extract_size // 1024),
+        "checksum": checksum,
         "create_time": datetime.now().strftime("%Y%m%d-%H:%M:%S"),
     }
     if beta:
