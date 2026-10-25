@@ -1,0 +1,4 @@
+#!/bin/sh
+# Before the files of the package are installed. Nothing to check: INFO sets the DSM version and the architecture.
+
+exit 0

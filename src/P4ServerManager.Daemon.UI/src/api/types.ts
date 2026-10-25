@@ -48,6 +48,49 @@ export interface UpdateInstanceRequest {
   autoStart?: boolean
 }
 
+/**
+ * A server profile of the HelixCoreServer Synology package (p4dctl-ng), waiting to be imported.
+ */
+export interface LegacyProfile {
+  /**
+   * File name of the profile.
+   */
+  id: string
+  name: string | null
+  rootPath: string | null
+  port: number | null
+  /**
+   * False when the profile ran p4d with `-C1`. Only a suggestion: the database does not record it.
+   */
+  caseSensitive: boolean
+  autoStart: boolean
+  /**
+   * Settings of the profile an imported instance does not keep, such as P4JOURNAL.
+   */
+  ignoredSettings: string[]
+  /**
+   * Why the profile cannot be imported. Empty when it can.
+   */
+  problems: string[]
+  /**
+   * The instance that uses the root of the profile, once imported.
+   */
+  instanceId: string | null
+}
+
+/**
+ * Settings of the instance that takes over the server of a legacy profile. The root comes from the profile, and the
+ * Unicode mode from its database.
+ */
+export interface ImportLegacyProfileRequest {
+  name: string
+  description?: string | null
+  release: string
+  port: number
+  caseSensitive: boolean
+  autoStart: boolean
+}
+
 export interface CachedBuild {
   build: string
   downloadedAt: string

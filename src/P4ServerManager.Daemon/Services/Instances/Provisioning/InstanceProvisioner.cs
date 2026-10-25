@@ -7,12 +7,13 @@ using P4ServerManager.Daemon.Services.Operations;
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
 /// <summary>
-/// Turns a new instance into a running p4d by running the provisioning steps, in the order they were registered by
-/// <see cref="ProvisioningServiceCollectionExtensions.AddProvisioning"/>.
+/// Turns a new instance into a running p4d by running the steps of its <see cref="ProvisioningKind"/>, in the order
+/// they were registered by <see cref="ProvisioningServiceCollectionExtensions.AddProvisioning"/>.
 /// </summary>
 public sealed class InstanceProvisioner(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
-    IEnumerable<IOperationStep<ProvisioningContext>> steps,
+    [FromKeyedServices(ProvisioningKind.Create)] IEnumerable<IOperationStep<ProvisioningContext>> createSteps,
+    [FromKeyedServices(ProvisioningKind.Import)] IEnumerable<IOperationStep<ProvisioningContext>> importSteps,
     OperationRunner operationRunner,
     P4ServerLauncher launcher,
     InstanceRuntimeRegistry runtimeRegistry,
@@ -21,7 +22,11 @@ public sealed class InstanceProvisioner(
 {
     public const string OperationKind = "provision";
 
-    private readonly IReadOnlyList<IOperationStep<ProvisioningContext>> provisioningSteps = steps.ToList();
+    public const string ImportOperationKind = "import";
+
+    private readonly IReadOnlyList<IOperationStep<ProvisioningContext>> provisioningSteps = createSteps.ToList();
+
+    private readonly IReadOnlyList<IOperationStep<ProvisioningContext>> importingSteps = importSteps.ToList();
 
     public async Task ProvisionAsync(ProvisioningRequest request, CancellationToken cancellationToken)
     {
@@ -34,11 +39,16 @@ public sealed class InstanceProvisioner(
             return;
         }
 
-        logger.LogInformation("Provisioning instance {Name}", instance.Name);
+        logger.LogInformation("Provisioning instance {Name} ({Kind})", instance.Name, request.Kind);
         ProvisioningContext context = new(db, instance, request.SuperUser);
+        (string kind, IReadOnlyList<IOperationStep<ProvisioningContext>> steps) = request.Kind switch
+        {
+            ProvisioningKind.Import => (ImportOperationKind, importingSteps),
+            _ => (OperationKind, provisioningSteps),
+        };
         try
         {
-            await operationRunner.RunAsync(instance.Id, OperationKind, provisioningSteps, context, cancellationToken);
+            await operationRunner.RunAsync(instance.Id, kind, steps, context, cancellationToken);
 
             instance.State = P4ServerInstanceState.Ready;
             instance.LastError = null;

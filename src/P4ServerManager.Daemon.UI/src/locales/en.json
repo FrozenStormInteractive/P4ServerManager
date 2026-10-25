@@ -17,7 +17,9 @@
     "start": "Start",
     "stop": "Stop",
     "restart": "Restart",
-    "delete": "Delete"
+    "delete": "Delete",
+    "import": "Import",
+    "dismiss": "Dismiss"
   },
   "status": {
     "provisioning": "Provisioning",
@@ -53,6 +55,16 @@
     },
     "noData": "No instances yet"
   },
+  "legacyProfiles": {
+    "title": "Servers of the HelixCoreServer package",
+    "text": "These servers were set up with the Perforce P4 Server (p4d) package. Import them to manage them here. Their root and their depots stay where they are.",
+    "loadError": "The servers to import could not be loaded: {message}",
+    "unnamed": "Unnamed server",
+    "noPort": "no port",
+    "ignored": "Not kept: {settings}",
+    "dismissError": "The server could not be dismissed: {message}",
+    "dismissHint": "Hide this server for good. It is left untouched."
+  },
   "instance": {
     "notFound": "This instance does not exist.",
     "details": "Details",
@@ -74,14 +86,19 @@
   },
   "operations": {
     "kinds": {
-      "provision": "Provisioning"
+      "provision": "Provisioning",
+      "import": "Import"
     },
     "steps": {
       "resolve-build": "Get the p4d build",
       "prepare-directories": "Prepare the directories",
       "initialize-database": "Initialize the database",
       "start-server": "Start the server",
-      "create-super-user": "Create the super user"
+      "create-super-user": "Create the super user",
+      "check-root": "Check the root",
+      "save-checkpoint": "Save a checkpoint",
+      "read-settings": "Read the server settings",
+      "upgrade-database": "Upgrade the database"
     },
     "skipped": "Skipped"
   },
@@ -124,6 +141,16 @@
       "passwordLength": "Use at least 8 characters.",
       "passwordMatch": "The passwords do not match."
     }
+  },
+  "importInstance": {
+    "title": "Import {name}",
+    "root": "Root directory",
+    "rootHint": "Kept as it is. The server ID stored in the database is kept too.",
+    "versionHint": "The database is upgraded to this version and cannot go back: choose the version the server ran, or a newer one.",
+    "caseSensitiveHint": "Must match the way the server was created. Suggested from its profile.",
+    "unicodeNote": "The Unicode mode is read from the database.",
+    "warning": "Stop the server in the HelixCoreServer package first. A checkpoint of the database is saved to the folder of the instance before the upgrade.",
+    "error": "The server could not be imported: {message}"
   },
   "deleteInstance": {
     "title": "Delete {name}?",

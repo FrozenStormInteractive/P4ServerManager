@@ -24,7 +24,8 @@ public sealed class CreateSuperUserStep(
         CancellationToken cancellationToken)
     {
         P4ServerInstance instance = context.Instance;
-        SuperUserCredentials superUser = context.SuperUser;
+        SuperUserCredentials superUser = context.SuperUser
+            ?? throw new InvalidOperationException("A created server needs a super user.");
         TimeSpan timeout = ProcessRunnerExtensions.CommandTimeout;
         string p4Path = buildCache.GetP4Path(instance.Build!);
         string clientDirectory = paths.GetClientStateDirectory(instance.Id);

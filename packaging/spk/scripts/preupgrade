@@ -1,0 +1,5 @@
+#!/bin/sh
+# Before an upgrade. Nothing to save: the database lives in the shared folder, and the daemon migrates it when it
+# starts.
+
+exit 0

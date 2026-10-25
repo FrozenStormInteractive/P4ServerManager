@@ -1,0 +1,25 @@
+#!/bin/sh
+# Called by DSM to start, stop and check the package.
+
+. "$(dirname "$0")/common"
+
+case "$1" in
+    start)
+        start_daemon
+        exit $?
+        ;;
+    stop)
+        # The daemon first, so that it does not report the servers it sees stopping as failures.
+        stop_daemon
+        stop_p4d_servers
+        exit $?
+        ;;
+    status)
+        # 0: running, 3: not running.
+        [ -n "$(daemon_pid)" ] && exit 0
+        exit 3
+        ;;
+    *)
+        exit 1
+        ;;
+esac

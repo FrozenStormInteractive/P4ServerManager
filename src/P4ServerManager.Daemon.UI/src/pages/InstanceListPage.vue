@@ -23,6 +23,8 @@
       {{ t('instances.loadError', { message: instances.error }) }}
     </v-alert>
 
+    <LegacyProfilesCard />
+
     <v-card>
       <v-data-table
         :headers="headers"
@@ -56,6 +58,7 @@
 
   // Components and stores
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
+  import LegacyProfilesCard from '@/components/instances/LegacyProfilesCard.vue'
   import { useAppStore } from '@/stores/app'
   import { useInstancesStore } from '@/stores/instances'
 
