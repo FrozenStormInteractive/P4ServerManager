@@ -2,4 +2,6 @@
 # Entry point of the CLI, linked to /usr/local/bin/p4sm by the usr-local-linker resource.
 
 TARGET_DIR="$(dirname "$(readlink -f "$0")")/.."
+# Socket of the daemon, set by scripts/common: keep both in sync.
+export P4SM_SOCKET="${P4SM_SOCKET:-/var/packages/P4ServerManager/var/daemon.sock}"
 exec "$TARGET_DIR/app/P4ServerManager.Cli" "$@"

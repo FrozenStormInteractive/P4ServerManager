@@ -1,7 +1,4 @@
-using P4ServerManager.Daemon.Database.Entities;
-using P4ServerManager.Daemon.Services.Instances;
-
-namespace P4ServerManager.Daemon.Contracts;
+namespace P4ServerManager.Contracts;
 
 /// <summary>
 /// A p4d server managed by the daemon.
@@ -36,25 +33,14 @@ public sealed record InstanceDto(
     P4ServerInstanceState State,
     InstanceRuntimeStatus RuntimeStatus,
     string? LastError,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt);
+
+/// <summary>
+/// Lifecycle state of an instance. Whether p4d runs is not stored: the supervisor reads it from the pid file.
+/// </summary>
+public enum P4ServerInstanceState
 {
-    public static InstanceDto From(P4ServerInstance instance, InstanceRuntimeStatus runtimeStatus)
-    {
-        return new InstanceDto(
-            instance.Id,
-            instance.Name,
-            instance.Description,
-            instance.Port,
-            instance.RootPath,
-            instance.Release,
-            instance.Build?.Version,
-            instance.Build?.BuildNumber,
-            instance.CaseSensitive,
-            instance.Unicode,
-            instance.AutoStart,
-            instance.State,
-            runtimeStatus,
-            instance.LastError,
-            instance.CreatedAt);
-    }
+    Provisioning,
+    Ready,
+    Failed,
 }

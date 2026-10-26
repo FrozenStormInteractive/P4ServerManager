@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-using P4ServerManager.Daemon.Contracts;
+using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Perforce;

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Filters;
+using P4ServerManager.Daemon.Hosting;
 using P4ServerManager.Daemon.Hubs;
 using P4ServerManager.Daemon.Options;
 using P4ServerManager.Daemon.Services;
@@ -26,6 +27,7 @@ builder.Services.AddOptions<DaemonOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 builder.Services.AddSingleton<DaemonPaths>();
+builder.AddCliSocket();
 builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddDbContextFactory<DaemonDbContext>((services, options) =>
@@ -82,7 +84,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// The CLI talks plain HTTP through its socket: redirecting it to the HTTPS port would send it off the socket.
+app.UseWhen(context => !CliSocket.IsCliSocketRequest(context), branch => branch.UseHttpsRedirection());
 
 app.UseAuthorization();
 

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Hubs;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Operations;

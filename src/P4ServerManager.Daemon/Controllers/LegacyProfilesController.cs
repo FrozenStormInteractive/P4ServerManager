@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
@@ -50,8 +51,7 @@ public sealed class LegacyProfilesController(
         }
 
         return profiles
-            .Select(profile => LegacyProfileDto.From(
-                profile,
+            .Select(profile => profile.ToDto(
                 GetFullRootPath(profile) is { } root && instancesByRoot.TryGetValue(root, out Guid id) ? id : null))
             .ToList();
     }
@@ -141,7 +141,7 @@ public sealed class LegacyProfilesController(
             nameof(InstancesController.GetInstance),
             "Instances",
             new { id = instanceId },
-            InstanceDto.From(instance, runtimeRegistry.Get(instanceId)));
+            instance.ToDto(runtimeRegistry.Get(instanceId)));
     }
 
     /// <summary>

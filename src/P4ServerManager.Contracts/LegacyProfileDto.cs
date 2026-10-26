@@ -1,6 +1,4 @@
-using P4ServerManager.Daemon.Services.Instances.Import;
-
-namespace P4ServerManager.Daemon.Contracts;
+namespace P4ServerManager.Contracts;
 
 /// <summary>
 /// A server profile of the HelixCoreServer Synology package (p4dctl-ng), waiting to be imported.
@@ -25,19 +23,4 @@ public sealed record LegacyProfileDto(
     bool AutoStart,
     IReadOnlyList<string> IgnoredSettings,
     IReadOnlyList<string> Problems,
-    Guid? InstanceId)
-{
-    public static LegacyProfileDto From(LegacyProfile profile, Guid? instanceId)
-    {
-        return new LegacyProfileDto(
-            profile.Id,
-            profile.Name,
-            profile.RootPath,
-            profile.Port,
-            profile.CaseSensitive,
-            profile.Enabled,
-            profile.IgnoredSettings,
-            profile.Problems,
-            instanceId);
-    }
-}
+    Guid? InstanceId);

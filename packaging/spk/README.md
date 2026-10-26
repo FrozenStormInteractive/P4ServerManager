@@ -40,12 +40,14 @@ The packages land in `artifacts/spk/`, named `P4ServerManager-<arch>-<version>-<
 - **Data**: the `P4ServerManager` shared folder is the data directory of the daemon: `p4servermanager.db`, `builds/`
   (the p4d builds) and `instances/` (logs, pid files and the default roots of the servers).
 - **Daemon**: `start-stop-status` runs `daemon/P4ServerManager.Daemon` in the background, listening on every
-  interface on the UI port. Its log is `/var/packages/P4ServerManager/var/daemon.log`, the previous one
+  interface on the UI port, and on the socket of the CLI. Its log is `/var/packages/P4ServerManager/var/daemon.log`, the previous one
   `daemon.log.1`.
 - **Stopping the package** stops the daemon, then each p4d with SIGTERM, a clean shutdown for p4d. Once DSM stops a
   package it may kill what is left of its processes, so the servers are not left to that. They start again with the
   package when auto-start is on. A daemon crash or restart outside of Package Center leaves them running.
-- **CLI**: `p4sm`, linked in `/usr/local/bin`.
+- **CLI**: `p4sm`, linked in `/usr/local/bin`. It talks to the daemon through the Unix socket
+  `/var/packages/P4ServerManager/var/daemon.sock`, open to the `Perforce` user and group only: run it with `sudo`, or
+  as a member of the `Perforce` group. `P4SM_SOCKET` or `--socket` points it to another socket.
 - **Uninstallation**: the wizard keeps the data by default. Deleting it removes the database, `builds/`, `instances/`
   and `import/`. The shared folder and the roots chosen outside of it are always kept.
 - **HelixCoreServer package**: at each start, the package copies the p4dctl-ng profiles of the

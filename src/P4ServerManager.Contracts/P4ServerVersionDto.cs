@@ -1,4 +1,4 @@
-namespace P4ServerManager.Daemon.Contracts;
+namespace P4ServerManager.Contracts;
 
 /// <summary>
 /// A p4d release that can be installed on this platform.

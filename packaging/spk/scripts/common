@@ -14,6 +14,8 @@ APP_DIR="$TARGET_DIR/app"
 DAEMON_BIN="$APP_DIR/P4ServerManager.Daemon"
 DAEMON_PID_FILE="$VAR_DIR/daemon.pid"
 DAEMON_LOG_FILE="$VAR_DIR/daemon.log"
+# Socket of the CLI, only open to the Perforce user and group. bin/p4sm has the same path: keep both in sync.
+DAEMON_SOCKET="$VAR_DIR/daemon.sock"
 DATA_DIR_FILE="$ETC_DIR/data-dir"
 
 # Package whose p4dctl-ng profiles the daemon offers to import.
@@ -92,6 +94,7 @@ start_daemon() {
     ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_URLS="http://+:$UI_PORT" \
     Daemon__DataDirectory="$data_dir" \
+    Daemon__SocketPath="$DAEMON_SOCKET" \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
         nohup "$DAEMON_BIN" >>"$DAEMON_LOG_FILE" 2>&1 </dev/null &
     echo $! >"$DAEMON_PID_FILE"
@@ -134,7 +137,7 @@ stop_daemon() {
             wait_for_exit "$pid" 5
         fi
     fi
-    rm -f "$DAEMON_PID_FILE"
+    rm -f "$DAEMON_PID_FILE" "$DAEMON_SOCKET"
 }
 
 # Pids of the p4d servers that run, one per line, read from the pid files the daemon keeps.

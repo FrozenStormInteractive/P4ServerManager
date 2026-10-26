@@ -8,6 +8,7 @@
     <Project Path="tests/P4ServerManager.Cli.Tests/P4ServerManager.Cli.Tests.csproj" />
   </Folder>
   <Project Path="src/P4ServerManager.Cli/P4ServerManager.Cli.csproj" />
+  <Project Path="src/P4ServerManager.Contracts/P4ServerManager.Contracts.csproj" />
   <Project Path="src/P4ServerManager.Daemon.UI/P4ServerManager.Daemon.UI.esproj">
     <Build />
     <Deploy />

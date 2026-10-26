@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace P4ServerManager.Daemon.Contracts;
+namespace P4ServerManager.Contracts;
 
 /// <summary>
 /// Settings of the instance that takes over the server of a legacy profile. The root comes from the profile, and the

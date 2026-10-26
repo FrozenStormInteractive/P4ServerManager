@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace P4ServerManager.Daemon.Contracts;
+namespace P4ServerManager.Contracts;
 
 // The request bodies are records with properties, not positional records: MVC keys the validation errors of a
 // constructor parameter by its C# name, and those of a property by its JSON name.

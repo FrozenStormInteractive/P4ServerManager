@@ -1,6 +1,6 @@
 using FluentValidation;
 
-using P4ServerManager.Daemon.Contracts;
+using P4ServerManager.Contracts;
 
 namespace P4ServerManager.Daemon.Services.Instances;
 

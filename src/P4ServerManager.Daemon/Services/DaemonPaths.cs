@@ -9,24 +9,19 @@ namespace P4ServerManager.Daemon.Services;
 /// </summary>
 public sealed class DaemonPaths
 {
-    public DaemonPaths(IOptions<DaemonOptions> options, IHostEnvironment environment)
-        : this(Path.GetFullPath(options.Value.DataDirectory, environment.ContentRootPath))
-    {
-    }
-
-    public DaemonPaths(string dataDirectory)
-    {
-        DataDirectory = dataDirectory;
-    }
-
     public string DataDirectory { get; }
+
+    /// <summary>
+    /// Unix domain socket of the CLI, or null when the daemon listens on none.
+    /// </summary>
+    public string? SocketPath { get; }
 
     public string DatabasePath => Path.Combine(DataDirectory, "p4servermanager.db");
 
     public string BuildsDirectory => Path.Combine(DataDirectory, "builds");
 
     public string InstancesDirectory => Path.Combine(DataDirectory, "instances");
-
+    
     /// <summary>
     /// Profiles of the p4dctl-ng servers of the HelixCoreServer Synology package, copied there by the package of the
     /// daemon, to be imported.
@@ -37,6 +32,17 @@ public sealed class DaemonPaths
     /// Profiles the user chose not to import.
     /// </summary>
     public string DismissedLegacyProfilesDirectory => Path.Combine(LegacyProfilesDirectory, "dismissed");
+
+    public DaemonPaths(IOptions<DaemonOptions> options, IHostEnvironment environment)
+        : this(Path.GetFullPath(options.Value.DataDirectory, environment.ContentRootPath), options.Value.SocketPath)
+    {
+    }
+
+    public DaemonPaths(string dataDirectory, string? socketPath = DaemonOptions.DefaultSocketPath)
+    {
+        DataDirectory = dataDirectory;
+        SocketPath = string.IsNullOrEmpty(socketPath) ? null : Path.GetFullPath(socketPath, dataDirectory);
+    }
 
     public string GetBuildDirectory(string platform, string version, string build)
     {

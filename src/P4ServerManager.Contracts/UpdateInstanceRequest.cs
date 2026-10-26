@@ -1,4 +1,4 @@
-namespace P4ServerManager.Daemon.Contracts;
+namespace P4ServerManager.Contracts;
 
 /// <summary>
 /// Settings of an instance that can change after its creation. A missing setting is left as it is.

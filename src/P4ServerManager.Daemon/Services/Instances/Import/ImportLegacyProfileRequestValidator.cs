@@ -1,6 +1,6 @@
 using FluentValidation;
 
-using P4ServerManager.Daemon.Contracts;
+using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Services.Perforce;
 

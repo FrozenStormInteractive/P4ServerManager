@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "Development": {
+      "commandName": "Project",
+      "commandLineArgs": "instance list",
+      "workingDirectory": "$(ProjectDir)",
+      "environmentVariables": {
+        "P4SM_SOCKET": "../P4ServerManager.Daemon/data/daemon.sock"
+      }
+    }
+  }
+}

@@ -12,10 +12,10 @@ using Microsoft.Extensions.Hosting;
 
 using NSubstitute.ExceptionExtensions;
 
+using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services;
-using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Perforce;
 
 namespace P4ServerManager.Daemon.Tests.Api;

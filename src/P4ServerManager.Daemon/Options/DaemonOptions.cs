@@ -9,12 +9,20 @@ public sealed class DaemonOptions
 {
     public const string SectionName = "Daemon";
 
+    public const string DefaultSocketPath = "daemon.sock";
+
     /// <summary>
     /// Folder that holds the database, the cached p4d builds and the instances. A relative path is resolved against
     /// the content root.
     /// </summary>
     [Required]
     public string DataDirectory { get; set; } = "data";
+
+    /// <summary>
+    /// Unix domain socket the CLI reaches the API through, next to the TCP port of the web UI. A relative path is
+    /// resolved against the data directory. Empty to listen on no socket.
+    /// </summary>
+    public string? SocketPath { get; set; } = DefaultSocketPath;
 
     /// <summary>
     /// Root of the Perforce FTP server that publishes the p4d releases.

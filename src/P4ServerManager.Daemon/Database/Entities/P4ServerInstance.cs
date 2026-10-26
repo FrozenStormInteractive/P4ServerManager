@@ -2,6 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 using Microsoft.EntityFrameworkCore;
 
+using P4ServerManager.Contracts;
+
 namespace P4ServerManager.Daemon.Database.Entities;
 
 /// <summary>
@@ -53,14 +55,4 @@ public sealed class P4ServerInstance
     public string? LastError { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
-}
-
-/// <summary>
-/// Lifecycle state of an instance. Whether p4d runs is not stored: the supervisor reads it from the pid file.
-/// </summary>
-public enum P4ServerInstanceState
-{
-    Provisioning,
-    Ready,
-    Failed,
 }

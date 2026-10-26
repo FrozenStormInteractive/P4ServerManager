@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
@@ -311,6 +312,6 @@ public sealed class InstancesController(
 
     private InstanceDto ToDto(P4ServerInstance instance)
     {
-        return InstanceDto.From(instance, runtimeRegistry.Get(instance.Id));
+        return instance.ToDto(runtimeRegistry.Get(instance.Id));
     }
 }

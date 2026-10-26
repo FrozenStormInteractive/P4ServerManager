@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 
-using P4ServerManager.Daemon.Contracts;
-using P4ServerManager.Daemon.Services.Operations;
+using P4ServerManager.Contracts;
 
 namespace P4ServerManager.Daemon.Hubs;
 

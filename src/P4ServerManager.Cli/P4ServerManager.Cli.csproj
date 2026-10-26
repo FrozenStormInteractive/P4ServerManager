@@ -1,10 +1,30 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <OutputType>Exe</OutputType>
-        <TargetFramework>net10.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-    </PropertyGroup>
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Kept compatible with Native AOT: the trimming and AOT analyzers report what would break it. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <!-- Every text of the CLI is in English: the translations of System.CommandLine are left out. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- dotnet run starts in the project folder, from wherever it runs: the socket path of the launch profile is
+         relative to it. -->
+    <RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\P4ServerManager.Contracts\P4ServerManager.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="P4ServerManager.Cli.Tests" />
+  </ItemGroup>
 
 </Project>

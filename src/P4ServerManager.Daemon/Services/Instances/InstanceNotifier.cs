@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.SignalR;
 
+using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Contracts;
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Hubs;
-using P4ServerManager.Daemon.Services.Operations;
 
 namespace P4ServerManager.Daemon.Services.Instances;
 
@@ -21,7 +21,7 @@ public sealed class InstanceNotifier(
     {
         try
         {
-            InstanceDto dto = InstanceDto.From(instance, runtimeRegistry.Get(instance.Id));
+            InstanceDto dto = instance.ToDto(runtimeRegistry.Get(instance.Id));
             await hubContext.Clients.All.InstanceUpdated(dto);
         }
         catch (Exception exception)

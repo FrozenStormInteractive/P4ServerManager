@@ -13,14 +13,16 @@ This project is unofficial and not affiliated with Perforce Software. "Perforce"
 1. **API first.** The web UI and the CLI are both clients of the same REST API.
 2. **p4d is decoupled from the package.** The packages ships no p4d binary. Each instance is pinned to an exact build downloaded on demand.
 3. **Servers outlive the daemon.** A daemon crash or restart must never stop a running p4d. On startup the daemon adopts running instances instead of restarting them.
-4. **One process, one port.** The daemon serves the API, SignalR and the static UI files from the same origin.
+4. **One process, one port.** The daemon serves the API, SignalR and the static UI files from the same origin. The CLI
+   reaches the same API through a Unix domain socket (`Daemon:SocketPath`), open to the user and group of the daemon only.
 5. **Safe operations over features.** Safe upgrades and consistent backups matter more than orchestration features.
 
 ## Repository layout
 
 ```
 src/
-  P4ServerManager.Cli/          Command-line app, Native AOT
+  P4ServerManager.Cli/          Command-line app (p4sm), kept compatible with Native AOT
+  P4ServerManager.Contracts/    Request and response types of the REST API, shared by the daemon and the CLI
   P4ServerManager.Daemon/       ASP.NET Core host: REST API, SignalR hub, serves the UI
   P4ServerManager.Daemon.UI/    SPA UI (Vue 3 + Vuetify 4 + Vite) wrapped as an .esproj
 packaging/
@@ -42,6 +44,7 @@ dotnet test --project tests/P4ServerManager.Daemon.Tests      # one project
 dotnet test --project tests/P4ServerManager.Daemon.Tests --filter-method "*Test1"     # one test
 dotnet test --project tests/P4ServerManager.Daemon.Tests --filter-class "*UnitTest1"  # one class
 dotnet run --project src/P4ServerManager.Daemon --launch-profile https
+dotnet run --project src/P4ServerManager.Cli -- instance list # CLI against that daemon, through its socket in data/
 ```
 
 Frontend / UI (from `src/P4ServerManager.Daemon.UI`):
@@ -80,6 +83,8 @@ Frontend-specific rules live in `src/P4ServerManager.Daemon.UI/AGENTS.md`. Befor
 - Async all the way, always pass `CancellationToken`. No blocking calls on the request path.
 - No new API endpoint without its OpenAPI description.
 - Request validation: one FluentValidation `AbstractValidator<T>` per request type. Validators are registered from the assembly and run by `RequestValidationFilter`, so controllers never call them. Keep `[Required]` on the contracts: it shapes the OpenAPI schema, and MVC checks it before the validators run.
+- Request and response types of the API live in `P4ServerManager.Contracts`, which depends on the BCL only. Their mapping from the daemon's own types stays in the daemon (`Contracts/ContractMappings.cs`).
+- CLI: JSON through the source-generated `CliJsonContext`, no reflection, so that it stays compatible with Native AOT.
 
 ## Do not
 

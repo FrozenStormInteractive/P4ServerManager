@@ -1,4 +1,4 @@
-namespace P4ServerManager.Daemon.Services.Operations;
+namespace P4ServerManager.Contracts;
 
 public enum OperationStatus
 {

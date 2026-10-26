@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 
+using P4ServerManager.Contracts;
+
 namespace P4ServerManager.Daemon.Services.Operations;
 
 /// <summary>

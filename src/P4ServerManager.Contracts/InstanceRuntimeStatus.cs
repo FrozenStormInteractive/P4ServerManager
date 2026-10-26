@@ -1,4 +1,4 @@
-namespace P4ServerManager.Daemon.Services.Instances;
+namespace P4ServerManager.Contracts;
 
 /// <summary>
 /// Whether the p4d process of an instance runs, or is being started, stopped, restarted or deleted by the daemon.

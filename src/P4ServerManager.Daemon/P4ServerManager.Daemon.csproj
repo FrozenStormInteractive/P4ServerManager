@@ -29,6 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\P4ServerManager.Contracts\P4ServerManager.Contracts.csproj" />
     <ProjectReference Include="..\P4ServerManager.Daemon.UI\P4ServerManager.Daemon.UI.esproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
