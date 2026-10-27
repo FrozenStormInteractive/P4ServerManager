@@ -9,6 +9,8 @@
     </v-main>
 
     <CreateInstanceDialog v-model="app.createDialogOpen" />
+
+    <AppNotifications />
   </v-app>
 </template>
 
@@ -19,6 +21,7 @@
   // Components and stores
   import AppBar from '@/components/AppBar.vue'
   import AppNavigation from '@/components/AppNavigation.vue'
+  import AppNotifications from '@/components/AppNotifications.vue'
   import CreateInstanceDialog from '@/components/instances/CreateInstanceDialog.vue'
   import { useAppStore } from '@/stores/app'
   import { useInstancesStore } from '@/stores/instances'

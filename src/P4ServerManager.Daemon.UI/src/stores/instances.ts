@@ -14,9 +14,11 @@ import type {
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-// API
+// API, plugins and stores
 import { connectInstancesHub } from '@/api/hub'
 import * as api from '@/api/instances'
+import i18n from '@/plugins/i18n'
+import { useNotificationsStore } from '@/stores/notifications'
 
 /**
  * The instances of the daemon, kept up to date by the `/hubs/instances` hub.
@@ -47,7 +49,30 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   function setOperation (snapshot: OperationSnapshot) {
+    const previous = operations.value[snapshot.instanceId]
     operations.value[snapshot.instanceId] = snapshot
+    if (previous?.status === 'Running' && snapshot.status === 'Succeeded' && snapshot.kind === 'upgrade') {
+      notifyUpgraded(snapshot)
+    }
+  }
+
+  /**
+   * Tells every client that an upgrade ended well, for a few seconds: once done, it leaves nothing on the page. A
+   * failure is kept as the last error of the instance instead. The new build is already known: the daemon pushes the
+   * instance once it is pinned to it, before the database is upgraded.
+   */
+  function notifyUpgraded (snapshot: OperationSnapshot) {
+    const instance = instances.value[snapshot.instanceId]
+    if (!instance) {
+      return
+    }
+    const params = { name: instance.name, version: `${instance.version}/${instance.build}` }
+    const upToDate = snapshot.outcome === 'up-to-date'
+    const { t } = i18n.global
+    useNotificationsStore().notify(
+      upToDate ? t('upgradeInstance.upToDate', params) : t('upgradeInstance.upgraded', params),
+      upToDate ? 'info' : 'success',
+    )
   }
 
   async function fetchAll () {
@@ -91,6 +116,13 @@ export const useInstancesStore = defineStore('instances', () => {
 
   async function restart (id: string) {
     upsertInstance(await api.restartInstance(id))
+  }
+
+  /**
+   * Begins the upgrade of the instance to the latest build of `release`. The hub tells its progress.
+   */
+  async function upgrade (id: string, release: string) {
+    upsertInstance(await api.upgradeInstance(id, { release }))
   }
 
   /**
@@ -141,6 +173,7 @@ export const useInstancesStore = defineStore('instances', () => {
     start,
     stop,
     restart,
+    upgrade,
     runAction,
     remove,
     connect,

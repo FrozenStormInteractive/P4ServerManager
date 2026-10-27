@@ -39,6 +39,7 @@ export function createSnapshot (instanceId: string, overrides: Partial<Operation
     currentStep: 'resolve-build',
     percent: 42,
     error: null,
+    outcome: null,
     ...overrides,
   }
 }

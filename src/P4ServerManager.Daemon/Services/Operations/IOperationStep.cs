@@ -32,7 +32,8 @@ public interface IOperationStep<in TContext>
 
     /// <summary>
     /// Whether the step applies to this run. Read before the first step runs: a step that does not apply is shown as
-    /// skipped from the start.
+    /// skipped from the start. Read again right before the step runs: a step that an earlier one made unnecessary is
+    /// skipped then.
     /// </summary>
     bool ShouldRun(TContext context)
     {

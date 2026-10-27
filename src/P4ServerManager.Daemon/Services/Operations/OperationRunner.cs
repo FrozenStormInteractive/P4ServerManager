@@ -11,7 +11,9 @@ public sealed class OperationRunner(OperationTracker tracker, InstanceNotifier n
 {
     /// <summary>
     /// Runs the steps that apply to <paramref name="context"/>, and stops at the first that throws. The steps not
-    /// included in this run are left out of the operation. The exception is
+    /// included in this run are left out of the operation, and a step that no longer applies when its turn comes is
+    /// skipped. A context that implements <see cref="IOperationOutcome"/> gives the outcome of the operation once it
+    /// succeeded. The exception is
     /// rethrown once the failure is reported, so that the caller can undo what it needs to.
     /// </summary>
     public async Task RunAsync<TContext>(
@@ -38,6 +40,12 @@ public sealed class OperationRunner(OperationTracker tracker, InstanceNotifier n
         {
             foreach (IOperationStep<TContext> step in stepsToRun)
             {
+                if (!step.ShouldRun(context))
+                {
+                    await notifier.OperationChangedAsync(tracker.SkipStep(instanceId, step.Key));
+                    continue;
+                }
+
                 await notifier.OperationChangedAsync(tracker.StartStep(instanceId, step.Key));
                 string? message = await step.RunAsync(context, progress, cancellationToken);
                 await notifier.OperationChangedAsync(tracker.CompleteStep(instanceId, step.Key, message));
@@ -50,6 +58,7 @@ public sealed class OperationRunner(OperationTracker tracker, InstanceNotifier n
             throw;
         }
 
-        await notifier.OperationChangedAsync(tracker.Complete(instanceId));
+        string? outcome = context is IOperationOutcome withOutcome ? withOutcome.Outcome : null;
+        await notifier.OperationChangedAsync(tracker.Complete(instanceId, outcome));
     }
 }

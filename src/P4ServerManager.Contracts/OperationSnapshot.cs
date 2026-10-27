@@ -32,6 +32,11 @@ public sealed record OperationStepState(string Key, string Title, OperationStepS
 /// <param name="CurrentStep">Key of the step running, or null between steps and once finished.</param>
 /// <param name="Percent">Progress of the current step, when it can be measured.</param>
 /// <param name="Error">Error that stopped the operation.</param>
+/// <param name="Outcome">
+/// How the operation ended, once it succeeded, for an operation that can succeed in more than one way: for an upgrade,
+/// <c>upgraded</c>, or <c>up-to-date</c> when the instance already ran the latest build and nothing was changed. Null
+/// otherwise.
+/// </param>
 public sealed record OperationSnapshot(
     Guid InstanceId,
     string Kind,
@@ -39,4 +44,5 @@ public sealed record OperationSnapshot(
     IReadOnlyList<OperationStepState> Steps,
     string? CurrentStep,
     int? Percent,
-    string? Error);
+    string? Error,
+    string? Outcome = null);

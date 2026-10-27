@@ -12,14 +12,16 @@ namespace P4ServerManager.Contracts;
 /// Fingerprint of the certificate of the server, that clients check before they trust it. Null without SSL.
 /// </param>
 /// <param name="RootPath">Absolute path of the P4ROOT.</param>
-/// <param name="Release">p4d release asked for at creation, for example <c>r25.1</c>.</param>
+/// <param name="Release">p4d release asked for at creation or at the last upgrade, for example <c>r25.1</c>.</param>
 /// <param name="Version">Version of the pinned p4d build, for example <c>2025.1</c>. Null until resolved.</param>
 /// <param name="Build">Build number of the pinned p4d build. Null until resolved.</param>
 /// <param name="CaseSensitive">False when p4d runs case-insensitive (<c>-C1</c>).</param>
 /// <param name="Unicode">True when the server runs in Unicode mode.</param>
 /// <param name="AutoStart">True when the daemon starts p4d when it starts.</param>
 /// <param name="State">Lifecycle state.</param>
-/// <param name="RuntimeStatus">Whether the p4d process runs, or is being started, stopped, restarted or deleted.</param>
+/// <param name="RuntimeStatus">
+/// Whether the p4d process runs, or is being started, stopped, restarted, upgraded or deleted.
+/// </param>
 /// <param name="LastError">Error of the last failed operation.</param>
 /// <param name="CreatedAt">Creation date.</param>
 public sealed record InstanceDto(

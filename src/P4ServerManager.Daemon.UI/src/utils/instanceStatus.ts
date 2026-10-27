@@ -3,7 +3,7 @@ import type { Instance } from '@/api/types'
 
 /**
  * What the UI shows for an instance: its lifecycle state while it is not ready, then whether p4d runs, or is being
- * started, stopped, restarted or deleted by the daemon.
+ * started, stopped, restarted, upgraded or deleted by the daemon.
  */
 export type InstanceStatus
   = | 'provisioning'
@@ -13,6 +13,7 @@ export type InstanceStatus
     | 'starting'
     | 'stopping'
     | 'restarting'
+    | 'upgrading'
     | 'deleting'
     | 'unknown'
 
@@ -43,6 +44,9 @@ export function getInstanceStatus (instance: Instance): InstanceStatus {
     case 'Restarting': {
       return 'restarting'
     }
+    case 'Upgrading': {
+      return 'upgrading'
+    }
     default: {
       return 'unknown'
     }
@@ -57,6 +61,7 @@ const colors: Record<InstanceStatus, string> = {
   starting: 'info',
   stopping: 'info',
   restarting: 'info',
+  upgrading: 'info',
   deleting: 'error',
   unknown: 'grey',
 }
@@ -65,7 +70,7 @@ export function getInstanceStatusColor (status: InstanceStatus): string {
   return colors[status]
 }
 
-const inProgressStatuses = new Set<InstanceStatus>(['provisioning', 'starting', 'stopping', 'restarting', 'deleting'])
+const inProgressStatuses = new Set<InstanceStatus>(['provisioning', 'starting', 'stopping', 'restarting', 'upgrading', 'deleting'])
 
 /**
  * Whether the daemon is working on the instance: no other action can be asked for meanwhile.

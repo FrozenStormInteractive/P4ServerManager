@@ -7,6 +7,7 @@ import type {
   InstanceSelection,
   OperationSnapshot,
   UpdateInstanceRequest,
+  UpgradeInstanceRequest,
 } from './types'
 
 // Utilities
@@ -56,6 +57,14 @@ export async function deleteInstance (id: string, deleteFiles: boolean): Promise
 
 export function restartInstance (id: string): Promise<Instance> {
   return request('POST', `/api/instances/${encodeURIComponent(id)}/restart`)
+}
+
+/**
+ * Begins the upgrade of the instance to the latest build of a release. The daemon answers once it has begun: the
+ * instance is `Upgrading` until it ends, and its operation tells its progress.
+ */
+export function upgradeInstance (id: string, body: UpgradeInstanceRequest): Promise<Instance> {
+  return request('POST', `/api/instances/${encodeURIComponent(id)}/upgrade`, body)
 }
 
 /**

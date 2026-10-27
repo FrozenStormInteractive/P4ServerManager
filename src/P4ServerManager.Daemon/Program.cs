@@ -14,6 +14,7 @@ using P4ServerManager.Daemon.Options;
 using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
+using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
@@ -53,7 +54,8 @@ builder.Services.AddHostedService(services => services.GetRequiredService<Instan
 builder.Services.AddSingleton<InstanceBatchRunner>();
 builder.Services.AddSingleton<OperationTracker>();
 builder.Services.AddSingleton<OperationRunner>();
-builder.Services.AddProvisioning();
+builder.Services.AddInstanceProvisioningServices();
+builder.Services.AddInstanceUpgradeServices();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 builder.Services.AddControllers(options =>

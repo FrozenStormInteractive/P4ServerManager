@@ -13,7 +13,7 @@ internal static class InstanceOperationCommand
     {
         Argument<string> instanceArgument = InstanceArgument.Create();
         Option<bool> followOption = new("--follow", "-f") { Description = "Follow the operation until it ends." };
-        Command command = new("operation", "Show the last long operation on an instance, such as its provisioning.")
+        Command command = new("operation", "Show the last long operation on an instance, such as its provisioning or its upgrade.")
         {
             instanceArgument,
             followOption,

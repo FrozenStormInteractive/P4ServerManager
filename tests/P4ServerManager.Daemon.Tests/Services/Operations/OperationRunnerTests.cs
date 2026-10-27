@@ -83,6 +83,34 @@ public sealed class OperationRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_SkipsAStepThatAnEarlierOneMadeUnnecessary()
+    {
+        List<string> ran = [];
+        FakeStep last = new("last", ran);
+        FakeStep first = new("first", ran) { OnRun = () => last.Applies = false };
+
+        await _runner.RunAsync(InstanceId, "test", [first, last], new object(), TestContext.Current.CancellationToken);
+
+        ran.ShouldBe(["first"]);
+        _pushed[0].Steps.Select(s => s.Status).ShouldBe([OperationStepStatus.Pending, OperationStepStatus.Pending]);
+        OperationSnapshot snapshot = _tracker.Get(InstanceId)!;
+        snapshot.Status.ShouldBe(OperationStatus.Succeeded);
+        snapshot.Steps.Select(s => s.Status).ShouldBe([OperationStepStatus.Succeeded, OperationStepStatus.Skipped]);
+    }
+
+    [Fact]
+    public async Task RunAsync_GivesTheOutcomeOfTheContextOnceSucceeded()
+    {
+        OutcomeContext context = new();
+        FakeStep step = new("step", []) { OnRun = () => context.Outcome = "up-to-date" };
+
+        await _runner.RunAsync(InstanceId, "test", [step], context, TestContext.Current.CancellationToken);
+
+        _pushed.Where(s => s.Status == OperationStatus.Running).ShouldAllBe(s => s.Outcome == null);
+        _tracker.Get(InstanceId)!.Outcome.ShouldBe("up-to-date");
+    }
+
+    [Fact]
     public async Task RunAsync_StopsAtTheFailedStepAndRethrows()
     {
         List<string> ran = [];
@@ -99,6 +127,11 @@ public sealed class OperationRunnerTests
         snapshot.Steps.Select(s => s.Status).ShouldBe([OperationStepStatus.Failed, OperationStepStatus.Pending]);
     }
 
+    private sealed class OutcomeContext : IOperationOutcome
+    {
+        public string? Outcome { get; set; }
+    }
+
     private sealed class FakeStep(string key, List<string> ran) : IOperationStep<object>
     {
         public string Key => key;
@@ -107,7 +140,9 @@ public sealed class OperationRunnerTests
 
         public bool Included { get; init; } = true;
 
-        public bool Applies { get; init; } = true;
+        public bool Applies { get; set; } = true;
+
+        public Action? OnRun { get; init; }
 
         public OperationStepProgress? Progress { get; init; }
 
@@ -129,6 +164,7 @@ public sealed class OperationRunnerTests
             CancellationToken cancellationToken)
         {
             ran.Add(key);
+            OnRun?.Invoke();
             if (Progress is { } value)
             {
                 progress.Report(value);

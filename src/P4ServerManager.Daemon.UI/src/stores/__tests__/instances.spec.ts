@@ -7,6 +7,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectInstancesHub } from '@/api/hub'
 import { useInstancesStore } from '@/stores/instances'
+import { useNotificationsStore } from '@/stores/notifications'
 import { createInstance, createSnapshot } from '@/testing/fixtures'
 import { server } from '@/testing/server'
 
@@ -45,6 +46,42 @@ describe('instances store', () => {
     handlers.onOperationProgress(createSnapshot('a', { percent: 80 }))
 
     expect(store.operations.a?.percent).toBe(80)
+  })
+
+  describe('at the end of an upgrade', () => {
+    function finish (outcome: string | null, kind = 'upgrade') {
+      const store = useInstancesStore()
+      store.connect()
+      handlers.onInstanceUpdated(createInstance({ id: 'a', name: 'main', version: '2025.2', build: '3086021' }))
+      handlers.onOperationProgress(createSnapshot('a', { kind, status: 'Running' }))
+      handlers.onOperationProgress(createSnapshot('a', { kind, status: 'Succeeded', outcome }))
+      return useNotificationsStore().queue
+    }
+
+    it('tells that the instance runs its new build', () => {
+      expect(finish('upgraded')).toEqual([{ text: 'main now runs p4d 2025.2/3086021.', color: 'success' }])
+    })
+
+    it('tells that the instance already ran the latest build', () => {
+      expect(finish('up-to-date')).toEqual([{
+        text: 'main already runs the latest build, p4d 2025.2/3086021. Nothing was changed.',
+        color: 'info',
+      }])
+    })
+
+    it('tells nothing at the end of another operation', () => {
+      expect(finish(null, 'provision')).toEqual([])
+    })
+
+    it('tells nothing about an upgrade that had already ended when the page loaded', () => {
+      const store = useInstancesStore()
+      store.connect()
+      handlers.onInstanceUpdated(createInstance({ id: 'a' }))
+
+      handlers.onOperationProgress(createSnapshot('a', { kind: 'upgrade', status: 'Succeeded', outcome: 'upgraded' }))
+
+      expect(useNotificationsStore().queue).toEqual([])
+    })
   })
 
   it('reloads the instances once connected, as events may have been missed', async () => {

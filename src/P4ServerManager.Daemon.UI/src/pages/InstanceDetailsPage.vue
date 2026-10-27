@@ -38,6 +38,15 @@
         />
 
         <v-btn
+          :disabled="!canAct"
+          :loading="status === 'upgrading'"
+          prepend-icon="mdi-update"
+          :text="t('actions.upgrade')"
+          variant="text"
+          @click="upgradeDialog = true"
+        />
+
+        <v-btn
           color="error"
           :disabled="!canDelete"
           :loading="status === 'deleting'"
@@ -49,6 +58,8 @@
       </div>
 
       <DeleteInstanceDialog v-model="deleteDialog" :instance="instance" @deleted="onDeleted" />
+
+      <UpgradeInstanceDialog v-model="upgradeDialog" :instance="instance" />
 
       <ConfirmInstanceActionDialog
         v-model="confirmDialog"
@@ -134,6 +145,7 @@
   import DeleteInstanceDialog from '@/components/instances/DeleteInstanceDialog.vue'
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
   import OperationProgress from '@/components/instances/OperationProgress.vue'
+  import UpgradeInstanceDialog from '@/components/instances/UpgradeInstanceDialog.vue'
   import { useInstancesStore } from '@/stores/instances'
   import { formatPort } from '@/utils/instancePort'
   import { getInstanceStatus, isInstanceStatusInProgress } from '@/utils/instanceStatus'
@@ -151,6 +163,7 @@
   const sending = ref(false)
   const actionError = ref<string | null>(null)
   const deleteDialog = ref(false)
+  const upgradeDialog = ref(false)
   const confirmDialog = ref(false)
   const confirmAction = ref<'stop' | 'restart'>('stop')
   const savingAutoStart = ref(false)

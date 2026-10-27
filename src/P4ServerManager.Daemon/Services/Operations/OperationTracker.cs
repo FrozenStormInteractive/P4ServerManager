@@ -59,9 +59,17 @@ public sealed class OperationTracker
         });
     }
 
-    public OperationSnapshot Complete(Guid instanceId)
+    public OperationSnapshot SkipStep(Guid instanceId, string key)
     {
-        return Update(instanceId, snapshot => snapshot with { Status = OperationStatus.Succeeded });
+        return Update(instanceId, snapshot => snapshot with
+        {
+            Steps = WithStep(snapshot.Steps, key, OperationStepStatus.Skipped, null),
+        });
+    }
+
+    public OperationSnapshot Complete(Guid instanceId, string? outcome)
+    {
+        return Update(instanceId, snapshot => snapshot with { Status = OperationStatus.Succeeded, Outcome = outcome });
     }
 
     public OperationSnapshot Fail(Guid instanceId, string error)

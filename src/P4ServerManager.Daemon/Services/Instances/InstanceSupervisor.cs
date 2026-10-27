@@ -5,18 +5,21 @@ using Microsoft.EntityFrameworkCore;
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
+using P4ServerManager.Daemon.Services.Perforce;
 
 namespace P4ServerManager.Daemon.Services.Instances;
 
 /// <summary>
 /// Keeps track of the p4d processes. At startup it adopts the instances that still run, without restarting them, then
-/// starts the stopped ones marked for auto-start and checks them periodically. It also starts, stops and deletes them
-/// on request.
+/// starts the stopped ones marked for auto-start and checks them periodically. It also starts, stops, upgrades and
+/// deletes them on request.
 /// </summary>
 public sealed class InstanceSupervisor(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
     P4ServerLauncher launcher,
+    InstanceUpgrader upgrader,
     InstanceRuntimeRegistry runtimeRegistry,
     OperationTracker operationTracker,
     InstanceNotifier notifier,
@@ -84,6 +87,62 @@ public sealed class InstanceSupervisor(
                 await launcher.StopAsync(instance, stoppingToken);
             });
         });
+    }
+
+    /// <summary>
+    /// Moves an instance to the latest build of <paramref name="release"/>: the same release for its latest patch, or a
+    /// newer one. The upgrade runs in the background, once this returns: the instance stays
+    /// <see cref="InstanceRuntimeStatus.Upgrading"/> until it ends, and its operation tells its progress. Only the
+    /// shutdown of the daemon cancels it, and never while p4d upgrades the database.
+    /// </summary>
+    /// <param name="instanceId">Identifier of the instance.</param>
+    /// <param name="release">Release to move to.</param>
+    /// <param name="cancellationToken">Aborts the wait for the instance to be free.</param>
+    /// <returns>The instance, once its upgrade has begun.</returns>
+    /// <exception cref="InstanceConflictException">
+    /// The instance is not ready, another operation is in progress, or the release is older than the one of the
+    /// instance: p4d cannot downgrade a database.
+    /// </exception>
+    public async Task<P4ServerInstance> UpgradeInstanceAsync(
+        Guid instanceId,
+        P4ServerRelease release,
+        CancellationToken cancellationToken)
+    {
+        SemaphoreSlim? instanceLock = await AcquireLockAsync(instanceId, cancellationToken);
+        DaemonDbContext? db = null;
+        try
+        {
+            db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            P4ServerInstance instance = await FindAsync(db, instanceId, cancellationToken);
+            EnsureReady(instance);
+            if (instance.Build is null)
+            {
+                throw new InstanceConflictException($"Instance {instance.Name} has no p4d build yet.");
+            }
+            if (P4ServerRelease.TryParse(instance.Release, out P4ServerRelease current) && release < current)
+            {
+                throw new InstanceConflictException(
+                    $"Instance {instance.Name} runs {current}: its database cannot go back to {release}.");
+            }
+
+            UpgradeContext context = new(db, instance, release, launcher.IsRunning(instance));
+            runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.Upgrading);
+            await notifier.InstanceChangedAsync(instance);
+
+            // The upgrade outlives the request: it releases the instance and the context once it ends.
+            _ = UpgradeAsync(context, instanceLock);
+            instanceLock = null;
+            db = null;
+            return instance;
+        }
+        finally
+        {
+            if (db is not null)
+            {
+                await db.DisposeAsync();
+            }
+            instanceLock?.Release();
+        }
     }
 
     /// <summary>
@@ -242,6 +301,40 @@ public sealed class InstanceSupervisor(
         }
     }
 
+    /// <summary>
+    /// Runs an upgrade begun by <see cref="UpgradeInstanceAsync"/>, then reads the status back from the process and
+    /// saves the instance, whatever the outcome.
+    /// </summary>
+    private async Task UpgradeAsync(UpgradeContext context, SemaphoreSlim instanceLock)
+    {
+        P4ServerInstance instance = context.Instance;
+        try
+        {
+            await upgrader.UpgradeAsync(context, lifetime.ApplicationStopping);
+        }
+        catch (Exception exception)
+        {
+            // Any failure is caught: nothing awaits this task.
+            logger.LogWarning(exception, "The upgrade of instance {Name} was interrupted", instance.Name);
+        }
+
+        try
+        {
+            runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
+            await context.Db.SaveChangesAsync(CancellationToken.None);
+            await notifier.InstanceChangedAsync(instance);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Could not save instance {Name} after its upgrade", instance.Name);
+        }
+        finally
+        {
+            await context.Db.DisposeAsync();
+            instanceLock.Release();
+        }
+    }
+
     private async Task CheckInstancesAsync(CancellationToken cancellationToken)
     {
         await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -322,6 +415,26 @@ public sealed class InstanceSupervisor(
         CancellationToken cancellationToken,
         Func<DaemonDbContext, P4ServerInstance, Task> operation)
     {
+        SemaphoreSlim instanceLock = await AcquireLockAsync(instanceId, cancellationToken);
+        try
+        {
+            await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            P4ServerInstance instance = await FindAsync(db, instanceId, cancellationToken);
+            await operation(db, instance);
+            return instance;
+        }
+        finally
+        {
+            instanceLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Takes the lock of an instance, which every operation on it holds.
+    /// </summary>
+    /// <exception cref="InstanceConflictException">Another operation is in progress on the instance.</exception>
+    private async Task<SemaphoreSlim> AcquireLockAsync(Guid instanceId, CancellationToken cancellationToken)
+    {
         SemaphoreSlim instanceLock = GetLock(instanceId);
         if (!await instanceLock.WaitAsync(0, cancellationToken))
         {
@@ -333,22 +446,18 @@ public sealed class InstanceSupervisor(
             // Only the periodic check holds the lock, for a moment.
             await instanceLock.WaitAsync(cancellationToken);
         }
+        return instanceLock;
+    }
 
-        try
-        {
-            await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-            P4ServerInstance instance = await db.Instances
-                .Include(i => i.Build)
-                .FirstOrDefaultAsync(i => i.Id == instanceId, cancellationToken)
-                ?? throw new KeyNotFoundException($"Instance {instanceId} does not exist.");
-
-            await operation(db, instance);
-            return instance;
-        }
-        finally
-        {
-            instanceLock.Release();
-        }
+    private static async Task<P4ServerInstance> FindAsync(
+        DaemonDbContext db,
+        Guid instanceId,
+        CancellationToken cancellationToken)
+    {
+        return await db.Instances
+            .Include(i => i.Build)
+            .FirstOrDefaultAsync(i => i.Id == instanceId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Instance {instanceId} does not exist.");
     }
 
     private static void EnsureReady(P4ServerInstance instance)

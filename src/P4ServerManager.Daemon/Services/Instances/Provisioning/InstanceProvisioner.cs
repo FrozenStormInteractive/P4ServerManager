@@ -9,7 +9,7 @@ namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
 /// <summary>
 /// Turns a new instance into a running p4d by running the steps of its <see cref="ProvisioningKind"/>, in the order
-/// they were registered by <see cref="ProvisioningServiceCollectionExtensions.AddProvisioning"/>.
+/// they were registered by <see cref="ProvisioningServiceCollectionExtensions.AddInstanceProvisioningServices"/>.
 /// </summary>
 public sealed class InstanceProvisioner(
     IDbContextFactory<DaemonDbContext> dbContextFactory,

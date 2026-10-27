@@ -27,19 +27,26 @@ public sealed class ResolveBuildStep(IP4ServerBuildCache buildCache, InstanceNot
             throw new InstanceOperationException($"{instance.Release} is not a p4d release.");
         }
 
-        InlineProgress<BuildDownloadProgress> downloadProgress = new(p =>
-        {
-            string message = p.Percent is { } percent
-                ? string.Create(CultureInfo.InvariantCulture, $"Downloading {p.FileName} ({percent}%)")
-                : $"Downloading {p.FileName}";
-            progress.Report(new OperationStepProgress(message, p.Percent));
-        });
-        P4ServerBuild build = await buildCache.EnsureAsync(release, downloadProgress, cancellationToken);
+        P4ServerBuild build = await buildCache.EnsureAsync(release, ReportDownload(progress), cancellationToken);
 
         instance.BuildId = build.Id;
         await context.Db.SaveChangesAsync(cancellationToken);
         await context.Db.Entry(instance).Reference(i => i.Build).LoadAsync(cancellationToken);
         await notifier.InstanceChangedAsync(instance);
         return $"p4d {build.Version}/{build.BuildNumber}";
+    }
+
+    /// <summary>
+    /// Reports the download of a build as the progress of the step that gets it.
+    /// </summary>
+    internal static IProgress<BuildDownloadProgress> ReportDownload(IProgress<OperationStepProgress> progress)
+    {
+        return new InlineProgress<BuildDownloadProgress>(p =>
+        {
+            string message = p.Percent is { } percent
+                ? string.Create(CultureInfo.InvariantCulture, $"Downloading {p.FileName} ({percent}%)")
+                : $"Downloading {p.FileName}";
+            progress.Report(new OperationStepProgress(message, p.Percent));
+        });
     }
 }

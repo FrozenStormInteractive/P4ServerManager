@@ -4,7 +4,15 @@
 
 export type InstanceState = 'Provisioning' | 'Ready' | 'Failed'
 
-export type RuntimeStatus = 'Unknown' | 'Running' | 'Stopped' | 'Starting' | 'Stopping' | 'Restarting' | 'Deleting'
+export type RuntimeStatus
+  = | 'Unknown'
+    | 'Running'
+    | 'Stopped'
+    | 'Starting'
+    | 'Stopping'
+    | 'Restarting'
+    | 'Deleting'
+    | 'Upgrading'
 
 export interface Instance {
   id: string
@@ -86,6 +94,13 @@ export interface CreateInstanceRequest {
  */
 export interface UpdateInstanceRequest {
   autoStart?: boolean
+}
+
+/**
+ * The p4d release an instance moves to: its own release, for its latest patch, or a newer one.
+ */
+export interface UpgradeInstanceRequest {
+  release: string
 }
 
 /**
@@ -177,6 +192,11 @@ export interface OperationSnapshot {
   currentStep: string | null
   percent: number | null
   error: string | null
+  /**
+   * How the operation ended, once it succeeded, for an operation that can succeed in more than one way: for an upgrade,
+   * `upgraded`, or `up-to-date` when the instance already ran the latest build and nothing was changed. Null otherwise.
+   */
+  outcome: string | null
 }
 
 /**

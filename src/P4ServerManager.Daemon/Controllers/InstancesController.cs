@@ -8,7 +8,9 @@ using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
+using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
+using P4ServerManager.Daemon.Services.Perforce;
 
 namespace P4ServerManager.Daemon.Controllers;
 
@@ -161,7 +163,7 @@ public sealed class InstancesController(
     }
 
     /// <summary>
-    /// Gets the progress of the last long operation on an instance, such as its provisioning.
+    /// Gets the progress of the last long operation on an instance, such as its provisioning or its upgrade.
     /// </summary>
     /// <param name="id">Identifier of the instance.</param>
     /// <response code="200">The operation, its steps and their status.</response>
@@ -249,6 +251,46 @@ public sealed class InstancesController(
         CancellationToken cancellationToken)
     {
         return RunOperationAsync(() => supervisor.RestartInstanceAsync(id, cancellationToken));
+    }
+
+    /// <summary>
+    /// Upgrades an instance to the latest build of a p4d release: the release of the instance, for its latest patch,
+    /// or a newer one. The upgrade runs in the background: it gets the build, stops p4d if it runs, upgrades the
+    /// database, then starts p4d again if it ran. No backup of the database is taken. The instance is
+    /// <c>Upgrading</c> meanwhile. Follow it with <c>GET /api/instances/{id}/operation</c> or the
+    /// <c>OperationProgress</c> event of the <c>/hubs/instances</c> hub. A failure before the database is upgraded
+    /// leaves the instance on its previous build, started again if it ran; the error is kept as its last error.
+    /// </summary>
+    /// <param name="id">Identifier of the instance.</param>
+    /// <param name="request">The release, checked by <see cref="UpgradeInstanceRequestValidator"/>.</param>
+    /// <param name="supervisor">Runs the upgrade.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the upgrade runs to its end: only the shutdown of the daemon cancels it, and
+    /// never while p4d upgrades the database.
+    /// </param>
+    /// <response code="202">The upgrade has begun.</response>
+    /// <response code="400">The release is not an available p4d release.</response>
+    /// <response code="404">No instance has this identifier.</response>
+    /// <response code="409">
+    /// The instance is not ready, another operation is in progress, or the release is older than the one of the
+    /// instance: a database cannot go back to an older release.
+    /// </response>
+    /// <response code="502">The list of p4d releases could not be read from the Perforce FTP.</response>
+    [HttpPost("{id:guid}/upgrade")]
+    [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway, "application/problem+json")]
+    public Task<ActionResult<InstanceDto>> UpgradeInstance(
+        Guid id,
+        UpgradeInstanceRequest request,
+        [FromServices] InstanceSupervisor supervisor,
+        CancellationToken cancellationToken)
+    {
+        // Checked by the validator.
+        P4ServerRelease.TryParse(request.Release, out P4ServerRelease release);
+        return RunOperationAsync(() => supervisor.UpgradeInstanceAsync(id, release, cancellationToken));
     }
 
     /// <summary>

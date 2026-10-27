@@ -9,7 +9,7 @@ public static class ProvisioningServiceCollectionExtensions
     /// Registers the provisioning of the instances. The steps of each <see cref="ProvisioningKind"/> run in the order
     /// they are registered here.
     /// </summary>
-    public static IServiceCollection AddProvisioning(this IServiceCollection services)
+    public static IServiceCollection AddInstanceProvisioningServices(this IServiceCollection services)
     {
         services.AddStep<ResolveBuildStep>(ProvisioningKind.Create);
         services.AddStep<PrepareDirectoriesStep>(ProvisioningKind.Create);

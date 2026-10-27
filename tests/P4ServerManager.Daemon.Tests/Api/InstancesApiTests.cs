@@ -18,6 +18,7 @@ using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Perforce;
+using P4ServerManager.Daemon.Services.Processes;
 
 namespace P4ServerManager.Daemon.Tests.Api;
 
@@ -25,12 +26,17 @@ public sealed class InstancesApiTests : IAsyncLifetime
 {
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "p4sm-tests", Guid.NewGuid().ToString("N"));
     private readonly IP4ServerReleaseCatalog _catalog = Substitute.For<IP4ServerReleaseCatalog>();
+    private readonly IP4ServerBuildCache _buildCache = Substitute.For<IP4ServerBuildCache>();
+    private readonly IProcessRunner _processRunner = Substitute.For<IProcessRunner>();
     private WebApplicationFactory<Program> _factory = null!;
     private HttpClient _client = null!;
 
     public ValueTask InitializeAsync()
     {
         _catalog.GetReleasesAsync(Arg.Any<CancellationToken>()).Returns([Release("r25.1"), Release("r24.2")]);
+        _buildCache.GetP4dPath(Arg.Any<P4ServerBuild>()).Returns(call => $"/builds/{call.Arg<P4ServerBuild>().BuildNumber}/p4d");
+        _processRunner.RunAsync(Arg.Any<ProcessCommand>(), Arg.Any<CancellationToken>())
+            .Returns(new ProcessResult(0, string.Empty, string.Empty));
 
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -39,6 +45,8 @@ public sealed class InstancesApiTests : IAsyncLifetime
             builder.ConfigureServices(services =>
             {
                 services.Replace(ServiceDescriptor.Singleton(_catalog));
+                services.Replace(ServiceDescriptor.Singleton(_buildCache));
+                services.Replace(ServiceDescriptor.Singleton(_processRunner));
                 // The tests only check the API: nothing is downloaded or started.
                 services.RemoveAll<IHostedService>();
             });
@@ -503,6 +511,242 @@ public sealed class InstancesApiTests : IAsyncLifetime
             TestContext.Current.CancellationToken)).EnumerateArray().ShouldHaveSingleItem();
         result.GetProperty("instance").GetProperty("name").GetString().ShouldBe("main");
         result.GetProperty("outcome").GetString().ShouldBe("Skipped");
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_UpgradesTheDatabaseWithTheNewBuild()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r24.2", "2024.2", "2700000");
+        P4ServerBuild target = await AddBuildAsync("r25.1", "2025.1", "2850123");
+        _buildCache.EnsureAsync(Release("r25.1"), Arg.Any<IProgress<BuildDownloadProgress>>(), Arg.Any<CancellationToken>())
+            .Returns(target);
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{id}/upgrade",
+            new { release = "r25.1" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await WaitForUpgradeAsync(id);
+        instance.GetProperty("release").GetString().ShouldBe("r25.1");
+        instance.GetProperty("version").GetString().ShouldBe("2025.1");
+        instance.GetProperty("build").GetString().ShouldBe("2850123");
+        instance.GetProperty("runtimeStatus").GetString().ShouldBe("Stopped");
+        instance.GetProperty("lastError").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        JsonElement operation = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}/operation",
+            TestContext.Current.CancellationToken);
+        operation.GetProperty("kind").GetString().ShouldBe("upgrade");
+        operation.GetProperty("status").GetString().ShouldBe("Succeeded");
+        operation.GetProperty("outcome").GetString().ShouldBe("upgraded");
+        // p4d did not run: it is neither stopped nor started.
+        operation.GetProperty("steps").EnumerateArray()
+            .Select(s => (s.GetProperty("key").GetString(), s.GetProperty("status").GetString()))
+            .ShouldBe(
+            [
+                ("resolve-build", "Succeeded"),
+                ("stop-server", "Skipped"),
+                ("upgrade-database", "Succeeded"),
+                ("start-server", "Skipped"),
+            ]);
+
+        List<ProcessCommand> commands = _processRunner.ReceivedCalls()
+            .Select(call => (ProcessCommand)call.GetArguments()[0]!)
+            .ToList();
+        commands.Select(c => (c.FileName, c.Arguments.Contains("-xu"))).ShouldBe([("/builds/2850123/p4d", true)]);
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_SucceedsWithoutTouchingAnInstanceAlreadyOnTheLatestBuild()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        P4ServerBuild current;
+        await using (DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(TestContext.Current.CancellationToken))
+        {
+            current = await db.Builds.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken);
+        }
+        _buildCache.EnsureAsync(Release("r25.1"), Arg.Any<IProgress<BuildDownloadProgress>>(), Arg.Any<CancellationToken>())
+            .Returns(current);
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{id}/upgrade",
+            new { release = "r25.1" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await WaitForUpgradeAsync(id);
+        instance.GetProperty("build").GetString().ShouldBe("2850123");
+        instance.GetProperty("lastError").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        JsonElement operation = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}/operation",
+            TestContext.Current.CancellationToken);
+        operation.GetProperty("status").GetString().ShouldBe("Succeeded");
+        operation.GetProperty("outcome").GetString().ShouldBe("up-to-date");
+        operation.GetProperty("steps")[0].GetProperty("message").GetString()
+            .ShouldBe("Already on p4d 2025.1/2850123, the latest build of r25.1");
+        operation.GetProperty("steps").EnumerateArray().Skip(1).Select(s => s.GetProperty("status").GetString())
+            .ShouldAllBe(status => status == "Skipped");
+        _processRunner.ReceivedCalls().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_KeepsThePreviousBuildWhenTheDownloadFails()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r24.2", "2024.2", "2700000");
+        _buildCache.EnsureAsync(Arg.Any<P4ServerRelease>(), Arg.Any<IProgress<BuildDownloadProgress>>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new P4ServerBuildException("The checksum does not match."));
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{id}/upgrade",
+            new { release = "r25.1" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await WaitForUpgradeAsync(id);
+        instance.GetProperty("release").GetString().ShouldBe("r24.2");
+        instance.GetProperty("build").GetString().ShouldBe("2700000");
+        instance.GetProperty("state").GetString().ShouldBe("Ready");
+        instance.GetProperty("lastError").GetString().ShouldBe("The checksum does not match.");
+        _processRunner.ReceivedCalls().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_WarnsThatTheDatabaseMayBePartlyUpgradedWhenItsUpgradeFails()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r24.2", "2024.2", "2700000");
+        P4ServerBuild target = await AddBuildAsync("r25.1", "2025.1", "2850123");
+        _buildCache.EnsureAsync(Release("r25.1"), Arg.Any<IProgress<BuildDownloadProgress>>(), Arg.Any<CancellationToken>())
+            .Returns(target);
+        _processRunner.RunAsync(Arg.Is<ProcessCommand>(c => c.Arguments.Contains("-xu")), Arg.Any<CancellationToken>())
+            .Returns(new ProcessResult(1, string.Empty, "Database is corrupt."));
+
+        await _client.PostAsJsonAsync(
+            $"/api/instances/{id}/upgrade",
+            new { release = "r25.1" },
+            TestContext.Current.CancellationToken);
+
+        JsonElement instance = await WaitForUpgradeAsync(id);
+        // The previous build may no longer open the database.
+        instance.GetProperty("build").GetString().ShouldBe("2850123");
+        instance.GetProperty("lastError").GetString()
+            .ShouldEndWith("failed: Database is corrupt. The database may be partly upgraded.");
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_RefusesAnOlderRelease()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Running);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{id}/upgrade",
+            new { release = "r24.2" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        _factory.Services.GetRequiredService<InstanceRuntimeRegistry>().Get(id).ShouldBe(InstanceRuntimeStatus.Running);
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_RejectsAReleaseThatIsNotAvailable()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{id}/upgrade",
+            new { release = "r26.1" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").GetProperty("release")[0].GetString()
+            .ShouldBe("r26.1 is not an available p4d release.");
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_ConflictsWhenTheInstanceIsNotReady()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{id}/upgrade",
+            new { release = "r25.1" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_ReturnsNotFoundForAnUnknownInstance()
+    {
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{Guid.NewGuid()}/upgrade",
+            new { release = "r25.1" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// Reads the instance until its upgrade has ended.
+    /// </summary>
+    private async Task<JsonElement> WaitForUpgradeAsync(Guid id)
+    {
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        while (true)
+        {
+            JsonElement instance = await _client.GetFromJsonAsync<JsonElement>($"/api/instances/{id}", timeout.Token);
+            if (instance.GetProperty("runtimeStatus").GetString() != "Upgrading")
+            {
+                return instance;
+            }
+            await Task.Delay(50, timeout.Token);
+        }
+    }
+
+    private async Task<P4ServerBuild> AddBuildAsync(string release, string version, string buildNumber)
+    {
+        P4ServerBuild build = new()
+        {
+            Id = Guid.NewGuid(),
+            Release = release,
+            Version = version,
+            BuildNumber = buildNumber,
+            Platform = "linux-x64",
+            Sha256 = buildNumber,
+        };
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(
+            TestContext.Current.CancellationToken);
+        db.Builds.Add(build);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return build;
+    }
+
+    private async Task PinToBuildAsync(Guid id, string release, string version, string buildNumber)
+    {
+        P4ServerBuild build = await AddBuildAsync(release, version, buildNumber);
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(
+            TestContext.Current.CancellationToken);
+        await db.Instances
+            .Where(i => i.Id == id)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(i => i.BuildId, build.Id).SetProperty(i => i.Release, release),
+                TestContext.Current.CancellationToken);
     }
 
     private async Task<Guid> CreateReadyInstanceAsync(string name, InstanceRuntimeStatus runtimeStatus)

@@ -67,6 +67,23 @@ internal sealed class DaemonClient(HttpClient httpClient, string socketPath) : I
     }
 
     /// <summary>
+    /// Begins the upgrade of an instance to another p4d release. It goes on in the daemon: follow it with
+    /// <see cref="GetOperationAsync"/>.
+    /// </summary>
+    public Task<InstanceDto> UpgradeInstanceAsync(
+        Guid id,
+        UpgradeInstanceRequest request,
+        CancellationToken cancellationToken)
+    {
+        return SendAsync(
+            HttpMethod.Post,
+            $"api/instances/{id}/upgrade",
+            Json.InstanceDto,
+            cancellationToken,
+            JsonContent.Create(request, Json.UpgradeInstanceRequest));
+    }
+
+    /// <summary>
     /// Starts, stops or restarts several instances at once.
     /// </summary>
     /// <param name="action">The action: <c>start</c>, <c>stop</c> or <c>restart</c>.</param>

@@ -4,7 +4,7 @@ using P4ServerManager.Contracts;
 namespace P4ServerManager.Cli.Operations;
 
 /// <summary>
-/// Follows a long operation of the daemon, such as a provisioning, until it ends.
+/// Follows a long operation of the daemon, such as a provisioning or an upgrade, until it ends.
 /// </summary>
 internal static class OperationWaiter
 {

@@ -12,11 +12,13 @@
   "actions": {
     "newServer": "New server",
     "cancel": "Cancel",
+    "close": "Close",
     "create": "Create",
     "retry": "Retry",
     "start": "Start",
     "stop": "Stop",
     "restart": "Restart",
+    "upgrade": "Upgrade",
     "delete": "Delete",
     "import": "Import",
     "dismiss": "Dismiss"
@@ -29,6 +31,7 @@
     "starting": "Starting",
     "stopping": "Stopping",
     "restarting": "Restarting",
+    "upgrading": "Upgrading",
     "deleting": "Deleting",
     "unknown": "Unknown"
   },
@@ -122,7 +125,8 @@
   "operations": {
     "kinds": {
       "provision": "Provisioning",
-      "import": "Import"
+      "import": "Import",
+      "upgrade": "Upgrade"
     },
     "steps": {
       "resolve-build": "Get the p4d build",
@@ -137,7 +141,8 @@
       "read-ssl-fingerprint": "Read the SSL fingerprint",
       "save-checkpoint": "Save a checkpoint",
       "read-settings": "Read the server settings",
-      "upgrade-database": "Upgrade the database"
+      "upgrade-database": "Upgrade the database",
+      "stop-server": "Stop the server"
     },
     "skipped": "Skipped"
   },
@@ -193,6 +198,18 @@
     "sslNote": "The server listens with SSL. It keeps the key and the certificate in the ssl folder of its root, so clients keep trusting it.",
     "warning": "Stop the server in the HelixCoreServer package first. A checkpoint of the database is saved to the folder of the instance before the upgrade.",
     "error": "The server could not be imported: {message}"
+  },
+  "upgradeInstance": {
+    "title": "Upgrade {name}",
+    "current": "Runs p4d {version}.",
+    "versionHint": "The latest build of the version is installed. The database cannot go back to an older version.",
+    "latestPatch": "{version} ({release}), latest patch",
+    "noVersions": "No newer p4d version available",
+    "warningRunning": "The server is stopped while its database is upgraded: its users are disconnected until it starts again. No backup of the database is taken: make one first.",
+    "warningStopped": "The server stays stopped. No backup of the database is taken: make one first.",
+    "error": "The upgrade could not begin: {message}",
+    "upgraded": "{name} now runs p4d {version}.",
+    "upToDate": "{name} already runs the latest build, p4d {version}. Nothing was changed."
   },
   "deleteInstance": {
     "title": "Delete {name}?",
