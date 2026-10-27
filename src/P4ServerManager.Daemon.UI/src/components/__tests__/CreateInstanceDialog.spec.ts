@@ -78,7 +78,7 @@ describe('CreateInstanceDialog', () => {
 
     await vi.waitFor(() => {
       expect(document.body.textContent).toContain('Start with a letter')
-      expect(document.body.textContent).toContain('Use at least 8 characters.')
+      expect(document.body.textContent).toContain('Use at least 8 characters, from at least two')
     })
     expect(requests).toEqual([])
   })
@@ -92,7 +92,7 @@ describe('CreateInstanceDialog', () => {
 
     await vi.waitFor(() => {
       expect(document.body.textContent).toContain('Enter a user name.')
-      expect(document.body.textContent).toContain('Use at least 8 characters.')
+      expect(document.body.textContent).toContain('Use at least 8 characters, from at least two')
     })
     expect(requests).toEqual([])
   })
@@ -117,10 +117,39 @@ describe('CreateInstanceDialog', () => {
       caseSensitive: true,
       unicode: false,
       autoStart: true,
-      rootPath: null,
+      ssl: false,
+      serverDirectory: null,
       superUser: { name: 'admin', password: 'Sup3r-Secret!' },
     }])
     expect(wrapper.emitted('update:modelValue')).toEqual([[false]])
+  })
+
+  it('refuses a long password made of one class of characters', async () => {
+    await mountDialog()
+    await type('name', 'main')
+    await type('password', 'onlylowercase')
+    await type('confirmPassword', 'onlylowercase')
+
+    await submit()
+
+    await vi.waitFor(() => expect(document.body.textContent).toContain('from at least two'))
+    expect(requests).toEqual([])
+  })
+
+  it('sends the SSL option and the server directory', async () => {
+    await mountDialog()
+    await type('name', 'main')
+    await type('serverDirectory', ' /volume1/p4/main ')
+    await type('password', 'Sup3r-Secret!')
+    await type('confirmPassword', 'Sup3r-Secret!')
+    ;(input('ssl') as HTMLInputElement).click()
+    await flushPromises()
+
+    await submit()
+
+    await vi.waitFor(() => expect(requests).toHaveLength(1))
+    expect(requests[0]!.ssl).toBe(true)
+    expect(requests[0]!.serverDirectory).toBe('/volume1/p4/main')
   })
 
   it('folds the advanced settings and sends the auto-start turned off there', async () => {

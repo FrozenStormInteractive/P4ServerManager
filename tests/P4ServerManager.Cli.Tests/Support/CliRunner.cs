@@ -60,6 +60,8 @@ internal sealed class CliRunner
             name,
             Description: null,
             port,
+            Ssl: false,
+            SslFingerprint: null,
             RootPath: $"/data/instances/{name}/root",
             Release: "r25.1",
             Version: state == P4ServerInstanceState.Provisioning ? null : "2025.1",

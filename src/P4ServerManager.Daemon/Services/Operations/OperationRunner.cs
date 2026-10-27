@@ -10,7 +10,8 @@ namespace P4ServerManager.Daemon.Services.Operations;
 public sealed class OperationRunner(OperationTracker tracker, InstanceNotifier notifier)
 {
     /// <summary>
-    /// Runs the steps that apply to <paramref name="context"/>, and stops at the first that throws. The exception is
+    /// Runs the steps that apply to <paramref name="context"/>, and stops at the first that throws. The steps not
+    /// included in this run are left out of the operation. The exception is
     /// rethrown once the failure is reported, so that the caller can undo what it needs to.
     /// </summary>
     public async Task RunAsync<TContext>(
@@ -20,11 +21,12 @@ public sealed class OperationRunner(OperationTracker tracker, InstanceNotifier n
         TContext context,
         CancellationToken cancellationToken)
     {
-        List<IOperationStep<TContext>> stepsToRun = steps.Where(step => step.ShouldRun(context)).ToList();
+        List<IOperationStep<TContext>> includedSteps = steps.Where(step => step.IsIncluded(context)).ToList();
+        List<IOperationStep<TContext>> stepsToRun = includedSteps.Where(step => step.ShouldRun(context)).ToList();
         await notifier.OperationChangedAsync(tracker.Begin(
             instanceId,
             kind,
-            steps.Select(step => new OperationStepState(
+            includedSteps.Select(step => new OperationStepState(
                 step.Key,
                 step.Title,
                 stepsToRun.Contains(step) ? OperationStepStatus.Pending : OperationStepStatus.Skipped,

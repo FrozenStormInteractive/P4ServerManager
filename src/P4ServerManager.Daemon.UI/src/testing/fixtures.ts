@@ -7,6 +7,8 @@ export function createInstance (overrides: Partial<Instance> = {}): Instance {
     name: 'main',
     description: null,
     port: 1666,
+    ssl: false,
+    sslFingerprint: null,
     rootPath: '/volume1/p4/main/root',
     release: 'r25.2',
     version: '2025.2',

@@ -32,6 +32,8 @@ public sealed class CreateInstanceCommandTests
             "--super-user", "admin",
             "--password-stdin",
             "--case-insensitive",
+            "--ssl",
+            "--directory", "/volume1/p4/main",
             "--no-auto-start",
             "--description", "Main depot",
             "--no-wait");
@@ -44,6 +46,8 @@ public sealed class CreateInstanceCommandTests
         request.RootElement.GetProperty("port").GetInt32().ShouldBe(1666);
         request.RootElement.GetProperty("caseSensitive").GetBoolean().ShouldBeFalse();
         request.RootElement.GetProperty("unicode").GetBoolean().ShouldBeFalse();
+        request.RootElement.GetProperty("ssl").GetBoolean().ShouldBeTrue();
+        request.RootElement.GetProperty("serverDirectory").GetString().ShouldBe("/volume1/p4/main");
         request.RootElement.GetProperty("autoStart").GetBoolean().ShouldBeFalse();
         request.RootElement.GetProperty("description").GetString().ShouldBe("Main depot");
         request.RootElement.GetProperty("superUser").GetProperty("name").GetString().ShouldBe("admin");
@@ -78,6 +82,35 @@ public sealed class CreateInstanceCommandTests
 
         result.ExitCode.ShouldBe(1);
         result.Error.ShouldContain("The passwords do not match.");
+        _cli.Daemon.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Create_RefusesAWeakPasswordOnATerminalBeforeItsConfirmation()
+    {
+        _cli.Prompter.IsInteractive = true;
+        _cli.Prompter.Secrets.Enqueue("onlylowercase");
+
+        CliResult result = await RunCreateAsync("--no-wait");
+
+        result.ExitCode.ShouldBe(1);
+        result.Error.ShouldContain(SuperUserPassword.Requirement);
+        _cli.Prompter.Questions.Count.ShouldBe(1);
+        _cli.Daemon.Requests.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Short1")]
+    [InlineData("onlylowercase")]
+    [InlineData("12345678")]
+    public async Task Create_RefusesAWeakPasswordFromStandardInput(string password)
+    {
+        _cli.Input = password + "\n";
+
+        CliResult result = await RunCreateAsync("--password-stdin", "--no-wait");
+
+        result.ExitCode.ShouldBe(1);
+        result.Error.ShouldContain(SuperUserPassword.Requirement);
         _cli.Daemon.Requests.ShouldBeEmpty();
     }
 

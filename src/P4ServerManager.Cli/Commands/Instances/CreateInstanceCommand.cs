@@ -3,6 +3,7 @@ using System.CommandLine;
 using P4ServerManager.Cli.Api;
 using P4ServerManager.Cli.Json;
 using P4ServerManager.Cli.Operations;
+using P4ServerManager.Cli.Output;
 using P4ServerManager.Cli.Prompts;
 using P4ServerManager.Contracts;
 
@@ -28,7 +29,8 @@ internal static class CreateInstanceCommand
         };
         Option<string> superUserOption = new("--super-user")
         {
-            Description = "Name of the super user created with the server. Its password is asked on the terminal.",
+            Description = "Name of the super user created with the server. Its password is asked on the terminal: at "
+                + "least 8 characters, from at least two of the classes upper case, lower case and non-alphabetic.",
             HelpName = "name",
             Required = true,
         };
@@ -37,10 +39,15 @@ internal static class CreateInstanceCommand
             Description = "Read the password of the super user from the standard input instead.",
         };
         Option<string?> descriptionOption = new("--description") { Description = "Free text." };
-        Option<string?> rootOption = new("--root")
+        Option<string?> directoryOption = new("--directory")
         {
-            Description = "Absolute P4ROOT. Defaults to a folder of the instance in the data directory.",
+            Description = "Absolute folder of the server, missing or empty. The P4ROOT is its root subfolder, next to "
+                + "journals, logs and archives. Defaults to a folder of the instance in the data directory.",
             HelpName = "path",
+        };
+        Option<bool> sslOption = new("--ssl")
+        {
+            Description = "Listen with SSL. The daemon generates the key and the certificate of the server.",
         };
         Option<bool> caseInsensitiveOption = new("--case-insensitive")
         {
@@ -67,7 +74,8 @@ internal static class CreateInstanceCommand
             superUserOption,
             passwordStdinOption,
             descriptionOption,
-            rootOption,
+            directoryOption,
+            sslOption,
             caseInsensitiveOption,
             unicodeOption,
             noAutoStartOption,
@@ -86,10 +94,11 @@ internal static class CreateInstanceCommand
                 Description = invocation.GetValue(descriptionOption),
                 Release = invocation.GetValue(releaseOption),
                 Port = invocation.GetValue(portOption),
+                Ssl = invocation.GetValue(sslOption),
                 CaseSensitive = !invocation.GetValue(caseInsensitiveOption),
                 Unicode = invocation.GetValue(unicodeOption),
                 AutoStart = !invocation.GetValue(noAutoStartOption),
-                RootPath = invocation.GetValue(rootOption),
+                ServerDirectory = invocation.GetValue(directoryOption),
                 SuperUser = new SuperUserRequest { Name = invocation.GetValue(superUserOption), Password = password },
             };
 
@@ -138,7 +147,12 @@ internal static class CreateInstanceCommand
             }
             else if (exitCode == 0)
             {
-                await invocation.Output.WriteLineAsync($"{created.Name} is ready on port {created.Port}.");
+                await invocation.Output.WriteLineAsync(
+                    $"{created.Name} is ready on port {InstanceFormatting.FormatPort(created)}.");
+                if (created.SslFingerprint is { } fingerprint)
+                {
+                    await invocation.Output.WriteLineAsync($"Fingerprint of its certificate: {fingerprint}");
+                }
             }
             return exitCode;
         });
@@ -147,7 +161,7 @@ internal static class CreateInstanceCommand
 
     /// <summary>
     /// Reads the password of the super user. It is never taken from an argument, which other users could read in the
-    /// list of the processes or in the shell history.
+    /// list of the processes or in the shell history. A weak password is refused before anything is sent to the daemon.
     /// </summary>
     private static async Task<string> ReadPasswordAsync(
         CliInvocation invocation,
@@ -158,7 +172,7 @@ internal static class CreateInstanceCommand
         {
             string? line = await invocation.Environment.Input.ReadLineAsync(cancellationToken);
             return line is { Length: > 0 }
-                ? line
+                ? CheckStrength(line)
                 : throw new CliException("No password was read from the standard input.");
         }
 
@@ -173,10 +187,16 @@ internal static class CreateInstanceCommand
         {
             throw new CliException("The password of the super user cannot be empty.");
         }
+        CheckStrength(password);
         if (prompter.ReadSecret("Confirm the password: ") != password)
         {
             throw new CliException("The passwords do not match.");
         }
         return password;
+    }
+
+    private static string CheckStrength(string password)
+    {
+        return SuperUserPassword.IsStrong(password) ? password : throw new CliException(SuperUserPassword.Requirement);
     }
 }

@@ -11,6 +11,14 @@ export interface Instance {
   name: string
   description: string | null
   port: number
+  /**
+   * True when p4d listens with SSL, on `ssl:` followed by the port.
+   */
+  ssl: boolean
+  /**
+   * Fingerprint of the certificate of the server, that clients check before they trust it. Null without SSL.
+   */
+  sslFingerprint: string | null
   rootPath: string
   release: string
   version: string | null
@@ -37,7 +45,11 @@ export interface CreateInstanceRequest {
   caseSensitive: boolean
   unicode: boolean
   autoStart: boolean
-  rootPath?: string | null
+  ssl: boolean
+  /**
+   * Folder of the server: the root is its `root` subfolder, next to `journals`, `logs` and `archives`.
+   */
+  serverDirectory?: string | null
   superUser: SuperUser
 }
 

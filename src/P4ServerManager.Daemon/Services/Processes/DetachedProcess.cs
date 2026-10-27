@@ -44,8 +44,16 @@ public static partial class DetachedProcess
     /// session. The standard input reads from <c>/dev/null</c>, the standard and error outputs go to
     /// <paramref name="outputPath"/>.
     /// </summary>
+    /// <param name="fileName">Program to start.</param>
+    /// <param name="arguments">Its arguments.</param>
+    /// <param name="outputPath">File of its standard and error outputs.</param>
+    /// <param name="environment">Variables set on top of the environment of the daemon.</param>
     /// <returns>The pid of the started process. It is a child of the daemon until it exits.</returns>
-    public static unsafe int Start(string fileName, IReadOnlyList<string> arguments, string outputPath)
+    public static unsafe int Start(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string outputPath,
+        IReadOnlyDictionary<string, string>? environment = null)
     {
         void* attributes = NativeMemory.AllocZeroed(OpaqueSize);
         void* fileActions = NativeMemory.AllocZeroed(OpaqueSize);
@@ -92,7 +100,7 @@ public static partial class DetachedProcess
             Check(PosixSpawnFileActionsAddDup2(fileActions, 1, 2), "posix_spawn_file_actions_adddup2");
 
             byte** argv = Utf8Array(strings, [fileName, .. arguments]);
-            byte** envp = Utf8Array(strings, GetEnvironment());
+            byte** envp = Utf8Array(strings, GetEnvironment(environment));
             int pid;
             Check(PosixSpawn(&pid, Utf8(strings, fileName), fileActions, attributes, argv, envp), "posix_spawn");
             return pid;
@@ -162,11 +170,18 @@ public static partial class DetachedProcess
         }
     }
 
-    private static IEnumerable<string> GetEnvironment()
+    private static IEnumerable<string> GetEnvironment(IReadOnlyDictionary<string, string>? overrides)
     {
         foreach (DictionaryEntry variable in Environment.GetEnvironmentVariables())
         {
-            yield return $"{variable.Key}={variable.Value}";
+            if (overrides is null || !overrides.ContainsKey((string)variable.Key))
+            {
+                yield return $"{variable.Key}={variable.Value}";
+            }
+        }
+        foreach ((string name, string value) in overrides ?? new Dictionary<string, string>())
+        {
+            yield return $"{name}={value}";
         }
     }
 

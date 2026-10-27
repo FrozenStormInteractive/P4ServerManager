@@ -7,6 +7,10 @@ namespace P4ServerManager.Contracts;
 /// <param name="Name">Unique name, also used as the p4d server ID.</param>
 /// <param name="Description">Optional free text.</param>
 /// <param name="Port">TCP port p4d listens on.</param>
+/// <param name="Ssl">True when p4d listens with SSL, on <c>ssl:</c> followed by the port.</param>
+/// <param name="SslFingerprint">
+/// Fingerprint of the certificate of the server, that clients check before they trust it. Null without SSL.
+/// </param>
 /// <param name="RootPath">Absolute path of the P4ROOT.</param>
 /// <param name="Release">p4d release asked for at creation, for example <c>r25.1</c>.</param>
 /// <param name="Version">Version of the pinned p4d build, for example <c>2025.1</c>. Null until resolved.</param>
@@ -23,6 +27,8 @@ public sealed record InstanceDto(
     string Name,
     string? Description,
     int Port,
+    bool Ssl,
+    string? SslFingerprint,
     string RootPath,
     string Release,
     string? Version,

@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Globalization;
 
 using P4ServerManager.Cli.Api;
 using P4ServerManager.Cli.Json;
@@ -38,7 +37,7 @@ internal static class ListInstancesCommand
                     instance.Name,
                     instance.State.ToString(),
                     instance.RuntimeStatus.ToString(),
-                    instance.Port.ToString(CultureInfo.InvariantCulture),
+                    InstanceFormatting.FormatPort(instance),
                     InstanceFormatting.FormatVersion(instance),
                     InstanceFormatting.FormatYesNo(instance.AutoStart));
             }

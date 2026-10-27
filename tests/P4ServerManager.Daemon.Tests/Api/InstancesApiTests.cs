@@ -87,12 +87,52 @@ public sealed class InstancesApiTests : IAsyncLifetime
         instance.GetProperty("state").GetString().ShouldBe("Provisioning");
         instance.GetProperty("runtimeStatus").GetString().ShouldBe("Unknown");
         instance.GetProperty("rootPath").GetString().ShouldStartWith(_dataDirectory);
+        instance.GetProperty("ssl").GetBoolean().ShouldBeFalse();
         instance.GetRawText().ShouldNotContain("secret-password");
 
         JsonElement instances = await _client.GetFromJsonAsync<JsonElement>(
             "/api/instances",
             TestContext.Current.CancellationToken);
         instances.EnumerateArray().Select(i => i.GetProperty("name").GetString()).ShouldBe(["main"]);
+    }
+
+    [Fact]
+    public async Task CreateInstance_PutsTheRootInTheServerDirectory()
+    {
+        string serverDirectory = Path.Combine(_dataDirectory, "servers", "main");
+        Guid id = await CreateFailedInstanceAsync("main", serverDirectory, ssl: true);
+
+        JsonElement instance = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+        instance.GetProperty("rootPath").GetString().ShouldBe(Path.Combine(serverDirectory, "root"));
+        instance.GetProperty("ssl").GetBoolean().ShouldBeTrue();
+        instance.GetProperty("sslFingerprint").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task CreateInstance_RejectsAServerDirectoryThatIsNotEmpty()
+    {
+        string serverDirectory = Path.Combine(_dataDirectory, "servers", "main");
+        Directory.CreateDirectory(Path.Combine(serverDirectory, "root"));
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            "/api/instances",
+            new
+            {
+                name = "main",
+                release = "r25.1",
+                port = GetFreePort(),
+                serverDirectory,
+                superUser = new { name = "admin", password = "secret-password" },
+            },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").GetProperty("serverDirectory")[0].GetString()
+            .ShouldBe("The server directory is not empty.");
     }
 
     [Theory]
@@ -177,6 +217,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
     [InlineData("main", 70000, "r25.1", "admin", "secret-password", "port")]
     [InlineData("main", 0, "r12.1", "admin", "secret-password", "release")]
     [InlineData("main", 0, "r25.1", "admin", "short", "superUser.password")]
+    [InlineData("main", 0, "r25.1", "admin", "onlylowercase", "superUser.password")]
     [InlineData("main", 0, "r25.1", "9admin", "secret-password", "superUser.name")]
     public async Task CreateInstance_RejectsAnInvalidField(
         string name,
@@ -378,10 +419,11 @@ public sealed class InstancesApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task DeleteInstance_KeepsARootChosenAtCreation()
+    public async Task DeleteInstance_KeepsAServerDirectoryChosenAtCreation()
     {
-        string rootPath = Path.Combine(_dataDirectory, "custom-root");
-        Guid id = await CreateFailedInstanceAsync("main", rootPath);
+        string serverDirectory = Path.Combine(_dataDirectory, "custom-server");
+        Guid id = await CreateFailedInstanceAsync("main", serverDirectory);
+        string rootPath = Path.Combine(serverDirectory, "root");
         Directory.CreateDirectory(rootPath);
 
         HttpResponseMessage response = await _client.DeleteAsync(
@@ -392,7 +434,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
         Directory.Exists(rootPath).ShouldBeTrue();
     }
 
-    private async Task<Guid> CreateFailedInstanceAsync(string name, string? rootPath = null)
+    private async Task<Guid> CreateFailedInstanceAsync(string name, string? serverDirectory = null, bool ssl = false)
     {
         HttpResponseMessage created = await _client.PostAsJsonAsync(
             "/api/instances",
@@ -401,7 +443,8 @@ public sealed class InstancesApiTests : IAsyncLifetime
                 name,
                 release = "r25.1",
                 port = GetFreePort(),
-                rootPath,
+                serverDirectory,
+                ssl,
                 caseSensitive = true,
                 unicode = false,
                 superUser = new { name = "admin", password = "secret-password" },

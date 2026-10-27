@@ -37,6 +37,43 @@ public sealed class P4ServerLauncher(
     }
 
     /// <summary>
+    /// What p4d listens on: the port, prefixed with <c>ssl:</c> when the instance uses SSL.
+    /// </summary>
+    public static string GetListenAddress(P4ServerInstance instance)
+    {
+        string port = instance.Port.ToString(CultureInfo.InvariantCulture);
+        return instance.Ssl ? $"ssl:{port}" : port;
+    }
+
+    /// <summary>
+    /// Variables p4d needs on top of the environment of the daemon: the folder of its key and certificate, with SSL.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string>? GetEnvironment(P4ServerInstance instance)
+    {
+        return instance.Ssl
+            ? new Dictionary<string, string> { ["P4SSLDIR"] = ServerLayout.GetSslDirectory(instance.RootPath) }
+            : null;
+    }
+
+    /// <summary>
+    /// Log of p4d: <c>logs/log</c> in the server directory when it has a logs folder, the file P4LOG points to in a
+    /// server laid out, otherwise a file of the instance in the data directory.
+    /// </summary>
+    public string GetLogPath(P4ServerInstance instance)
+    {
+        string? serverDirectory = ServerLayout.GetServerDirectory(instance.RootPath);
+        if (serverDirectory is not null)
+        {
+            string logsDirectory = Path.Combine(serverDirectory, ServerLayout.LogsFolder);
+            if (Directory.Exists(logsDirectory))
+            {
+                return Path.Combine(logsDirectory, ServerLayout.LogFile);
+            }
+        }
+        return paths.GetLogPath(instance.Id);
+    }
+
+    /// <summary>
     /// Whether the p4d of the instance runs.
     /// </summary>
     public bool IsRunning(P4ServerInstance instance)
@@ -79,23 +116,26 @@ public sealed class P4ServerLauncher(
 
         string p4dPath = buildCache.GetP4dPath(build);
         string pidFile = paths.GetPidFilePath(instance.Id);
-        string logPath = paths.GetLogPath(instance.Id);
+        string logPath = GetLogPath(instance);
         Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.GetStartOutputPath(instance.Id))!);
         File.Delete(pidFile);
 
         List<string> arguments =
         [
             .. GetRootArguments(instance),
-            "-p", instance.Port.ToString(CultureInfo.InvariantCulture),
+            "-p", GetListenAddress(instance),
             "-L", logPath,
         ];
+        IReadOnlyDictionary<string, string>? environment = GetEnvironment(instance);
 
         logger.LogInformation("Starting p4d for instance {Name} on port {Port}", instance.Name, instance.Port);
         int pid = OperatingSystem.IsWindows()
-            ? StartOnWindows(p4dPath, arguments, pidFile)
+            ? StartOnWindows(p4dPath, arguments, environment, pidFile)
             : await StartOnUnixAsync(
                 p4dPath,
                 arguments,
+                environment,
                 pidFile,
                 paths.GetStartOutputPath(instance.Id),
                 cancellationToken);
@@ -133,6 +173,7 @@ public sealed class P4ServerLauncher(
     private static async Task<int> StartOnUnixAsync(
         string p4dPath,
         List<string> arguments,
+        IReadOnlyDictionary<string, string>? environment,
         string pidFile,
         string outputPath,
         CancellationToken cancellationToken)
@@ -142,7 +183,7 @@ public sealed class P4ServerLauncher(
         // reach p4d.
         arguments.Add("--daemonsafe");
         arguments.Add($"--pid-file={pidFile}");
-        int launcherPid = DetachedProcess.Start(p4dPath, arguments, outputPath);
+        int launcherPid = DetachedProcess.Start(p4dPath, arguments, outputPath, environment);
 
         int? exitCode;
         try
@@ -177,7 +218,11 @@ public sealed class P4ServerLauncher(
         return pid;
     }
 
-    private static int StartOnWindows(string p4dPath, List<string> arguments, string pidFile)
+    private static int StartOnWindows(
+        string p4dPath,
+        List<string> arguments,
+        IReadOnlyDictionary<string, string>? environment,
+        string pidFile)
     {
         // Windows is only a development target. p4d accepts -d and --daemonsafe there but does not fork: the process
         // stays in the foreground. So it is started without waiting, and the daemon writes the pid file itself.
@@ -189,6 +234,10 @@ public sealed class P4ServerLauncher(
         foreach (string argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
+        }
+        foreach ((string name, string value) in environment ?? new Dictionary<string, string>())
+        {
+            startInfo.Environment[name] = value;
         }
 
         using Process process = Process.Start(startInfo)

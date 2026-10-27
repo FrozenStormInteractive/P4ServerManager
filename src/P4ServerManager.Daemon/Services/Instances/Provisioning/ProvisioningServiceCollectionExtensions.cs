@@ -14,8 +14,11 @@ public static class ProvisioningServiceCollectionExtensions
         services.AddStep<ResolveBuildStep>(ProvisioningKind.Create);
         services.AddStep<PrepareDirectoriesStep>(ProvisioningKind.Create);
         services.AddStep<InitializeDatabaseStep>(ProvisioningKind.Create);
+        services.AddStep<GenerateSslCertificateStep>(ProvisioningKind.Create);
         services.AddStep<StartServerStep>(ProvisioningKind.Create);
         services.AddStep<CreateSuperUserStep>(ProvisioningKind.Create);
+        services.AddStep<ConfigureServerStep>(ProvisioningKind.Create);
+        services.AddStep<CreateSpecsStep>(ProvisioningKind.Create);
 
         services.AddStep<ResolveBuildStep>(ProvisioningKind.Import);
         services.AddStep<CheckRootStep>(ProvisioningKind.Import);

@@ -18,6 +18,8 @@ public static class ContractMappings
             instance.Name,
             instance.Description,
             instance.Port,
+            instance.Ssl,
+            instance.SslFingerprint,
             instance.RootPath,
             instance.Release,
             instance.Build?.Version,

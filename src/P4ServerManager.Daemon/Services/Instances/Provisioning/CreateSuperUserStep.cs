@@ -1,4 +1,3 @@
-using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
@@ -6,7 +5,8 @@ using P4ServerManager.Daemon.Services.Processes;
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
 /// <summary>
-/// Creates the super user given at creation, and makes it the only super user of the protections table.
+/// Creates the super user given at creation, and makes it the only super user of the protections table. The table also
+/// hides the spec depot from the other users.
 /// </summary>
 public sealed class CreateSuperUserStep(
     IP4ServerBuildCache buildCache,
@@ -14,6 +14,11 @@ public sealed class CreateSuperUserStep(
     DaemonPaths paths,
     ILogger<CreateSuperUserStep> logger) : IOperationStep<ProvisioningContext>
 {
+    /// <summary>
+    /// Added after the <c>write user</c> line of the default table.
+    /// </summary>
+    private const string HideSpecDepotLine = "\tlist user * * -//spec/...";
+
     public string Key => "create-super-user";
 
     public string Title => "Create the super user";
@@ -23,74 +28,43 @@ public sealed class CreateSuperUserStep(
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {
-        P4ServerInstance instance = context.Instance;
-        SuperUserCredentials superUser = context.SuperUser
-            ?? throw new InvalidOperationException("A created server needs a super user.");
-        TimeSpan timeout = ProcessRunnerExtensions.CommandTimeout;
-        string p4Path = buildCache.GetP4Path(instance.Build!);
-        string clientDirectory = paths.GetClientStateDirectory(instance.Id);
-        List<string> connection = ["-p", $"localhost:{instance.Port}", "-u", superUser.Name];
-        if (instance.Unicode)
-        {
-            connection.AddRange(["-C", "utf8"]);
-        }
-
-        // Keeps the p4 settings of the account the daemon runs as out of the way.
-        Dictionary<string, string> environment = new()
-        {
-            ["P4CONFIG"] = ".p4config-unused",
-            ["P4ENVIRO"] = Path.Combine(clientDirectory, ".p4enviro"),
-            ["P4TICKETS"] = Path.Combine(clientDirectory, ".p4tickets"),
-            ["P4TRUST"] = Path.Combine(clientDirectory, ".p4trust"),
-        };
-
-        // The password goes first: since 2026.1, p4d refuses any other command from a user without one. Setting it
-        // creates the user.
-        await processRunner.RunCheckedAsync(
-            new ProcessCommand(
-                p4Path,
-                [.. connection, "passwd"],
-                $"{superUser.Password}\n{superUser.Password}\n",
-                environment,
-                timeout),
+        P4AdminSession session = await P4AdminSession.OpenAsync(
+            buildCache,
+            processRunner,
+            paths,
+            logger,
+            context,
             cancellationToken);
+        string name = context.SuperUser!.Name;
 
-        // Recent servers refuse P4PASSWD once a password is set: a ticket is needed. It is invalidated right after, so
-        // no credential of the super user stays on disk.
-        await processRunner.RunCheckedAsync(
-            new ProcessCommand(p4Path, [.. connection, "login"], $"{superUser.Password}\n", environment, timeout),
-            cancellationToken);
-        try
+        await session.SetPasswordAsync(cancellationToken);
+        return await session.RunLoggedInAsync(async () =>
         {
-            string userSpec = $"User:\t{superUser.Name}\n\nEmail:\t{superUser.Name}@localhost\n\nFullName:\t{superUser.Name}\n";
-            await processRunner.RunCheckedAsync(
-                new ProcessCommand(p4Path, [.. connection, "user", "-f", "-i"], userSpec, environment, timeout),
-                cancellationToken);
+            string userSpec = $"User:\t{name}\n\nEmail:\t{name}@localhost\n\nFullName:\t{name}\n";
+            await session.RunAsync(["user", "-f", "-i"], userSpec, cancellationToken);
 
             // Saving the protections table for the first time makes the current user the only super user.
-            ProcessResult protections = await processRunner.RunCheckedAsync(
-                new ProcessCommand(p4Path, [.. connection, "protect", "-o"], null, environment, timeout),
+            ProcessResult protections = await session.RunAsync(["protect", "-o"], cancellationToken: cancellationToken);
+            await session.RunAsync(
+                ["protect", "-i"],
+                AddHideSpecDepotLine(protections.StandardOutput),
                 cancellationToken);
-            await processRunner.RunCheckedAsync(
-                new ProcessCommand(
-                    p4Path,
-                    [.. connection, "protect", "-i"],
-                    protections.StandardOutput,
-                    environment,
-                    timeout),
-                cancellationToken);
-        }
-        finally
+            return name;
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds <see cref="HideSpecDepotLine"/> after the <c>write user</c> line of a protections table.
+    /// </summary>
+    internal static string AddHideSpecDepotLine(string protections)
+    {
+        List<string> lines = protections.ReplaceLineEndings("\n").Split('\n').ToList();
+        int writeLine = lines.FindIndex(line => line.TrimStart().StartsWith("write user ", StringComparison.Ordinal));
+        if (writeLine < 0)
         {
-            ProcessResult logout = await processRunner.RunAsync(
-                new ProcessCommand(p4Path, [.. connection, "logout"], null, environment, timeout),
-                CancellationToken.None);
-            if (!logout.Succeeded)
-            {
-                logger.LogWarning("Could not log the super user out of instance {Name}: {Error}",
-                    instance.Name, logout.ErrorText);
-            }
+            throw new InstanceOperationException("The protections table has no 'write user' line.");
         }
-        return superUser.Name;
+        lines.Insert(writeLine + 1, HideSpecDepotLine);
+        return string.Join('\n', lines);
     }
 }

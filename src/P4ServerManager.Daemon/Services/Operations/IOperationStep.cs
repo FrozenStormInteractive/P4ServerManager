@@ -21,6 +21,16 @@ public interface IOperationStep<in TContext>
     string Title { get; }
 
     /// <summary>
+    /// Whether the step is part of this run at all. Read before the first step runs: a step that is not is left out of
+    /// the list of the steps, for a step the clients would have no reason to show, such as one for an option the
+    /// instance does not use.
+    /// </summary>
+    bool IsIncluded(TContext context)
+    {
+        return true;
+    }
+
+    /// <summary>
     /// Whether the step applies to this run. Read before the first step runs: a step that does not apply is shown as
     /// skipped from the start.
     /// </summary>

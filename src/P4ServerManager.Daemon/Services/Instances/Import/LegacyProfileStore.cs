@@ -12,11 +12,6 @@ public sealed class LegacyProfileStore(DaemonPaths paths, ILogger<LegacyProfileS
     /// </summary>
     private const string CountersTable = "db.counters";
 
-    /// <summary>
-    /// Folders p4dctl-ng creates next to the root of a server.
-    /// </summary>
-    private static readonly string[] ServerFolders = ["archives", "journals", "logs"];
-
     /// <returns>The profiles, by file name, with the problems of their root.</returns>
     public async Task<IReadOnlyList<LegacyProfile>> ListAsync(CancellationToken cancellationToken)
     {
@@ -91,10 +86,16 @@ public sealed class LegacyProfileStore(DaemonPaths paths, ILogger<LegacyProfileS
         }
 
         // p4dctl-ng puts the archives, the journals and the logs next to the root, and points the server to them.
-        string? serverDirectory = Path.GetDirectoryName(Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar));
+        string? serverDirectory = ServerLayout.GetServerDirectory(rootPath);
         IEnumerable<string> folders = serverDirectory is null
             ? [rootPath]
-            : [rootPath, .. ServerFolders.Select(name => Path.Combine(serverDirectory, name)).Where(Directory.Exists)];
+            :
+            [
+                rootPath,
+                .. ServerLayout.SiblingFolders
+                    .Select(name => Path.Combine(serverDirectory, name))
+                    .Where(Directory.Exists),
+            ];
         foreach (string folder in folders)
         {
             if (!CanWriteTo(folder))

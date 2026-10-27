@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using P4ServerManager.Contracts;
 
 namespace P4ServerManager.Cli.Output;
@@ -11,6 +13,15 @@ internal static class InstanceFormatting
     public static string FormatVersion(InstanceDto instance)
     {
         return instance.Version is null ? instance.Release : $"{instance.Version}/{instance.Build}";
+    }
+
+    /// <summary>
+    /// The port as clients give it in P4PORT: prefixed with <c>ssl:</c> when the instance uses SSL.
+    /// </summary>
+    public static string FormatPort(InstanceDto instance)
+    {
+        string port = instance.Port.ToString(CultureInfo.InvariantCulture);
+        return instance.Ssl ? $"ssl:{port}" : port;
     }
 
     public static string FormatYesNo(bool value)

@@ -4,10 +4,14 @@ using P4ServerManager.Daemon.Services.Operations;
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
 /// <summary>
-/// Creates the directories of the instance. The root must be missing or empty.
+/// Creates the directories of the instance, and the server directory laid out as <see cref="ServerLayout"/> says. The
+/// root and the folders next to it must be missing or empty. Only the account the daemon runs as can open the server
+/// directory.
 /// </summary>
 public sealed class PrepareDirectoriesStep(DaemonPaths paths) : IOperationStep<ProvisioningContext>
 {
+    private const UnixFileMode PrivateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
     public string Key => "prepare-directories";
 
     public string Title => "Prepare the directories";
@@ -18,19 +22,48 @@ public sealed class PrepareDirectoriesStep(DaemonPaths paths) : IOperationStep<P
         CancellationToken cancellationToken)
     {
         P4ServerInstance instance = context.Instance;
-        Directory.CreateDirectory(paths.GetInstanceDirectory(instance.Id));
-        Directory.CreateDirectory(Path.GetDirectoryName(paths.GetLogPath(instance.Id))!);
-        Directory.CreateDirectory(paths.GetClientStateDirectory(instance.Id));
+        string serverDirectory = ServerLayout.GetServerDirectory(instance.RootPath)
+            ?? throw new InstanceOperationException($"The root {instance.RootPath} has no parent folder.");
+        string[] serverFolders =
+        [
+            instance.RootPath,
+            .. ServerLayout.SiblingFolders.Select(name => Path.Combine(serverDirectory, name)),
+        ];
+        foreach (string folder in serverFolders)
+        {
+            if (File.Exists(folder))
+            {
+                throw new InstanceOperationException($"{folder} is a file.");
+            }
+            if (Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any())
+            {
+                throw new InstanceOperationException($"{folder} is not empty.");
+            }
+        }
 
-        if (File.Exists(instance.RootPath))
+        CreatePrivateDirectory(serverDirectory);
+        foreach (string folder in serverFolders)
         {
-            throw new InstanceOperationException($"The root {instance.RootPath} is a file.");
+            CreatePrivateDirectory(folder);
         }
-        if (Directory.Exists(instance.RootPath) && Directory.EnumerateFileSystemEntries(instance.RootPath).Any())
+        if (instance.Ssl)
         {
-            throw new InstanceOperationException($"The root {instance.RootPath} is not empty.");
+            // p4d refuses a key folder that other accounts can open.
+            CreatePrivateDirectory(ServerLayout.GetSslDirectory(instance.RootPath));
         }
-        Directory.CreateDirectory(instance.RootPath);
-        return Task.FromResult<string?>(instance.RootPath);
+
+        Directory.CreateDirectory(paths.GetInstanceDirectory(instance.Id));
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.GetStartOutputPath(instance.Id))!);
+        Directory.CreateDirectory(paths.GetClientStateDirectory(instance.Id));
+        return Task.FromResult<string?>(serverDirectory);
+    }
+
+    private static void CreatePrivateDirectory(string path)
+    {
+        Directory.CreateDirectory(path);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, PrivateMode);
+        }
     }
 }

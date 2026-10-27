@@ -127,6 +127,7 @@
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
   import OperationProgress from '@/components/instances/OperationProgress.vue'
   import { useInstancesStore } from '@/stores/instances'
+  import { formatPort } from '@/utils/instancePort'
   import { getInstanceStatus, isInstanceStatusInProgress } from '@/utils/instanceStatus'
 
   const props = defineProps<{
@@ -169,7 +170,8 @@
         label: 'instance.version',
         value: value.version ? `${value.version}/${value.build} (${value.release})` : t('instance.pendingVersion'),
       },
-      { label: 'instance.port', value: String(value.port) },
+      { label: 'instance.port', value: formatPort(value) },
+      ...(value.sslFingerprint ? [{ label: 'instance.sslFingerprint', value: value.sslFingerprint }] : []),
       { label: 'instance.root', value: value.rootPath },
       {
         label: 'instance.caseHandling',

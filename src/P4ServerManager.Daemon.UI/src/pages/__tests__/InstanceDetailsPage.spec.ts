@@ -108,6 +108,16 @@ describe('InstanceDetailsPage', () => {
     expect(autoStart.element.checked).toBe(false)
   })
 
+  it('shows the SSL port and the fingerprint of the certificate', async () => {
+    const fingerprint = 'A5:C8:59:F1:AC:B9:85:90:D9:6D:4A:3F:70:2A:F9:2C:F6:CB:12:F8'
+    const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, { props: { id: instance.id } })
+    useInstancesStore(pinia).upsertInstance({ ...instance, ssl: true, sslFingerprint: fingerprint })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('ssl:1666')
+    expect(wrapper.text()).toContain(fingerprint)
+  })
+
   it('does not offer to delete an instance being provisioned', async () => {
     expect(await mountWith('Unknown', 'Provisioning')).toEqual([
       { text: 'Start', loading: false, disabled: true },

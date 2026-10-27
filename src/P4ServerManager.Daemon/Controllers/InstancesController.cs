@@ -62,9 +62,10 @@ public sealed class InstancesController(
     }
 
     /// <summary>
-    /// Creates an instance. The provisioning (download of p4d, initialization, start, super user) runs in the
-    /// background: follow it with <c>GET /api/instances/{id}/operation</c> or the <c>OperationProgress</c> event
-    /// of the <c>/hubs/instances</c> hub.
+    /// Creates an instance, with recommended configuration: folders, recommended configurables, security level 4, spec
+    /// and unload depots, server spec and typemap. The provisioning (download of p4d, initialization, start,
+    /// super user, configuration) runs in the background: follow it with <c>GET /api/instances/{id}/operation</c> or
+    /// the <c>OperationProgress</c> event of the <c>/hubs/instances</c> hub.
     /// </summary>
     /// <param name="request">Settings of the instance, checked by <see cref="CreateInstanceRequestValidator"/>.</param>
     /// <param name="queue">Queue of the provisionings.</param>
@@ -90,9 +91,10 @@ public sealed class InstancesController(
             Name = request.Name,
             Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
             Port = request.Port,
-            RootPath = string.IsNullOrWhiteSpace(request.RootPath)
+            Ssl = request.Ssl,
+            RootPath = string.IsNullOrWhiteSpace(request.ServerDirectory)
                 ? paths.GetDefaultRootPath(id)
-                : Path.GetFullPath(request.RootPath),
+                : ServerLayout.GetRootPath(Path.GetFullPath(request.ServerDirectory)),
             Release = request.Release,
             CaseSensitive = request.CaseSensitive,
             Unicode = request.Unicode,
@@ -256,8 +258,9 @@ public sealed class InstancesController(
     /// </summary>
     /// <param name="id">Identifier of the instance.</param>
     /// <param name="deleteFiles">
-    /// Also deletes the files of the instance in the data directory: its logs and, when the daemon chose it, its root
-    /// with the depots. A root directory given at creation is always kept. False by default: the files stay on disk.
+    /// Also deletes the files of the instance in the data directory: its logs and, when the daemon chose it, its server
+    /// directory with the root, the journals and the depots. A server directory given at creation is always kept.
+    /// False by default: the files stay on disk.
     /// </param>
     /// <param name="supervisor">Stops the process and deletes the instance.</param>
     /// <param name="cancellationToken">

@@ -26,14 +26,14 @@ public sealed class CreateInstanceRequestValidator : AbstractValidator<CreateIns
         RuleFor(r => r.Port).MustBeFreeInstancePort(db);
         RuleFor(r => r.Release).MustBeAvailableRelease(releaseCatalog);
 
-        RuleFor(r => r.RootPath!)
+        RuleFor(r => r.ServerDirectory!)
             .Must(Path.IsPathFullyQualified)
-            .WithMessage("The root directory is an absolute path.")
+            .WithMessage("The server directory is an absolute path.")
             .Must(path => !File.Exists(path))
-            .WithMessage("The root directory is a file.")
+            .WithMessage("The server directory is a file.")
             .Must(path => !Directory.Exists(path) || !Directory.EnumerateFileSystemEntries(path).Any())
-            .WithMessage("The root directory is not empty.")
-            .When(r => !string.IsNullOrWhiteSpace(r.RootPath));
+            .WithMessage("The server directory is not empty.")
+            .When(r => !string.IsNullOrWhiteSpace(r.ServerDirectory));
 
         RuleFor(r => r.SuperUser).SetValidator(superUserValidator);
     }
@@ -44,8 +44,6 @@ public sealed class CreateInstanceRequestValidator : AbstractValidator<CreateIns
 /// </summary>
 public sealed partial class SuperUserRequestValidator : AbstractValidator<SuperUserRequest>
 {
-    public const int MinPasswordLength = 8;
-
     public SuperUserRequestValidator()
     {
         RuleFor(u => u.Name)
@@ -53,8 +51,8 @@ public sealed partial class SuperUserRequestValidator : AbstractValidator<SuperU
             .WithMessage("The user name starts with a letter and has up to 64 letters, digits, '.', '-' or '_'.");
 
         RuleFor(u => u.Password)
-            .MinimumLength(MinPasswordLength)
-            .WithMessage("The password has at least {MinLength} characters.");
+            .Must(SuperUserPassword.IsStrong)
+            .WithMessage(SuperUserPassword.Requirement);
     }
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9._-]{0,63}$")]

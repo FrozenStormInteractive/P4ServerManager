@@ -61,6 +61,7 @@
   import LegacyProfilesCard from '@/components/instances/LegacyProfilesCard.vue'
   import { useAppStore } from '@/stores/app'
   import { useInstancesStore } from '@/stores/instances'
+  import { formatPort } from '@/utils/instancePort'
 
   const { t } = useI18n()
   const router = useRouter()
@@ -71,7 +72,7 @@
     { title: t('instances.headers.name'), key: 'name' },
     { title: t('instances.headers.status'), key: 'status', sortable: false },
     { title: t('instances.headers.version'), key: 'version' },
-    { title: t('instances.headers.port'), key: 'port' },
+    { title: t('instances.headers.port'), key: 'port', value: (item: Instance) => formatPort(item) },
     { title: t('instances.headers.root'), key: 'rootPath' },
   ])
 

@@ -48,9 +48,16 @@ public sealed record CreateInstanceRequest
     public bool AutoStart { get; init; } = true;
 
     /// <summary>
-    /// Absolute P4ROOT, empty or missing. Defaults to a folder of the instance.
+    /// True to listen with SSL (<c>ssl:</c> port). The daemon generates the private key and the certificate of the
+    /// server. False when missing.
     /// </summary>
-    public string? RootPath { get; init; }
+    public bool Ssl { get; init; }
+
+    /// <summary>
+    /// Absolute folder of the server, empty or missing. The P4ROOT is its <c>root</c> subfolder, next to the
+    /// <c>journals</c>, <c>logs</c> and <c>archives</c> folders. Defaults to a folder of the instance.
+    /// </summary>
+    public string? ServerDirectory { get; init; }
 
     /// <summary>
     /// Super user created with the server, required: it is the only account that can administer it. Its password is
@@ -72,7 +79,7 @@ public sealed record SuperUserRequest
     public string Name { get; init; } = null!;
 
     /// <summary>
-    /// Password, at least 8 characters.
+    /// Password: at least 8 characters, from at least two of the classes upper case, lower case and non-alphabetic.
     /// </summary>
     [Required]
     public string Password { get; init; } = null!;

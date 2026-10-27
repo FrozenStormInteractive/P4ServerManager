@@ -59,6 +59,7 @@
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
   import { useAppStore } from '@/stores/app'
   import { useInstancesStore } from '@/stores/instances'
+  import { formatPort } from '@/utils/instancePort'
   import { getInstanceStatus } from '@/utils/instanceStatus'
 
   const { t } = useI18n()
@@ -78,6 +79,6 @@
 
   function describe (instance: Instance) {
     const version = instance.version ? `${instance.version}/${instance.build}` : instance.release
-    return t('dashboard.instanceSummary', { version, port: instance.port })
+    return t('dashboard.instanceSummary', { version, port: formatPort(instance) })
   }
 </script>

@@ -52,6 +52,25 @@ public sealed class OperationRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_LeavesOutTheStepsNotIncluded()
+    {
+        List<string> ran = [];
+        FakeStep first = new("first", ran);
+        FakeStep excluded = new("excluded", ran) { Included = false };
+        FakeStep last = new("last", ran);
+
+        await _runner.RunAsync(InstanceId, "test", [first, excluded, last], new object(), TestContext.Current.CancellationToken);
+
+        ran.ShouldBe(["first", "last"]);
+        _pushed[0].Steps.Select(s => s.Key).ShouldBe(["first", "last"]);
+        _tracker.Get(InstanceId)!.Steps.Select(s => (s.Key, s.Status)).ShouldBe(
+        [
+            ("first", OperationStepStatus.Succeeded),
+            ("last", OperationStepStatus.Succeeded),
+        ]);
+    }
+
+    [Fact]
     public async Task RunAsync_ReportsTheProgressOfTheCurrentStep()
     {
         FakeStep step = new("download", []) { Progress = new OperationStepProgress("Downloading (50%)", 50) };
@@ -86,11 +105,18 @@ public sealed class OperationRunnerTests
 
         public string Title => key;
 
+        public bool Included { get; init; } = true;
+
         public bool Applies { get; init; } = true;
 
         public OperationStepProgress? Progress { get; init; }
 
         public Exception? Error { get; init; }
+
+        public bool IsIncluded(object context)
+        {
+            return Included;
+        }
 
         public bool ShouldRun(object context)
         {

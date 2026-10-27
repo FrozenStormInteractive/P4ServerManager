@@ -78,18 +78,29 @@
           </v-row>
 
           <v-text-field
-            v-model="fields.rootPath"
+            v-model="fields.serverDirectory"
             class="mb-2"
-            :error-messages="serverErrors.rootPath"
-            :hint="t('createInstance.rootPathHint')"
-            :label="t('createInstance.rootPath')"
-            name="rootPath"
+            :error-messages="serverErrors.serverDirectory"
+            :hint="t('createInstance.serverDirectoryHint')"
+            :label="t('createInstance.serverDirectory')"
+            name="serverDirectory"
             persistent-hint
-            :rules="rules.rootPath"
+            :rules="rules.serverDirectory"
           />
 
           <v-row density="compact">
-            <v-col cols="12" sm="6">
+            <v-col cols="12" sm="4">
+              <v-switch
+                v-model="fields.ssl"
+                color="primary"
+                :hint="t('createInstance.sslHint')"
+                :label="t('createInstance.ssl')"
+                name="ssl"
+                persistent-hint
+              />
+            </v-col>
+
+            <v-col cols="12" sm="4">
               <v-switch
                 v-model="fields.caseSensitive"
                 color="primary"
@@ -100,7 +111,7 @@
               />
             </v-col>
 
-            <v-col cols="12" sm="6">
+            <v-col cols="12" sm="4">
               <v-switch
                 v-model="fields.unicode"
                 color="primary"
@@ -240,6 +251,8 @@
   const NAME_PATTERN = /^[A-Z][\w-]{0,31}$/i
   const USER_NAME_PATTERN = /^[A-Z][\w.-]{0,63}$/i
   const MIN_PASSWORD_LENGTH = 8
+  // The classes p4d counts from security level 2: a strong password has characters from two of them.
+  const PASSWORD_CLASSES = [/\p{Lu}/u, /\p{Ll}/u, /\P{L}/u]
   const MAX_DESCRIPTION_LENGTH = 512
 
   function createFields () {
@@ -248,7 +261,8 @@
       description: '',
       release: null as string | null,
       port: DEFAULT_PORT as number | string,
-      rootPath: '',
+      serverDirectory: '',
+      ssl: false,
       caseSensitive: true,
       unicode: false,
       autoStart: true,
@@ -294,15 +308,16 @@
           || t('createInstance.rules.portRange')
       },
     ],
-    rootPath: [
-      value => !value || isAbsolutePath(String(value)) || t('createInstance.rules.rootPathAbsolute'),
+    serverDirectory: [
+      value => !String(value ?? '').trim() || isAbsolutePath(String(value).trim())
+        || t('createInstance.rules.serverDirectoryAbsolute'),
     ],
     superUserName: [
       value => !!value || t('createInstance.rules.userNameRequired'),
       value => USER_NAME_PATTERN.test(String(value)) || t('createInstance.rules.userNameFormat'),
     ],
     password: [
-      value => String(value ?? '').length >= MIN_PASSWORD_LENGTH || t('createInstance.rules.passwordLength'),
+      value => isStrongPassword(String(value ?? '')) || t('createInstance.rules.passwordStrength'),
     ],
     confirmPassword: [
       value => value === fields.password || t('createInstance.rules.passwordMatch'),
@@ -315,7 +330,7 @@
     'description': 'description',
     'release': 'release',
     'port': 'port',
-    'rootPath': 'rootPath',
+    'serverDirectory': 'serverDirectory',
     'superUser.name': 'superUserName',
     'superUser.password': 'password',
   }
@@ -338,6 +353,11 @@
       void loadVersions()
     }
   }, { immediate: true })
+
+  function isStrongPassword (password: string) {
+    return password.length >= MIN_PASSWORD_LENGTH
+      && PASSWORD_CLASSES.filter(pattern => pattern.test(password)).length >= 2
+  }
 
   function isAbsolutePath (path: string) {
     // The daemon runs on Linux; Windows paths are accepted for development.
@@ -371,7 +391,8 @@
       caseSensitive: fields.caseSensitive,
       unicode: fields.unicode,
       autoStart: fields.autoStart,
-      rootPath: fields.rootPath.trim() || null,
+      ssl: fields.ssl,
+      serverDirectory: fields.serverDirectory.trim() || null,
       superUser: { name: fields.superUserName, password: fields.password },
     }
 

@@ -59,6 +59,14 @@ public class ParsingTests
     }
 
     [Fact]
+    public void SslFingerprintParser_ReadsTheOutputOfP4dGf()
+    {
+        SslFingerprintParser.Parse("Fingerprint: a5:C8:59:F1:AC:B9:85:90:D9:6D:4A:3F:70:2A:F9:2C:F6:CB:12:F8\r\n")
+            .ShouldBe("A5:C8:59:F1:AC:B9:85:90:D9:6D:4A:3F:70:2A:F9:2C:F6:CB:12:F8");
+        SslFingerprintParser.Parse("Unable to get certificate.").ShouldBeNull();
+    }
+
+    [Fact]
     public void P4dRelease_ComparesByYearThenNumber()
     {
         P4ServerRelease.TryParse("r24.2", out P4ServerRelease older).ShouldBeTrue();

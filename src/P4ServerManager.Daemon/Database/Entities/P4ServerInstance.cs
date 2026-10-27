@@ -24,6 +24,17 @@ public sealed class P4ServerInstance
     public int Port { get; set; }
 
     /// <summary>
+    /// Whether p4d listens with SSL. Its key and certificate are in the <c>ssl</c> folder of the root.
+    /// </summary>
+    public bool Ssl { get; set; }
+
+    /// <summary>
+    /// Fingerprint of the certificate of the server, read once it is generated. Null without SSL.
+    /// </summary>
+    [MaxLength(128)]
+    public string? SslFingerprint { get; set; }
+
+    /// <summary>
     /// Absolute path of the P4ROOT.
     /// </summary>
     public required string RootPath { get; set; }

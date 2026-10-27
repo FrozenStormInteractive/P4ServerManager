@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 
 using P4ServerManager.Daemon.Options;
+using P4ServerManager.Daemon.Services.Instances;
 
 namespace P4ServerManager.Daemon.Services;
 
@@ -54,11 +55,17 @@ public sealed class DaemonPaths
         return Path.Combine(InstancesDirectory, instanceId.ToString("N"));
     }
 
+    /// <summary>
+    /// Root of an instance created without a server directory: the folder of the instance is its server directory.
+    /// </summary>
     public string GetDefaultRootPath(Guid instanceId)
     {
-        return Path.Combine(GetInstanceDirectory(instanceId), "root");
+        return ServerLayout.GetRootPath(GetInstanceDirectory(instanceId));
     }
 
+    /// <summary>
+    /// Log of a p4d whose server directory has no logs folder, such as an imported server.
+    /// </summary>
     public string GetLogPath(Guid instanceId)
     {
         return Path.Combine(GetInstanceDirectory(instanceId), "logs", "p4d.log");

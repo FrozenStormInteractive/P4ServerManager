@@ -101,6 +101,13 @@ namespace P4ServerManager.Daemon.Database.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Ssl")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SslFingerprint")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(16)
