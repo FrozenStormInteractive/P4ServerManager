@@ -58,8 +58,8 @@ public sealed class LegacyProfilesController(
 
     /// <summary>
     /// Imports the server of a profile as an instance that keeps its root. The import runs in the background: it gets
-    /// the p4d build, saves a checkpoint of the database to the folder of the instance, reads its Unicode mode,
-    /// upgrades it to the build, then starts p4d. Follow it with <c>GET /api/instances/{id}/operation</c> or the
+    /// the p4d build, reads the fingerprint of the SSL certificate when the server uses SSL, saves a checkpoint of the
+    /// database to the folder of the instance, reads its Unicode mode, upgrades it to the build, then starts p4d. Follow it with <c>GET /api/instances/{id}/operation</c> or the
     /// <c>OperationProgress</c> event of the <c>/hubs/instances</c> hub. The profile and the HelixCoreServer package are
     /// left untouched; the server of the profile must be stopped first.
     /// </summary>
@@ -112,6 +112,7 @@ public sealed class LegacyProfilesController(
             Name = request.Name,
             Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
             Port = request.Port,
+            Ssl = profile.Ssl,
             RootPath = rootPath,
             Release = request.Release,
             CaseSensitive = request.CaseSensitive,

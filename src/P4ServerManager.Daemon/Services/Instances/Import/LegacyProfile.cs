@@ -7,6 +7,9 @@ namespace P4ServerManager.Daemon.Services.Instances.Import;
 /// <param name="Name">Name of the server in the profile, if any.</param>
 /// <param name="RootPath">Absolute P4ROOT of the server, if the profile has one.</param>
 /// <param name="Port">TCP port from the P4PORT of the profile, if it has one.</param>
+/// <param name="Ssl">
+/// Whether the P4PORT of the profile uses SSL. The key and the certificate stay in the <c>ssl</c> folder of the root.
+/// </param>
 /// <param name="CaseSensitive">
 /// False when the profile runs p4d with <c>-C1</c>. The database does not record it: it is only a suggestion.
 /// </param>
@@ -18,6 +21,7 @@ public sealed record LegacyProfile(
     string? Name,
     string? RootPath,
     int? Port,
+    bool Ssl,
     bool CaseSensitive,
     bool Enabled,
     IReadOnlyList<string> IgnoredSettings,

@@ -7,6 +7,9 @@ namespace P4ServerManager.Contracts;
 /// <param name="Name">Name of the server in the profile, suggested as the name of the instance.</param>
 /// <param name="RootPath">Absolute P4ROOT of the server. An imported instance keeps it.</param>
 /// <param name="Port">TCP port of the server, if the profile gives one.</param>
+/// <param name="Ssl">
+/// Whether the server listens with SSL. An imported instance keeps it, with the key and the certificate of the root.
+/// </param>
 /// <param name="CaseSensitive">
 /// False when the profile ran p4d with <c>-C1</c>. The database does not record it: it is a suggestion to confirm.
 /// </param>
@@ -19,6 +22,7 @@ public sealed record LegacyProfileDto(
     string? Name,
     string? RootPath,
     int? Port,
+    bool Ssl,
     bool CaseSensitive,
     bool AutoStart,
     IReadOnlyList<string> IgnoredSettings,

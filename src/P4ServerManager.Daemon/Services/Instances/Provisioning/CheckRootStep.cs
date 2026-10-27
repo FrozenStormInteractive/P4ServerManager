@@ -20,7 +20,7 @@ public sealed class CheckRootStep(DaemonPaths paths) : IOperationStep<Provisioni
         CancellationToken cancellationToken)
     {
         P4ServerInstance instance = context.Instance;
-        if (LegacyProfileStore.CheckRoot(instance.RootPath) is { } problem)
+        if (LegacyProfileStore.CheckRoot(instance.RootPath, instance.Ssl) is { } problem)
         {
             throw new InstanceOperationException(problem);
         }

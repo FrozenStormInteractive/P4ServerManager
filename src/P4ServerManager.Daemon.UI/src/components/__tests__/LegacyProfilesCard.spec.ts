@@ -22,6 +22,7 @@ function createProfile (overrides: Partial<LegacyProfile> = {}): LegacyProfile {
     name: 'main',
     rootPath: '/volume1/Perforce/main/root',
     port: 1666,
+    ssl: false,
     caseSensitive: false,
     autoStart: true,
     ignoredSettings: [],
@@ -71,7 +72,8 @@ describe('LegacyProfilesCard', () => {
   it('lists the profiles with their problems and the settings they lose', async () => {
     profiles = [
       createProfile({ ignoredSettings: ['P4JOURNAL'] }),
-      createProfile({ id: 'ssl.json', name: 'ssl', problems: ['SSL ports are not supported yet.'] }),
+      createProfile({ id: 'broker.json', name: 'broker', problems: ['Only p4d servers can be imported, not p4broker.'] }),
+      createProfile({ id: 'ssl.json', name: 'ssl', port: 1667, ssl: true }),
     ]
 
     await mountWithPlugins(LegacyProfilesCard, { attachTo: document.body })
@@ -80,8 +82,10 @@ describe('LegacyProfilesCard', () => {
     expect(row('main.json').textContent).toContain('/volume1/Perforce/main/root · 1666')
     expect(row('main.json').textContent).toContain('Not kept: P4JOURNAL')
     expect(button('Import', row('main.json')).disabled).toBe(false)
-    expect(row('ssl.json').textContent).toContain('SSL ports are not supported yet.')
-    expect(button('Import', row('ssl.json')).disabled).toBe(true)
+    expect(row('broker.json').textContent).toContain('Only p4d servers can be imported, not p4broker.')
+    expect(button('Import', row('broker.json')).disabled).toBe(true)
+    expect(row('ssl.json').textContent).toContain('/volume1/Perforce/main/root · ssl:1667')
+    expect(button('Import', row('ssl.json')).disabled).toBe(false)
   })
 
   it('dismisses a profile', async () => {
@@ -129,6 +133,29 @@ describe('LegacyProfilesCard', () => {
     }])
     expect(useInstancesStore().getInstance('new-id')?.state).toBe('Provisioning')
     expect(document.body.textContent).not.toContain('Servers of the HelixCoreServer package')
+  })
+
+  it('tells that an SSL server keeps its certificate', async () => {
+    profiles = [createProfile({ ssl: true })]
+
+    await mountWithPlugins(LegacyProfilesCard, { attachTo: document.body })
+    await vi.waitFor(() => expect(row('main.json')).not.toBeNull())
+    button('Import', row('main.json')).click()
+    await vi.waitFor(() => expect(document.body.textContent).toContain('2026.1 (r26.1)'))
+
+    expect(document.querySelector('[data-ssl-note]')?.textContent).toContain('The server listens with SSL.')
+    expect(document.querySelector('.v-text-field__prefix')?.textContent).toContain('ssl:')
+  })
+
+  it('shows no SSL note for a server without SSL', async () => {
+    profiles = [createProfile()]
+
+    await mountWithPlugins(LegacyProfilesCard, { attachTo: document.body })
+    await vi.waitFor(() => expect(row('main.json')).not.toBeNull())
+    button('Import', row('main.json')).click()
+    await vi.waitFor(() => expect(document.body.textContent).toContain('2026.1 (r26.1)'))
+
+    expect(document.querySelector('[data-ssl-note]')).toBeNull()
   })
 
   it('shows the errors of the daemon by field', async () => {

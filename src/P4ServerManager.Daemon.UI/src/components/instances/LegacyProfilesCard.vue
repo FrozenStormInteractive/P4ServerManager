@@ -17,7 +17,8 @@
         <v-list-item-title>{{ profile.name ?? t('legacyProfiles.unnamed') }}</v-list-item-title>
 
         <v-list-item-subtitle>
-          {{ profile.rootPath ?? profile.id }} · {{ profile.port ?? t('legacyProfiles.noPort') }}
+          {{ profile.rootPath ?? profile.id }} ·
+          {{ profile.port === null ? t('legacyProfiles.noPort') : formatPort({ port: profile.port, ssl: profile.ssl }) }}
         </v-list-item-subtitle>
 
         <div v-for="problem in profile.problems" :key="problem" class="text-body-small text-error mt-1">
@@ -76,6 +77,7 @@
   // Components and utilities
   import { dismissLegacyProfile, listLegacyProfiles } from '@/api/legacyProfiles'
   import ImportLegacyProfileDialog from '@/components/instances/ImportLegacyProfileDialog.vue'
+  import { formatPort } from '@/utils/instancePort'
 
   const { t } = useI18n()
 

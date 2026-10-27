@@ -5,12 +5,20 @@ namespace P4ServerManager.Daemon.Services.Instances.Import;
 
 /// <summary>
 /// Reads a p4dctl-ng profile: a JSON object with <c>Name</c>, <c>ServerType</c>, <c>Owner</c>, <c>Execute</c>,
-/// <c>Args</c>, <c>Enabled</c>, <c>Prefix</c> and an <c>Environment</c> map that holds P4ROOT and P4PORT.
+/// <c>Args</c>, <c>Enabled</c>, <c>Prefix</c> and an <c>Environment</c> map that holds P4ROOT, P4PORT and, with SSL,
+/// P4SSLDIR.
 /// </summary>
 public static class LegacyProfileParser
 {
     // Read from the profile. Owner, Execute and Prefix are replaced by the daemon: they are not reported.
     private static readonly HashSet<string> UsedVariables = new(StringComparer.OrdinalIgnoreCase) { "P4ROOT", "P4PORT" };
+
+    // Read from the profile only when the server uses SSL.
+    private const string SslDirectoryVariable = "P4SSLDIR";
+
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -34,7 +42,7 @@ public static class LegacyProfileParser
         }
         if (file is null)
         {
-            return new LegacyProfile(id, null, null, null, true, false, [], ["The profile is not a p4dctl-ng profile."]);
+            return new LegacyProfile(id, null, null, null, false, true, false, [], ["The profile is not a p4dctl-ng profile."]);
         }
 
         List<string> problems = [];
@@ -58,16 +66,22 @@ public static class LegacyProfileParser
         }
 
         int? port = null;
+        bool ssl = false;
         if (environment.GetValueOrDefault("P4PORT") is { } p4Port && !string.IsNullOrWhiteSpace(p4Port))
         {
-            port = ParsePort(p4Port, out bool secure);
-            if (secure)
-            {
-                problems.Add($"The server listens on {p4Port}: SSL ports are not supported yet.");
-            }
+            port = ParsePort(p4Port, out ssl);
         }
 
-        ignored.AddRange(environment.Keys.Where(key => !UsedVariables.Contains(key)).Order(StringComparer.Ordinal));
+        if (ssl && rootPath is not null && Path.IsPathFullyQualified(rootPath)
+            && CheckSslDirectory(rootPath, environment.GetValueOrDefault(SslDirectoryVariable)) is { } sslProblem)
+        {
+            problems.Add(sslProblem);
+        }
+
+        ignored.AddRange(environment.Keys
+            .Where(key => !UsedVariables.Contains(key)
+                && !(ssl && key.Equals(SslDirectoryVariable, StringComparison.OrdinalIgnoreCase)))
+            .Order(StringComparer.Ordinal));
 
         string[] arguments = (file.Args ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
         bool caseSensitive = !arguments.Contains("-C1", StringComparer.Ordinal);
@@ -78,7 +92,26 @@ public static class LegacyProfileParser
         }
 
         string? name = string.IsNullOrWhiteSpace(file.Name) ? Path.GetFileNameWithoutExtension(id) : file.Name.Trim();
-        return new LegacyProfile(id, name, rootPath, port, caseSensitive, file.Enabled, ignored, problems);
+        return new LegacyProfile(id, name, rootPath, port, ssl, caseSensitive, file.Enabled, ignored, problems);
+    }
+
+    /// <summary>
+    /// Checks that the key and the certificate of the server are where an instance looks for them: the <c>ssl</c>
+    /// folder of its root. P4SSLDIR defaults to it, and a relative P4SSLDIR is read from the root.
+    /// </summary>
+    /// <returns>Why the profile cannot be imported, or null when it can.</returns>
+    private static string? CheckSslDirectory(string rootPath, string? sslDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(sslDirectory))
+        {
+            return null;
+        }
+
+        string expected = Path.GetFullPath(ServerLayout.GetSslDirectory(rootPath));
+        string actual = Path.GetFullPath(Path.Combine(rootPath, sslDirectory.Trim()));
+        return PathComparer.Equals(Path.TrimEndingDirectorySeparator(actual), expected)
+            ? null
+            : $"The SSL key and certificate are in {sslDirectory.Trim()}. Move them to {expected} before the import.";
     }
 
     /// <summary>

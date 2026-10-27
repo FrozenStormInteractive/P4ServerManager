@@ -80,6 +80,7 @@ public sealed class LegacyProfilesApiTests : IAsyncLifetime
         main.GetProperty("name").GetString().ShouldBe("main");
         main.GetProperty("rootPath").GetString().ShouldBe(root);
         main.GetProperty("port").GetInt32().ShouldBe(1666);
+        main.GetProperty("ssl").GetBoolean().ShouldBeFalse();
         main.GetProperty("caseSensitive").GetBoolean().ShouldBeFalse();
         main.GetProperty("autoStart").GetBoolean().ShouldBeTrue();
         main.GetProperty("problems").GetArrayLength().ShouldBe(0);
@@ -127,6 +128,46 @@ public sealed class LegacyProfilesApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetLegacyProfiles_ReportsAnSslServerWithoutCertificate()
+    {
+        string root = CreateRoot("main");
+        string sslDirectory = Path.Combine(root, "ssl");
+        Directory.CreateDirectory(sslDirectory);
+        File.WriteAllText(Path.Combine(sslDirectory, "privatekey.txt"), string.Empty);
+        WriteProfile("main.json", "main", root, "ssl:1666");
+
+        JsonElement profiles = await GetProfilesAsync();
+
+        profiles[0].GetProperty("ssl").GetBoolean().ShouldBeTrue();
+        profiles[0].GetProperty("problems")[0].GetString().ShouldBe(
+            $"The server uses SSL, but {sslDirectory} has no certificate.txt.");
+    }
+
+    [Fact]
+    public async Task ImportLegacyProfile_KeepsSsl()
+    {
+        string root = CreateRoot("main");
+        string sslDirectory = Path.Combine(root, "ssl");
+        Directory.CreateDirectory(sslDirectory);
+        File.WriteAllText(Path.Combine(sslDirectory, "certificate.txt"), string.Empty);
+        File.WriteAllText(Path.Combine(sslDirectory, "privatekey.txt"), string.Empty);
+        WriteProfile("main.json", "main", root, "ssl:1666");
+
+        JsonElement profiles = await GetProfilesAsync();
+        profiles[0].GetProperty("ssl").GetBoolean().ShouldBeTrue();
+        profiles[0].GetProperty("problems").GetArrayLength().ShouldBe(0);
+
+        HttpResponseMessage response = await ImportAsync("main.json", "main");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        instance.GetProperty("ssl").GetBoolean().ShouldBeTrue();
+        // Read by the import.
+        instance.GetProperty("sslFingerprint").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
     public async Task ImportLegacyProfile_CreatesAnInstanceThatKeepsTheRoot()
     {
         string root = CreateRoot("main");
@@ -146,6 +187,7 @@ public sealed class LegacyProfilesApiTests : IAsyncLifetime
         instance.GetProperty("state").GetString().ShouldBe("Provisioning");
         instance.GetProperty("rootPath").GetString().ShouldBe(root);
         instance.GetProperty("port").GetInt32().ShouldBe(port);
+        instance.GetProperty("ssl").GetBoolean().ShouldBeFalse();
         instance.GetProperty("caseSensitive").GetBoolean().ShouldBeFalse();
         instance.GetProperty("autoStart").GetBoolean().ShouldBeFalse();
 
@@ -254,7 +296,10 @@ public sealed class LegacyProfilesApiTests : IAsyncLifetime
         _factory.Services
             .GetKeyedServices<Daemon.Services.Operations.IOperationStep<ProvisioningContext>>(ProvisioningKind.Import)
             .Select(step => step.Key)
-            .ShouldBe(["resolve-build", "check-root", "save-checkpoint", "read-settings", "upgrade-database", "start-server"]);
+            .ShouldBe([
+                "resolve-build", "check-root", "read-ssl-fingerprint", "save-checkpoint", "read-settings",
+                "upgrade-database", "start-server",
+            ]);
     }
 
     private async Task<JsonElement> GetProfilesAsync()

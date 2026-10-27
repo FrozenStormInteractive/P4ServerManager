@@ -78,6 +78,7 @@
                 max="65535"
                 min="1024"
                 name="port"
+                :prefix="profile?.ssl ? 'ssl:' : undefined"
                 :rules="rules.port"
                 type="number"
               />
@@ -104,6 +105,10 @@
           />
 
           <p class="text-body-medium text-medium-emphasis mt-4">{{ t('importInstance.unicodeNote') }}</p>
+
+          <p v-if="profile?.ssl" class="text-body-medium text-medium-emphasis mt-2" data-ssl-note>
+            {{ t('importInstance.sslNote') }}
+          </p>
 
           <v-alert
             v-if="submitError"

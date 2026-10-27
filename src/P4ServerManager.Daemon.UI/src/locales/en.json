@@ -100,6 +100,7 @@
       "configure-server": "Apply the recommended configuration",
       "create-specs": "Create the depots, the server spec and the typemap",
       "check-root": "Check the root",
+      "read-ssl-fingerprint": "Read the SSL fingerprint",
       "save-checkpoint": "Save a checkpoint",
       "read-settings": "Read the server settings",
       "upgrade-database": "Upgrade the database"
@@ -155,6 +156,7 @@
     "versionHint": "The database is upgraded to this version and cannot go back: choose the version the server ran, or a newer one.",
     "caseSensitiveHint": "Must match the way the server was created. Suggested from its profile.",
     "unicodeNote": "The Unicode mode is read from the database.",
+    "sslNote": "The server listens with SSL. It keeps the key and the certificate in the ssl folder of its root, so clients keep trusting it.",
     "warning": "Stop the server in the HelixCoreServer package first. A checkpoint of the database is saved to the folder of the instance before the upgrade.",
     "error": "The server could not be imported: {message}"
   },

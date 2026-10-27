@@ -22,6 +22,7 @@ public static class ProvisioningServiceCollectionExtensions
 
         services.AddStep<ResolveBuildStep>(ProvisioningKind.Import);
         services.AddStep<CheckRootStep>(ProvisioningKind.Import);
+        services.AddStep<ReadSslFingerprintStep>(ProvisioningKind.Import);
         services.AddStep<SaveCheckpointStep>(ProvisioningKind.Import);
         services.AddStep<ReadServerSettingsStep>(ProvisioningKind.Import);
         services.AddStep<UpgradeDatabaseStep>(ProvisioningKind.Import);

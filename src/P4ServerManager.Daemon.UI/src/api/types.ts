@@ -72,6 +72,10 @@ export interface LegacyProfile {
   rootPath: string | null
   port: number | null
   /**
+   * True when the server listens with SSL. An imported instance keeps it, with the key and the certificate of its root.
+   */
+  ssl: boolean
+  /**
    * False when the profile ran p4d with `-C1`. Only a suggestion: the database does not record it.
    */
   caseSensitive: boolean

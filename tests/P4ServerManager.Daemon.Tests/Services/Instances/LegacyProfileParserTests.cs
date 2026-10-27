@@ -111,7 +111,7 @@ public class LegacyProfileParserTests
     }
 
     [Fact]
-    public void Parse_RejectsAnSslPort()
+    public void Parse_ReadsAnSslPort()
     {
         string content = $$"""
             { "Environment": { "P4ROOT": {{System.Text.Json.JsonSerializer.Serialize(Root)}}, "P4PORT": "ssl:1666" } }
@@ -120,7 +120,61 @@ public class LegacyProfileParserTests
         LegacyProfile profile = LegacyProfileParser.Parse("main.json", content);
 
         profile.Port.ShouldBe(1666);
-        profile.Problems.ShouldBe(["The server listens on ssl:1666: SSL ports are not supported yet."]);
+        profile.Ssl.ShouldBeTrue();
+        profile.Problems.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("ssl")]
+    [InlineData("ssl/")]
+    [InlineData("./ssl")]
+    public void Parse_AcceptsTheSslFolderOfTheRoot(string sslDirectory)
+    {
+        LegacyProfile profile = LegacyProfileParser.Parse("main.json", SslProfile(sslDirectory));
+
+        profile.Ssl.ShouldBeTrue();
+        profile.Problems.ShouldBeEmpty();
+        profile.IgnoredSettings.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Parse_AcceptsTheAbsoluteSslFolderOfTheRoot()
+    {
+        LegacyProfile profile = LegacyProfileParser.Parse("main.json", SslProfile(Path.Combine(Root, "ssl")));
+
+        profile.Problems.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Parse_RejectsAnotherSslFolder()
+    {
+        string sslDirectory = Path.Combine(Path.GetTempPath(), "perforce", "main", "ssl");
+
+        LegacyProfile profile = LegacyProfileParser.Parse("main.json", SslProfile(sslDirectory));
+
+        profile.Problems.ShouldBe([
+            $"The SSL key and certificate are in {sslDirectory}. Move them to {Path.Combine(Root, "ssl")} before the import.",
+        ]);
+    }
+
+    [Fact]
+    public void Parse_IgnoresTheSslFolderWithoutSsl()
+    {
+        string content = $$"""
+            {
+                "Environment": {
+                    "P4ROOT": {{System.Text.Json.JsonSerializer.Serialize(Root)}},
+                    "P4PORT": "1666",
+                    "P4SSLDIR": "/elsewhere"
+                }
+            }
+            """;
+
+        LegacyProfile profile = LegacyProfileParser.Parse("main.json", content);
+
+        profile.Ssl.ShouldBeFalse();
+        profile.Problems.ShouldBeEmpty();
+        profile.IgnoredSettings.ShouldBe(["P4SSLDIR"]);
     }
 
     [Theory]
@@ -138,6 +192,19 @@ public class LegacyProfileParserTests
 
         port.ShouldBe(expectedPort);
         secure.ShouldBe(expectedSecure);
+    }
+
+    private static string SslProfile(string sslDirectory)
+    {
+        return $$"""
+            {
+                "Environment": {
+                    "P4ROOT": {{System.Text.Json.JsonSerializer.Serialize(Root)}},
+                    "P4PORT": "ssl:1666",
+                    "P4SSLDIR": {{System.Text.Json.JsonSerializer.Serialize(sslDirectory)}}
+                }
+            }
+            """;
     }
 
     [Fact]

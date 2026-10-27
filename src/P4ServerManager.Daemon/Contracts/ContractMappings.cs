@@ -42,6 +42,7 @@ public static class ContractMappings
             profile.Name,
             profile.RootPath,
             profile.Port,
+            profile.Ssl,
             profile.CaseSensitive,
             profile.Enabled,
             profile.IgnoredSettings,

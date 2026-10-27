@@ -12,6 +12,11 @@ public sealed class LegacyProfileStore(DaemonPaths paths, ILogger<LegacyProfileS
     /// </summary>
     private const string CountersTable = "db.counters";
 
+    /// <summary>
+    /// Files p4d reads from P4SSLDIR to listen with SSL.
+    /// </summary>
+    private static readonly string[] SslFiles = ["certificate.txt", "privatekey.txt"];
+
     /// <returns>The profiles, by file name, with the problems of their root.</returns>
     public async Task<IReadOnlyList<LegacyProfile>> ListAsync(CancellationToken cancellationToken)
     {
@@ -55,10 +60,11 @@ public sealed class LegacyProfileStore(DaemonPaths paths, ILogger<LegacyProfileS
     }
 
     /// <summary>
-    /// Checks that a root holds a p4d database the daemon can open, and that no server uses it.
+    /// Checks that a root holds a p4d database the daemon can open, and that no server uses it. With SSL, also checks
+    /// that the <c>ssl</c> folder of the root holds the key and the certificate.
     /// </summary>
     /// <returns>Why the root cannot be imported, or null when it can.</returns>
-    public static string? CheckRoot(string rootPath)
+    public static string? CheckRoot(string rootPath, bool ssl)
     {
         if (!Directory.Exists(rootPath))
         {
@@ -101,6 +107,16 @@ public sealed class LegacyProfileStore(DaemonPaths paths, ILogger<LegacyProfileS
             if (!CanWriteTo(folder))
             {
                 return $"The daemon cannot write to {folder}. Give the account it runs as access to it.";
+            }
+        }
+
+        if (ssl)
+        {
+            string sslDirectory = ServerLayout.GetSslDirectory(rootPath);
+            string[] missing = SslFiles.Where(name => !File.Exists(Path.Combine(sslDirectory, name))).ToArray();
+            if (missing.Length > 0)
+            {
+                return $"The server uses SSL, but {sslDirectory} has no {string.Join(" or ", missing)}.";
             }
         }
         return null;
@@ -147,11 +163,11 @@ public sealed class LegacyProfileStore(DaemonPaths paths, ILogger<LegacyProfileS
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(exception, "Could not read the legacy profile {Id}", id);
-            return new LegacyProfile(id, null, null, null, true, false, [], [$"The profile cannot be read: {exception.Message}"]);
+            return new LegacyProfile(id, null, null, null, false, true, false, [], [$"The profile cannot be read: {exception.Message}"]);
         }
 
         LegacyProfile profile = LegacyProfileParser.Parse(id, content);
-        if (profile.CanImport && CheckRoot(profile.RootPath!) is { } problem)
+        if (profile.CanImport && CheckRoot(profile.RootPath!, profile.Ssl) is { } problem)
         {
             profile = profile with { Problems = [problem] };
         }
