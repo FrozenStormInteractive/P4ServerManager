@@ -32,6 +32,34 @@ export interface Instance {
   createdAt: string
 }
 
+/**
+ * The instances a start, a stop or a restart applies to: the ones listed, or every ready instance.
+ */
+export type InstanceSelection = { instanceIds: string[] } | { all: true }
+
+export type InstanceAction = 'start' | 'stop' | 'restart'
+
+/**
+ * `Skipped` when there was nothing to do: the instance already ran for a start, was already stopped for a stop, or was
+ * stopped for a restart of all the instances.
+ */
+export type InstanceActionOutcome = 'Succeeded' | 'Skipped' | 'Failed'
+
+/**
+ * Result of a start, a stop or a restart on one instance of a selection.
+ */
+export interface InstanceActionResult {
+  /**
+   * The instance once the action ended.
+   */
+  instance: Instance
+  outcome: InstanceActionOutcome
+  /**
+   * Why the action failed. Null otherwise.
+   */
+  error: string | null
+}
+
 export interface SuperUser {
   name: string
   password: string

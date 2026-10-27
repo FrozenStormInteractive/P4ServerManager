@@ -88,6 +88,33 @@ describe('InstanceDetailsPage', () => {
     ])
   })
 
+  it('asks before it stops the server', async () => {
+    let requests = 0
+    server.use(http.post(`/api/instances/${instance.id}/stop`, () => {
+      requests++
+      return HttpResponse.json({ ...instance, runtimeStatus: 'Stopped' }, { status: 202 })
+    }))
+    const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, {
+      props: { id: instance.id },
+      attachTo: document.body,
+    })
+    useInstancesStore(pinia).upsertInstance({ ...instance, runtimeStatus: 'Running' })
+    await flushPromises()
+    const stopButtons = () => [...document.querySelectorAll('button')].filter(b => b.textContent?.trim() === 'Stop')
+
+    await wrapper.findAll('button').find(b => b.text() === 'Stop')!.trigger('click')
+    await flushPromises()
+
+    expect(document.body.textContent).toContain(`Stop ${instance.name}?`)
+    expect(requests).toBe(0)
+
+    stopButtons().at(-1)!.click()
+    await flushPromises()
+
+    expect(requests).toBe(1)
+    expect(useInstancesStore(pinia).getInstance(instance.id)?.runtimeStatus).toBe('Stopped')
+  })
+
   it('turns the auto-start off and shows the setting saved by the daemon', async () => {
     let body: unknown
     server.use(http.patch(`/api/instances/${instance.id}`, async ({ request }) => {

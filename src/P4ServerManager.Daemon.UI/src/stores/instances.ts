@@ -1,6 +1,14 @@
 // Types
 import type { InstancesHub } from '@/api/hub'
-import type { CreateInstanceRequest, Instance, OperationSnapshot, UpdateInstanceRequest } from '@/api/types'
+import type {
+  CreateInstanceRequest,
+  Instance,
+  InstanceAction,
+  InstanceActionResult,
+  InstanceSelection,
+  OperationSnapshot,
+  UpdateInstanceRequest,
+} from '@/api/types'
 
 // Utilities
 import { defineStore } from 'pinia'
@@ -85,6 +93,17 @@ export const useInstancesStore = defineStore('instances', () => {
     upsertInstance(await api.restartInstance(id))
   }
 
+  /**
+   * Starts, stops or restarts several instances, or all of them, and keeps the states returned by the daemon.
+   */
+  async function runAction (action: InstanceAction, selection: InstanceSelection): Promise<InstanceActionResult[]> {
+    const results = await api.runInstancesAction(action, selection)
+    for (const result of results) {
+      upsertInstance(result.instance)
+    }
+    return results
+  }
+
   async function remove (id: string, deleteFiles: boolean) {
     await api.deleteInstance(id, deleteFiles)
     removeInstance(id)
@@ -122,6 +141,7 @@ export const useInstancesStore = defineStore('instances', () => {
     start,
     stop,
     restart,
+    runAction,
     remove,
     connect,
     disconnect,

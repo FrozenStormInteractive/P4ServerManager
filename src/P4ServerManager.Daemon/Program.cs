@@ -50,6 +50,7 @@ builder.Services.AddSingleton<InstanceNotifier>();
 builder.Services.AddSingleton<P4ServerLauncher>();
 builder.Services.AddSingleton<InstanceSupervisor>();
 builder.Services.AddHostedService(services => services.GetRequiredService<InstanceSupervisor>());
+builder.Services.AddSingleton<InstanceBatchRunner>();
 builder.Services.AddSingleton<OperationTracker>();
 builder.Services.AddSingleton<OperationRunner>();
 builder.Services.AddProvisioning();

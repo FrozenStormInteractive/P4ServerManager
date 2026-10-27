@@ -13,7 +13,7 @@
             prepend-icon="mdi-restart"
             :text="t('actions.restart')"
             variant="tonal"
-            @click="run(instances.restart)"
+            @click="ask('restart')"
           />
 
           <v-btn
@@ -22,7 +22,7 @@
             prepend-icon="mdi-stop"
             :text="t('actions.stop')"
             variant="tonal"
-            @click="run(instances.stop)"
+            @click="ask('stop')"
           />
         </template>
 
@@ -49,6 +49,13 @@
       </div>
 
       <DeleteInstanceDialog v-model="deleteDialog" :instance="instance" @deleted="onDeleted" />
+
+      <ConfirmInstanceActionDialog
+        v-model="confirmDialog"
+        :action="confirmAction"
+        :names="[instance.name]"
+        @confirm="run(confirmAction === 'stop' ? instances.stop : instances.restart)"
+      />
 
       <p v-if="instance.description" class="text-body-medium text-medium-emphasis mb-4">
         {{ instance.description }}
@@ -123,6 +130,7 @@
   import { useRouter } from 'vue-router'
 
   // Components, stores and utilities
+  import ConfirmInstanceActionDialog from '@/components/instances/ConfirmInstanceActionDialog.vue'
   import DeleteInstanceDialog from '@/components/instances/DeleteInstanceDialog.vue'
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
   import OperationProgress from '@/components/instances/OperationProgress.vue'
@@ -143,6 +151,8 @@
   const sending = ref(false)
   const actionError = ref<string | null>(null)
   const deleteDialog = ref(false)
+  const confirmDialog = ref(false)
+  const confirmAction = ref<'stop' | 'restart'>('stop')
   const savingAutoStart = ref(false)
 
   const instance = computed(() => instances.getInstance(props.id))
@@ -203,6 +213,12 @@
     } finally {
       savingAutoStart.value = false
     }
+  }
+
+  // A stop or a restart disconnects the users of the server: it is confirmed. A start is not.
+  function ask (action: 'stop' | 'restart') {
+    confirmAction.value = action
+    confirmDialog.value = true
   }
 
   async function run (action: (id: string) => Promise<void>) {

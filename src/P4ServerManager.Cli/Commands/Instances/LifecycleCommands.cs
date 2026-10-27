@@ -7,7 +7,8 @@ using P4ServerManager.Contracts;
 namespace P4ServerManager.Cli.Commands.Instances;
 
 /// <summary>
-/// The start, the stop and the restart of the p4d of an instance. The daemon answers once they are done.
+/// The start, the stop and the restart of the p4d of one or more instances, or of all of them. The daemon runs them in
+/// parallel and answers once they are all done.
 /// </summary>
 internal static class LifecycleCommands
 {
@@ -15,58 +16,106 @@ internal static class LifecycleCommands
     {
         yield return Create(
             services,
-            "start",
-            "Start the p4d of an instance and wait until it accepts connections.",
-            "Starting",
-            "Started",
-            (client, id, cancellationToken) => client.StartInstanceAsync(id, cancellationToken));
+            new LifecycleAction(
+                "start",
+                "Start the p4d of instances and wait until they accept connections. Those already running are skipped.",
+                "Starting",
+                "Started",
+                "already runs"));
         yield return Create(
             services,
-            "stop",
-            "Stop the p4d of an instance and wait until it exits.",
-            "Stopping",
-            "Stopped",
-            (client, id, cancellationToken) => client.StopInstanceAsync(id, cancellationToken));
+            new LifecycleAction(
+                "stop",
+                "Stop the p4d of instances and wait until they exit. Those already stopped are skipped.",
+                "Stopping",
+                "Stopped",
+                "is already stopped"));
         yield return Create(
             services,
-            "restart",
-            "Stop the p4d of an instance if it runs, then start it again.",
-            "Restarting",
-            "Restarted",
-            (client, id, cancellationToken) => client.RestartInstanceAsync(id, cancellationToken));
+            new LifecycleAction(
+                "restart",
+                "Stop the p4d of instances if they run, then start them again. With --all, only the running ones are "
+                + "restarted.",
+                "Restarting",
+                "Restarted",
+                "is stopped: not restarted"));
     }
 
-    private static Command Create(
-        CliServices services,
-        string name,
-        string description,
-        string progressVerb,
-        string doneVerb,
-        Func<DaemonClient, Guid, CancellationToken, Task<InstanceDto>> operation)
+    private static Command Create(CliServices services, LifecycleAction action)
     {
-        Argument<string> instanceArgument = InstanceArgument.Create();
-        Command command = new(name, description) { instanceArgument };
+        Argument<string[]> instancesArgument = InstanceArgument.CreateMany();
+        Option<bool> allOption = new("--all", "-a") { Description = "Every ready instance, instead of a list." };
+        Command command = new(action.Name, action.Description) { instancesArgument, allOption };
 
         services.SetAction(command, async (invocation, cancellationToken) =>
         {
-            using DaemonClient client = invocation.CreateClient();
-            InstanceDto instance = await client.ResolveInstanceAsync(
-                invocation.GetValue(instanceArgument),
-                cancellationToken);
-
-            await invocation.Progress.WriteLineAsync($"{progressVerb} {instance.Name}...");
-            InstanceDto result = await operation(client, instance.Id, cancellationToken);
-
-            if (invocation.Json)
+            string[] references = invocation.GetValue(instancesArgument) ?? [];
+            bool all = invocation.GetValue(allOption);
+            if (all == references.Length > 0)
             {
-                invocation.WriteJson(result, CliJsonContext.Default.InstanceDto);
+                throw new CliException(all
+                    ? "Name instances or pass --all, not both."
+                    : "Name at least one instance, or pass --all.");
+            }
+
+            using DaemonClient client = invocation.CreateClient();
+            InstanceSelectionRequest selection;
+            if (all)
+            {
+                selection = new InstanceSelectionRequest { All = true };
+                await invocation.Progress.WriteLineAsync($"{action.ProgressVerb} all the instances...");
             }
             else
             {
-                await invocation.Output.WriteLineAsync($"{doneVerb} {result.Name}.");
+                IReadOnlyList<InstanceDto> instances = await client.ResolveInstancesAsync(references, cancellationToken);
+                selection = new InstanceSelectionRequest { InstanceIds = instances.Select(i => i.Id).ToList() };
+                await invocation.Progress.WriteLineAsync(
+                    $"{action.ProgressVerb} {string.Join(", ", instances.Select(i => i.Name))}...");
             }
-            return 0;
+
+            IReadOnlyList<InstanceActionResult> results = await client.RunInstancesActionAsync(
+                action.Name,
+                selection,
+                cancellationToken);
+
+            if (invocation.Json)
+            {
+                invocation.WriteJson(results, CliJsonContext.Default.IReadOnlyListInstanceActionResult);
+            }
+            else if (results.Count == 0)
+            {
+                await invocation.Output.WriteLineAsync("No instance is ready.");
+            }
+            foreach (InstanceActionResult result in results)
+            {
+                string name = result.Instance.Name;
+                switch (result.Outcome)
+                {
+                    case InstanceActionOutcome.Failed:
+                        await invocation.Error.WriteLineAsync($"Error: {name}: {result.Error}");
+                        break;
+                    case InstanceActionOutcome.Skipped when !invocation.Json:
+                        await invocation.Output.WriteLineAsync($"{name} {action.SkippedText}.");
+                        break;
+                    case InstanceActionOutcome.Succeeded when !invocation.Json:
+                        await invocation.Output.WriteLineAsync($"{action.DoneVerb} {name}.");
+                        break;
+                }
+            }
+            return results.Any(r => r.Outcome == InstanceActionOutcome.Failed) ? CliServices.ErrorExitCode : 0;
         });
         return command;
     }
+
+    /// <param name="Name">Name of the command, and of the action in the API.</param>
+    /// <param name="Description">Help of the command.</param>
+    /// <param name="ProgressVerb">Written while the action runs, such as <c>Starting</c>.</param>
+    /// <param name="DoneVerb">Written for each instance it succeeded on, such as <c>Started</c>.</param>
+    /// <param name="SkippedText">Written after the name of each instance it skipped.</param>
+    private sealed record LifecycleAction(
+        string Name,
+        string Description,
+        string ProgressVerb,
+        string DoneVerb,
+        string SkippedText);
 }

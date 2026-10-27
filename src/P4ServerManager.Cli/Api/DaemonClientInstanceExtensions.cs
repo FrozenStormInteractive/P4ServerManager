@@ -16,7 +16,24 @@ internal static class DaemonClientInstanceExtensions
         CancellationToken cancellationToken)
     {
         IReadOnlyList<InstanceDto> instances = await client.GetInstancesAsync(cancellationToken);
+        return Resolve(instances, reference);
+    }
 
+    /// <summary>
+    /// Finds the instances a command names, by their names or their identifiers, in the order given and without
+    /// duplicates.
+    /// </summary>
+    public static async Task<IReadOnlyList<InstanceDto>> ResolveInstancesAsync(
+        this DaemonClient client,
+        IEnumerable<string> references,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<InstanceDto> instances = await client.GetInstancesAsync(cancellationToken);
+        return references.Select(reference => Resolve(instances, reference)).DistinctBy(i => i.Id).ToList();
+    }
+
+    private static InstanceDto Resolve(IReadOnlyList<InstanceDto> instances, string reference)
+    {
         if (Guid.TryParse(reference, out Guid id) && instances.FirstOrDefault(i => i.Id == id) is { } byId)
         {
             return byId;

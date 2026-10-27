@@ -53,7 +53,41 @@
       "port": "Port",
       "root": "Root directory"
     },
-    "noData": "No instances yet"
+    "noData": "No instances yet",
+    "selectionHint": "Select servers to start, stop or restart them together.",
+    "selected": "{count} selected",
+    "clearSelection": "Clear the selection",
+    "allServers": "All servers",
+    "all": {
+      "start": "Start all",
+      "stop": "Stop all",
+      "restart": "Restart all running"
+    },
+    "confirmAll": {
+      "stop": {
+        "title": "Stop all the servers?",
+        "text": "Every running server is stopped. Users cannot connect until the servers start again."
+      },
+      "restart": {
+        "title": "Restart all the running servers?",
+        "text": "Users are disconnected while each server restarts. Stopped servers stay stopped."
+      }
+    },
+    "confirmAction": {
+      "stop": {
+        "title": "Stop {name}? | Stop {count} servers?",
+        "text": "Its users are disconnected and cannot connect until it starts again. | Their users are disconnected and cannot connect until they start again."
+      },
+      "restart": {
+        "title": "Restart {name}? | Restart {count} servers?",
+        "text": "Its users are disconnected while it restarts. | Their users are disconnected while they restart."
+      }
+    },
+    "actionFailed": {
+      "start": "Some servers did not start",
+      "stop": "Some servers did not stop",
+      "restart": "Some servers did not restart"
+    }
   },
   "legacyProfiles": {
     "title": "Servers of the HelixCoreServer package",

@@ -15,5 +15,7 @@ namespace P4ServerManager.Cli.Json;
 [JsonSerializable(typeof(CreateInstanceRequest))]
 [JsonSerializable(typeof(UpdateInstanceRequest))]
 [JsonSerializable(typeof(OperationSnapshot))]
+[JsonSerializable(typeof(InstanceSelectionRequest))]
+[JsonSerializable(typeof(IReadOnlyList<InstanceActionResult>))]
 [JsonSerializable(typeof(ApiProblem))]
 internal sealed partial class CliJsonContext : JsonSerializerContext;

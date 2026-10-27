@@ -16,6 +16,7 @@ using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services;
+using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Perforce;
 
 namespace P4ServerManager.Daemon.Tests.Api;
@@ -432,6 +433,92 @@ public sealed class InstancesApiTests : IAsyncLifetime
 
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         Directory.Exists(rootPath).ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("start", "{}")]
+    [InlineData("stop", """{"instanceIds":[]}""")]
+    [InlineData("restart", """{"all":true,"instanceIds":["5f0079c4-12bf-4f3e-b7f5-3d8677fb10bc"]}""")]
+    public async Task InstancesAction_NeedsEitherAListOrAll(string action, string body)
+    {
+        HttpResponseMessage response = await _client.PostAsync(
+            $"/api/instances/{action}",
+            new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).ShouldBe(["instanceIds"]);
+    }
+
+    [Fact]
+    public async Task InstancesAction_ReturnsNotFoundForAnUnknownInstanceAndRunsNothing()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Running);
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            "/api/instances/stop",
+            new { instanceIds = new[] { id, Guid.NewGuid() } },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        _factory.Services.GetRequiredService<InstanceRuntimeRegistry>().Get(id).ShouldBe(InstanceRuntimeStatus.Running);
+    }
+
+    [Fact]
+    public async Task StopInstances_SkipsAStoppedInstanceAndReportsOneNotReady()
+    {
+        Guid ready = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        Guid failed = await CreateFailedInstanceAsync("broken");
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            "/api/instances/stop",
+            new { instanceIds = new[] { ready, failed } },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonElement[] results = (await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken)).EnumerateArray().ToArray();
+        results.Select(r => r.GetProperty("instance").GetProperty("name").GetString()).ShouldBe(["broken", "main"]);
+        results.Select(r => r.GetProperty("outcome").GetString()).ShouldBe(["Failed", "Skipped"]);
+        results[0].GetProperty("error").GetString().ShouldBe("Instance broken is not ready.");
+    }
+
+    [Theory]
+    [InlineData("start", InstanceRuntimeStatus.Running)]
+    [InlineData("restart", InstanceRuntimeStatus.Stopped)]
+    public async Task InstancesAction_WithAllSelectsTheReadyInstancesOnly(string action, InstanceRuntimeStatus status)
+    {
+        await CreateReadyInstanceAsync("main", status);
+        await CreateFailedInstanceAsync("broken");
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{action}",
+            new { all = true },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonElement result = (await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken)).EnumerateArray().ShouldHaveSingleItem();
+        result.GetProperty("instance").GetProperty("name").GetString().ShouldBe("main");
+        result.GetProperty("outcome").GetString().ShouldBe("Skipped");
+    }
+
+    private async Task<Guid> CreateReadyInstanceAsync(string name, InstanceRuntimeStatus runtimeStatus)
+    {
+        Guid id = await CreateFailedInstanceAsync(name);
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(
+            TestContext.Current.CancellationToken);
+        await db.Instances
+            .Where(i => i.Id == id)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(i => i.State, P4ServerInstanceState.Ready),
+                TestContext.Current.CancellationToken);
+        _factory.Services.GetRequiredService<InstanceRuntimeRegistry>().Set(id, runtimeStatus);
+        return id;
     }
 
     private async Task<Guid> CreateFailedInstanceAsync(string name, string? serverDirectory = null, bool ssl = false)

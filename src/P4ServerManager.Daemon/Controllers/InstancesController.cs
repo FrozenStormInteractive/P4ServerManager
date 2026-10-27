@@ -252,6 +252,85 @@ public sealed class InstancesController(
     }
 
     /// <summary>
+    /// Starts the p4d of several instances in parallel, and waits until each one accepts connections or fails. An
+    /// instance that already runs is skipped.
+    /// </summary>
+    /// <param name="request">
+    /// The instances, or all of them: every ready instance. Checked by <see cref="InstanceSelectionRequestValidator"/>.
+    /// </param>
+    /// <param name="batchRunner">Runs the starts.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the starts run to their end: only the shutdown of the daemon cancels them.
+    /// </param>
+    /// <response code="200">One result per instance, by name: started, skipped, or failed with its error.</response>
+    /// <response code="400">Neither a list of instances nor all of them is selected, or both are.</response>
+    /// <response code="404">An instance of the list does not exist. Nothing is started.</response>
+    [HttpPost("start")]
+    [ProducesResponseType<IReadOnlyList<InstanceActionResult>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    public Task<ActionResult<IReadOnlyList<InstanceActionResult>>> StartInstances(
+        InstanceSelectionRequest request,
+        [FromServices] InstanceBatchRunner batchRunner,
+        CancellationToken cancellationToken)
+    {
+        return RunBatchAsync(batchRunner, InstanceAction.Start, request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Stops the p4d of several instances in parallel, and waits until each one exits or fails. An instance that is
+    /// already stopped is skipped.
+    /// </summary>
+    /// <param name="request">
+    /// The instances, or all of them: every ready instance. Checked by <see cref="InstanceSelectionRequestValidator"/>.
+    /// </param>
+    /// <param name="batchRunner">Runs the stops.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the stops run to their end: only the shutdown of the daemon cancels them.
+    /// </param>
+    /// <response code="200">One result per instance, by name: stopped, skipped, or failed with its error.</response>
+    /// <response code="400">Neither a list of instances nor all of them is selected, or both are.</response>
+    /// <response code="404">An instance of the list does not exist. Nothing is stopped.</response>
+    [HttpPost("stop")]
+    [ProducesResponseType<IReadOnlyList<InstanceActionResult>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    public Task<ActionResult<IReadOnlyList<InstanceActionResult>>> StopInstances(
+        InstanceSelectionRequest request,
+        [FromServices] InstanceBatchRunner batchRunner,
+        CancellationToken cancellationToken)
+    {
+        return RunBatchAsync(batchRunner, InstanceAction.Stop, request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Restarts the p4d of several instances in parallel, and waits until each one accepts connections again or
+    /// fails. A listed instance that is stopped is started. With all the instances, the stopped ones are skipped
+    /// instead: only the running servers are restarted.
+    /// </summary>
+    /// <param name="request">
+    /// The instances, or all of them: every ready instance. Checked by <see cref="InstanceSelectionRequestValidator"/>.
+    /// </param>
+    /// <param name="batchRunner">Runs the restarts.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the restarts run to their end: only the shutdown of the daemon cancels them.
+    /// </param>
+    /// <response code="200">One result per instance, by name: restarted, skipped, or failed with its error.</response>
+    /// <response code="400">Neither a list of instances nor all of them is selected, or both are.</response>
+    /// <response code="404">An instance of the list does not exist. Nothing is restarted.</response>
+    [HttpPost("restart")]
+    [ProducesResponseType<IReadOnlyList<InstanceActionResult>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    public Task<ActionResult<IReadOnlyList<InstanceActionResult>>> RestartInstances(
+        InstanceSelectionRequest request,
+        [FromServices] InstanceBatchRunner batchRunner,
+        CancellationToken cancellationToken)
+    {
+        return RunBatchAsync(batchRunner, InstanceAction.Restart, request, cancellationToken);
+    }
+
+    /// <summary>
     /// Deletes an instance: stops its p4d if it runs, then removes it from the daemon. The instance is
     /// <c>Deleting</c> meanwhile, and the <c>InstanceDeleted</c> event of the <c>/hubs/instances</c> hub tells the
     /// clients once it is gone. A failed instance can be deleted too.
@@ -286,6 +365,22 @@ public sealed class InstancesController(
             await supervisor.DeleteInstanceAsync(id, deleteFiles, cancellationToken);
             return NoContent();
         });
+    }
+
+    private async Task<ActionResult<IReadOnlyList<InstanceActionResult>>> RunBatchAsync(
+        InstanceBatchRunner batchRunner,
+        InstanceAction action,
+        InstanceSelectionRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await batchRunner.RunAsync(action, request, cancellationToken));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Problem(exception.Message, statusCode: StatusCodes.Status404NotFound);
+        }
     }
 
     private async Task<ActionResult<InstanceDto>> RunOperationAsync(Func<Task<P4ServerInstance>> operation)

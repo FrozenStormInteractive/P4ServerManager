@@ -66,6 +66,25 @@ internal sealed class DaemonClient(HttpClient httpClient, string socketPath) : I
         return SendAsync(HttpMethod.Post, $"api/instances/{id}/restart", Json.InstanceDto, cancellationToken);
     }
 
+    /// <summary>
+    /// Starts, stops or restarts several instances at once.
+    /// </summary>
+    /// <param name="action">The action: <c>start</c>, <c>stop</c> or <c>restart</c>.</param>
+    /// <param name="selection">The instances, or all of them.</param>
+    /// <param name="cancellationToken">Aborts the request.</param>
+    public Task<IReadOnlyList<InstanceActionResult>> RunInstancesActionAsync(
+        string action,
+        InstanceSelectionRequest selection,
+        CancellationToken cancellationToken)
+    {
+        return SendAsync(
+            HttpMethod.Post,
+            $"api/instances/{action}",
+            Json.IReadOnlyListInstanceActionResult,
+            cancellationToken,
+            JsonContent.Create(selection, Json.InstanceSelectionRequest));
+    }
+
     public async Task DeleteInstanceAsync(Guid id, bool deleteFiles, CancellationToken cancellationToken)
     {
         string uri = $"api/instances/{id}?deleteFiles={(deleteFiles ? "true" : "false")}";

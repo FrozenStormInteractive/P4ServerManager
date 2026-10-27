@@ -1,5 +1,13 @@
 // Types
-import type { CreateInstanceRequest, Instance, OperationSnapshot, UpdateInstanceRequest } from './types'
+import type {
+  CreateInstanceRequest,
+  Instance,
+  InstanceAction,
+  InstanceActionResult,
+  InstanceSelection,
+  OperationSnapshot,
+  UpdateInstanceRequest,
+} from './types'
 
 // Utilities
 import { ApiError, request } from './client'
@@ -48,4 +56,12 @@ export async function deleteInstance (id: string, deleteFiles: boolean): Promise
 
 export function restartInstance (id: string): Promise<Instance> {
   return request('POST', `/api/instances/${encodeURIComponent(id)}/restart`)
+}
+
+/**
+ * Starts, stops or restarts several instances in parallel. The daemon answers once they are all done, with one result
+ * per instance, by name: one failure does not stop the others.
+ */
+export function runInstancesAction (action: InstanceAction, selection: InstanceSelection): Promise<InstanceActionResult[]> {
+  return request('POST', `/api/instances/${action}`, selection)
 }

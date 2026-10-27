@@ -70,6 +70,27 @@ describe('instances store', () => {
     expect(store.getInstance('a')?.lastError).toBeNull()
   })
 
+  it('restarts several instances and keeps the states returned by the daemon', async () => {
+    let body: unknown
+    server.use(http.post('/api/instances/restart', async ({ request }) => {
+      body = await request.json()
+      return HttpResponse.json([
+        { instance: createInstance({ id: 'a', name: 'alpha', lastError: null }), outcome: 'Succeeded', error: null },
+        { instance: createInstance({ id: 'b', name: 'beta', lastError: 'Failed' }), outcome: 'Failed', error: 'Failed' },
+      ])
+    }))
+    const store = useInstancesStore()
+    store.upsertInstance(createInstance({ id: 'a', name: 'alpha', lastError: 'Old error' }))
+    store.upsertInstance(createInstance({ id: 'b', name: 'beta', lastError: null }))
+
+    const results = await store.runAction('restart', { instanceIds: ['a', 'b'] })
+
+    expect(body).toEqual({ instanceIds: ['a', 'b'] })
+    expect(results.map(r => r.outcome)).toEqual(['Succeeded', 'Failed'])
+    expect(store.getInstance('a')?.lastError).toBeNull()
+    expect(store.getInstance('b')?.lastError).toBe('Failed')
+  })
+
   it('sends the changed settings and keeps the instance returned by the daemon', async () => {
     let body: unknown
     server.use(http.patch('/api/instances/a', async ({ request }) => {
