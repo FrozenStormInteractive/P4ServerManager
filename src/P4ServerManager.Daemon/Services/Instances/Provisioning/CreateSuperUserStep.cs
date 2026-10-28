@@ -37,11 +37,13 @@ public sealed class CreateSuperUserStep(
             cancellationToken);
         string name = context.SuperUser!.Name;
 
-        await session.SetPasswordAsync(cancellationToken);
+        bool specSaved = await session.SetPasswordAsync(cancellationToken);
         return await session.RunLoggedInAsync(async () =>
         {
-            string userSpec = $"User:\t{name}\n\nEmail:\t{name}@localhost\n\nFullName:\t{name}\n";
-            await session.RunAsync(["user", "-f", "-i"], userSpec, cancellationToken);
+            if (!specSaved)
+            {
+                await session.RunAsync(["user", "-f", "-i"], session.GetUserSpec(), cancellationToken);
+            }
 
             // Saving the protections table for the first time makes the current user the only super user.
             ProcessResult protections = await session.RunAsync(["protect", "-o"], cancellationToken: cancellationToken);

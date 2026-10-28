@@ -81,11 +81,35 @@ public sealed class P4AdminSession
 
     /// <summary>
     /// Sets the password of the super user, which creates it. Since 2026.1, p4d refuses any other command from a user
-    /// without a password.
+    /// without a password. Older releases only set the password of an existing user: when it is refused, the user is
+    /// created from <see cref="GetUserSpec"/> first.
     /// </summary>
-    public Task SetPasswordAsync(CancellationToken cancellationToken)
+    /// <returns>
+    /// Whether the user was saved from <see cref="GetUserSpec"/>. Before 2026.1, saving it again at a low security
+    /// level would clear the password: the spec has no <c>Password</c> field.
+    /// </returns>
+    public async Task<bool> SetPasswordAsync(CancellationToken cancellationToken)
     {
-        return RunAsync(["passwd"], $"{superUser.Password}\n{superUser.Password}\n", cancellationToken);
+        string passwords = $"{superUser.Password}\n{superUser.Password}\n";
+        ProcessResult result = await TryRunAsync(["passwd"], passwords, cancellationToken);
+        if (result.Succeeded)
+        {
+            return false;
+        }
+
+        logger.LogDebug("Creating super user {User} before setting its password on instance {Name}: {Error}",
+            superUser.Name, instance.Name, result.ErrorText);
+        await RunAsync(["user", "-f", "-i"], GetUserSpec(), cancellationToken);
+        await RunAsync(["passwd"], passwords, cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// The user spec of the super user.
+    /// </summary>
+    public string GetUserSpec()
+    {
+        return $"User:\t{superUser.Name}\n\nEmail:\t{superUser.Name}@localhost\n\nFullName:\t{superUser.Name}\n";
     }
 
     /// <summary>
