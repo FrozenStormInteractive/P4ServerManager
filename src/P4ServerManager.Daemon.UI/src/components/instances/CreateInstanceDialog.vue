@@ -3,16 +3,33 @@
     <v-card :title="t('createInstance.title')">
       <v-card-text>
         <v-form id="create-instance-form" ref="form" @submit.prevent="submit">
-          <v-text-field
-            v-model="fields.name"
-            autofocus
-            class="mb-2"
-            :error-messages="serverErrors.name"
-            :hint="t('createInstance.nameHint')"
-            :label="t('createInstance.name')"
-            name="name"
-            :rules="rules.name"
-          />
+          <!-- How the server is known: by its name in the manager, by its port to the clients. -->
+          <v-row class="mb-2" density="compact">
+            <v-col cols="12" sm="8">
+              <v-text-field
+                v-model="fields.name"
+                autofocus
+                :error-messages="serverErrors.name"
+                :hint="t('createInstance.nameHint')"
+                :label="t('createInstance.name')"
+                name="name"
+                :rules="rules.name"
+              />
+            </v-col>
+
+            <v-col cols="12" sm="4">
+              <v-text-field
+                v-model.number="fields.port"
+                :error-messages="serverErrors.port"
+                :label="t('createInstance.port')"
+                max="65535"
+                min="1024"
+                name="port"
+                :rules="rules.port"
+                type="number"
+              />
+            </v-col>
+          </v-row>
 
           <v-textarea
             v-model="fields.description"
@@ -39,8 +56,9 @@
             </template>
           </v-alert>
 
+          <!-- Both fields always take their place, so the form never moves as the release changes. -->
           <v-row density="compact">
-            <v-col cols="12" sm="8">
+            <v-col cols="12" sm="6">
               <v-select
                 v-model="fields.release"
                 :error-messages="serverErrors.release"
@@ -63,16 +81,17 @@
               </v-select>
             </v-col>
 
-            <v-col cols="12" sm="4">
-              <v-text-field
-                v-model.number="fields.port"
-                :error-messages="serverErrors.port"
-                :label="t('createInstance.port')"
-                max="65535"
-                min="1024"
-                name="port"
-                :rules="rules.port"
-                type="number"
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="fields.build"
+                :disabled="buildItems.length <= 1"
+                :error-messages="serverErrors.build"
+                :hint="t('createInstance.buildHint')"
+                item-title="title"
+                item-value="build"
+                :items="buildItems"
+                :label="t('createInstance.build')"
+                name="build"
               />
             </v-col>
           </v-row>
@@ -260,6 +279,8 @@
       name: '',
       description: '',
       release: null as string | null,
+      // Null for the latest build of the release.
+      build: null as string | null,
       port: DEFAULT_PORT as number | string,
       serverDirectory: '',
       ssl: false,
@@ -289,6 +310,24 @@
     title: `${version.version} (${version.release})`,
     cached: version.cachedBuilds.length > 0,
   })))
+
+  // The builds of the archive for the chosen release, after the default: its latest build.
+  const buildItems = computed(() => {
+    const version = versions.value.find(v => v.release === fields.release)
+    return [
+      { build: null, title: t('createInstance.latestBuild') },
+      ...(version?.cachedBuilds ?? []).map(cached => ({
+        build: cached.build,
+        title: t(cached.extracted ? 'createInstance.extractedBuild' : 'createInstance.archivedBuild', {
+          build: `${version!.version}/${cached.build}`,
+        }),
+      })),
+    ]
+  })
+
+  watch(() => fields.release, () => {
+    fields.build = null
+  })
 
   const rules: Record<string, Rule[]> = {
     name: [
@@ -329,6 +368,7 @@
     'name': 'name',
     'description': 'description',
     'release': 'release',
+    'build': 'build',
     'port': 'port',
     'serverDirectory': 'serverDirectory',
     'superUser.name': 'superUserName',
@@ -387,6 +427,7 @@
       name: fields.name,
       description: fields.description.trim() || null,
       release: fields.release,
+      ...(fields.build ? { build: fields.build } : {}),
       port: Number(fields.port),
       caseSensitive: fields.caseSensitive,
       unicode: fields.unicode,

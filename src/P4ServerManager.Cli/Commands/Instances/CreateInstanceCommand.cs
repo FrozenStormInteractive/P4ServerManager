@@ -22,6 +22,11 @@ internal static class CreateInstanceCommand
             Description = "p4d release, for example r25.1.",
             Required = true,
         };
+        Option<string?> buildOption = new("--build")
+        {
+            Description = "Exact build of the release from the archive, for example 2850123. Defaults to the latest "
+                + "build. List them with 'p4sm build list'.",
+        };
         Option<int> portOption = new("--port")
         {
             Description = "TCP port p4d listens on, between 1024 and 65535.",
@@ -70,6 +75,7 @@ internal static class CreateInstanceCommand
         {
             nameArgument,
             releaseOption,
+            buildOption,
             portOption,
             superUserOption,
             passwordStdinOption,
@@ -93,6 +99,7 @@ internal static class CreateInstanceCommand
                 Name = invocation.GetValue(nameArgument),
                 Description = invocation.GetValue(descriptionOption),
                 Release = invocation.GetValue(releaseOption),
+                Build = invocation.GetValue(buildOption),
                 Port = invocation.GetValue(portOption),
                 Ssl = invocation.GetValue(sslOption),
                 CaseSensitive = !invocation.GetValue(caseInsensitiveOption),

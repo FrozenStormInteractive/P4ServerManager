@@ -47,6 +47,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
                 services.Replace(ServiceDescriptor.Singleton(_catalog));
                 services.Replace(ServiceDescriptor.Singleton(_buildCache));
                 services.Replace(ServiceDescriptor.Singleton(_processRunner));
+                services.Replace(ServiceDescriptor.Singleton(P4ServerPlatformDefinition.LinuxX64));
                 // The tests only check the API: nothing is downloaded or started.
                 services.RemoveAll<IHostedService>();
             });
@@ -103,6 +104,71 @@ public sealed class InstancesApiTests : IAsyncLifetime
             "/api/instances",
             TestContext.Current.CancellationToken);
         instances.EnumerateArray().Select(i => i.GetProperty("name").GetString()).ShouldBe(["main"]);
+    }
+
+    [Fact]
+    public async Task CreateInstance_PinsTheRequestedBuildOfTheArchive()
+    {
+        P4ServerBuild build = await AddBuildAsync("r25.1", "2025.1", "2800000");
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            "/api/instances",
+            ValidRequest("main", GetFreePort(), build: "2800000"),
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+        (await db.Instances.SingleAsync(TestContext.Current.CancellationToken)).BuildId.ShouldBe(build.Id);
+    }
+
+    [Fact]
+    public async Task CreateInstance_RejectsABuildThatIsNotInTheArchive()
+    {
+        await AddBuildAsync("r24.2", "2024.2", "2800000");
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            "/api/instances",
+            ValidRequest("main", GetFreePort(), build: "2800000"),
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").GetProperty("build")[0].GetString()
+            .ShouldBe("Build 2800000 of r25.1 is not in the archive.");
+    }
+
+    [Fact]
+    public async Task CreateInstance_AcceptsAnArchivedReleaseWhileThePerforceFtpIsDown()
+    {
+        _catalog.GetReleasesAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new HttpRequestException("Unreachable"));
+        await AddBuildAsync("r25.1", "2025.1", "2850123");
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            "/api/instances",
+            ValidRequest("main", GetFreePort()),
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task GetVersions_ListsTheArchivedReleasesWhileThePerforceFtpIsDown()
+    {
+        _catalog.GetReleasesAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new HttpRequestException("Unreachable"));
+        await AddBuildAsync("r23.1", "2023.1", "2400000");
+        await AddBuildAsync("r23.1", "2023.1", "2450000");
+
+        JsonElement versions = await _client.GetFromJsonAsync<JsonElement>(
+            "/api/p4d/versions",
+            TestContext.Current.CancellationToken);
+
+        JsonElement version = versions.EnumerateArray().ShouldHaveSingleItem();
+        version.GetProperty("release").GetString().ShouldBe("r23.1");
+        version.GetProperty("cachedBuilds").EnumerateArray().Select(b => b.GetProperty("build").GetString())
+            .ShouldBe(["2450000", "2400000"]);
     }
 
     [Fact]
@@ -519,7 +585,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
         Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
         await PinToBuildAsync(id, "r24.2", "2024.2", "2700000");
         P4ServerBuild target = await AddBuildAsync("r25.1", "2025.1", "2850123");
-        _buildCache.EnsureAsync(Release("r25.1"), Arg.Any<IProgress<BuildDownloadProgress>>(), Arg.Any<CancellationToken>())
+        _buildCache.EnsureAsync(Release("r25.1"), Arg.Any<IProgress<BuildProgress>>(), Arg.Any<CancellationToken>())
             .Returns(target);
 
         HttpResponseMessage response = await _client.PostAsJsonAsync(
@@ -570,7 +636,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
         {
             current = await db.Builds.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken);
         }
-        _buildCache.EnsureAsync(Release("r25.1"), Arg.Any<IProgress<BuildDownloadProgress>>(), Arg.Any<CancellationToken>())
+        _buildCache.EnsureAsync(Release("r25.1"), Arg.Any<IProgress<BuildProgress>>(), Arg.Any<CancellationToken>())
             .Returns(current);
 
         HttpResponseMessage response = await _client.PostAsJsonAsync(
@@ -600,7 +666,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
     {
         Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
         await PinToBuildAsync(id, "r24.2", "2024.2", "2700000");
-        _buildCache.EnsureAsync(Arg.Any<P4ServerRelease>(), Arg.Any<IProgress<BuildDownloadProgress>>(), Arg.Any<CancellationToken>())
+        _buildCache.EnsureAsync(Arg.Any<P4ServerRelease>(), Arg.Any<IProgress<BuildProgress>>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new P4ServerBuildException("The checksum does not match."));
 
         HttpResponseMessage response = await _client.PostAsJsonAsync(
@@ -623,7 +689,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
         Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
         await PinToBuildAsync(id, "r24.2", "2024.2", "2700000");
         P4ServerBuild target = await AddBuildAsync("r25.1", "2025.1", "2850123");
-        _buildCache.EnsureAsync(Release("r25.1"), Arg.Any<IProgress<BuildDownloadProgress>>(), Arg.Any<CancellationToken>())
+        _buildCache.EnsureAsync(Release("r25.1"), Arg.Any<IProgress<BuildProgress>>(), Arg.Any<CancellationToken>())
             .Returns(target);
         _processRunner.RunAsync(Arg.Is<ProcessCommand>(c => c.Arguments.Contains("-xu")), Arg.Any<CancellationToken>())
             .Returns(new ProcessResult(1, string.Empty, "Database is corrupt."));
@@ -653,6 +719,49 @@ public sealed class InstancesApiTests : IAsyncLifetime
 
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         _factory.Services.GetRequiredService<InstanceRuntimeRegistry>().Get(id).ShouldBe(InstanceRuntimeStatus.Running);
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_MovesToTheRequestedBuild()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2800000");
+        P4ServerBuild target = await AddBuildAsync("r25.1", "2025.1", "2850123");
+        await AddBuildAsync("r25.1", "2025.1", "2860000");
+        _buildCache.EnsureAsync(target.Id, Arg.Any<IProgress<BuildProgress>>(), Arg.Any<CancellationToken>())
+            .Returns(target);
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{id}/upgrade",
+            new { release = "r25.1", build = "2850123" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await WaitForUpgradeAsync(id);
+        instance.GetProperty("build").GetString().ShouldBe("2850123");
+        await _buildCache.DidNotReceive().EnsureAsync(
+            Arg.Any<P4ServerRelease>(),
+            Arg.Any<IProgress<BuildProgress>>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpgradeInstance_RefusesAnOlderBuild()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        await AddBuildAsync("r25.1", "2025.1", "2800000");
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            $"/api/instances/{id}/upgrade",
+            new { release = "r25.1", build = "2800000" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString()
+            .ShouldBe("Instance main runs p4d 2025.1/2850123: it cannot go back to 2025.1/2800000.");
     }
 
     [Fact]
@@ -799,13 +908,14 @@ public sealed class InstancesApiTests : IAsyncLifetime
         return id;
     }
 
-    private static object ValidRequest(string name, int port)
+    private static object ValidRequest(string name, int port, string? build = null)
     {
         return new
         {
             name,
             description = "Test server",
             release = "r25.1",
+            build,
             port,
             caseSensitive = false,
             unicode = false,

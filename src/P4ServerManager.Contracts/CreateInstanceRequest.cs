@@ -28,6 +28,12 @@ public sealed record CreateInstanceRequest
     public string Release { get; init; } = null!;
 
     /// <summary>
+    /// Exact build of <see cref="Release"/> from the archive, for example <c>2850123</c>. Defaults to the latest build
+    /// of the release.
+    /// </summary>
+    public string? Build { get; init; }
+
+    /// <summary>
     /// TCP port p4d listens on, between 1024 and 65535.
     /// </summary>
     public int Port { get; init; }

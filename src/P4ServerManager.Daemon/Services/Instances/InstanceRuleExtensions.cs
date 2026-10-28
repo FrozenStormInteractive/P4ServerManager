@@ -59,17 +59,37 @@ public static partial class InstanceRuleExtensions
     }
 
     /// <summary>
-    /// A release of the p4d catalog, such as <c>r25.1</c>.
+    /// A release such as <c>r25.1</c>, with a build in the archive or published on the Perforce FTP. The archive is
+    /// looked at first: an archived release is available while the Perforce FTP cannot be read.
     /// </summary>
     public static IRuleBuilderOptions<T, string> MustBeAvailableRelease<T>(
         this IRuleBuilder<T, string> rule,
-        IP4ServerReleaseCatalog releaseCatalog)
+        IP4ServerReleaseCatalog releaseCatalog,
+        DaemonDbContext db)
     {
         return rule
             .MustAsync(async (release, cancellationToken) =>
                 P4ServerRelease.TryParse(release, out P4ServerRelease parsed)
-                && (await releaseCatalog.GetReleasesAsync(cancellationToken)).Contains(parsed))
+                && (await db.Builds.AnyAsync(b => b.Release == parsed.Name, cancellationToken)
+                    || (await releaseCatalog.GetReleasesAsync(cancellationToken)).Contains(parsed)))
             .WithMessage((_, release) => $"{release} is not an available p4d release.");
+    }
+
+    /// <summary>
+    /// A build number of the archive, in the release that <paramref name="getRelease"/> reads from the request.
+    /// </summary>
+    public static IRuleBuilderOptions<T, string> MustBeArchivedBuild<T>(
+        this IRuleBuilder<T, string> rule,
+        DaemonDbContext db,
+        Func<T, string> getRelease)
+    {
+        return rule
+            .MustAsync((request, build, cancellationToken) =>
+            {
+                string release = getRelease(request);
+                return db.Builds.AnyAsync(b => b.Release == release && b.BuildNumber == build, cancellationToken);
+            })
+            .WithMessage((request, build) => $"Build {build} of {getRelease(request)} is not in the archive.");
     }
 
     private static bool BeFreeOnHost(int port)

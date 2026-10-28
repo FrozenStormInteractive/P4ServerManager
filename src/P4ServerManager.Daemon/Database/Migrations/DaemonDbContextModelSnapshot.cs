@@ -17,11 +17,48 @@ namespace P4ServerManager.Daemon.Database.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.BuildArchivePolicy", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AutoDownload")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CheckIntervalHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("KeepLatestPerRelease")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("LastCheckAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastCheckError")
+                        .HasColumnType("TEXT");
+
+                    b.PrimitiveCollection<string>("Releases")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BuildArchivePolicies");
+                });
+
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.P4ServerBuild", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
+
+                    b.Property<long?>("ArchiveSize")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("BuildNumber")
                         .IsRequired()
@@ -31,10 +68,23 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.Property<DateTimeOffset>("DownloadedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Imported")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsExtracted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("P4Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Platform")
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("Protected")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Release")
                         .IsRequired()

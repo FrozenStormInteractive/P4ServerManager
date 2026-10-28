@@ -31,7 +31,22 @@ export async function request<T> (method: string, url: string, body?: unknown): 
       : { 'Accept': 'application/json', 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
+  return readResponse<T>(response)
+}
 
+/**
+ * Posts files as `multipart/form-data`. The browser sets the content type, with its boundary.
+ */
+export async function upload<T> (url: string, form: FormData): Promise<T> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    body: form,
+  })
+  return readResponse<T>(response)
+}
+
+async function readResponse<T> (response: Response): Promise<T> {
   const isJson = response.headers.get('Content-Type')?.includes('json') ?? false
   const content: unknown = isJson ? await response.json() : null
   if (!response.ok) {

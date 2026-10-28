@@ -12,7 +12,11 @@ import { server } from '@/testing/server'
 
 const versions: P4dVersion[] = [
   { release: 'r26.1', version: '2026.1', cachedBuilds: [] },
-  { release: 'r25.2', version: '2025.2', cachedBuilds: [{ build: '3086021', downloadedAt: '2026-10-21T23:06:43Z' }] },
+  {
+    release: 'r25.2',
+    version: '2025.2',
+    cachedBuilds: [{ build: '3086021', downloadedAt: '2026-10-21T23:06:43Z', extracted: true }],
+  },
 ]
 
 function input (name: string) {
@@ -67,6 +71,24 @@ describe('CreateInstanceDialog', () => {
     await mountDialog()
 
     expect(input('release').value).toBe('r26.1')
+  })
+
+  it('keeps the build field in place, enabled only when the archive has builds of the release', async () => {
+    const { wrapper } = await mountDialog()
+    const build = () => wrapper.findAllComponents({ name: 'VSelect' })
+      .find(select => select.props('label') === 'Build')!
+
+    expect(build().props('disabled')).toBe(true)
+    expect(build().props('modelValue')).toBeNull()
+
+    wrapper.findAllComponents({ name: 'VSelect' })
+      .find(select => select.props('label') === 'p4d version')!
+      .vm
+      .$emit('update:modelValue', 'r25.2')
+    await flushPromises()
+
+    expect(build().props('disabled')).toBe(false)
+    expect(build().props('items')).toHaveLength(2)
   })
 
   it('does not send an invalid form', async () => {

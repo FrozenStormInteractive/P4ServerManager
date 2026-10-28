@@ -33,6 +33,20 @@
           persistent-hint
         />
 
+        <!-- Always in place, so the dialog does not grow as the release changes. -->
+        <v-select
+          v-model="build"
+          class="mt-4"
+          :disabled="submitting || buildItems.length <= 1"
+          :hint="t('createInstance.buildHint')"
+          item-title="title"
+          item-value="build"
+          :items="buildItems"
+          :label="t('createInstance.build')"
+          name="build"
+          persistent-hint
+        />
+
         <v-alert
           class="mt-4"
           density="compact"
@@ -84,8 +98,9 @@
   import { compareReleases } from '@/utils/release'
 
   /**
-   * Upgrades an instance to the latest build of a p4d release: its own release, for its latest patch, or a newer one.
-   * A database cannot go back to an older release, so the older ones are not offered.
+   * Upgrades an instance to the latest build of a p4d release, or to a build of it from the archive: its own release,
+   * for a newer patch, or a newer one. A database cannot go back to an older release or build, so those are not
+   * offered.
    */
   const props = defineProps<{
     instance: Instance
@@ -104,6 +119,8 @@
   const versionsLoading = ref(false)
   const versionsError = ref<string | null>(null)
   const release = ref<string | null>(null)
+  // Null for the latest build of the release.
+  const build = ref<string | null>(null)
   const submitting = ref(false)
   const submitError = ref<string | null>(null)
 
@@ -119,6 +136,27 @@
         ? t('upgradeInstance.latestPatch', { version: version.version, release: version.release })
         : `${version.version} (${version.release})`,
     })))
+
+  // The builds of the archive for the chosen release, after the default: its latest build. Within the release of the
+  // instance, only the newer builds.
+  const buildItems = computed(() => {
+    const version = versions.value.find(v => v.release === release.value)
+    const builds = (version?.cachedBuilds ?? []).filter(cached =>
+      version?.release !== props.instance.release || Number(cached.build) > Number(props.instance.build))
+    return [
+      { build: null, title: t('createInstance.latestBuild') },
+      ...builds.map(cached => ({
+        build: cached.build,
+        title: t(cached.extracted ? 'createInstance.extractedBuild' : 'createInstance.archivedBuild', {
+          build: `${version!.version}/${cached.build}`,
+        }),
+      })),
+    ]
+  })
+
+  watch(release, () => {
+    build.value = null
+  })
 
   watch(open, value => {
     if (value) {
@@ -150,7 +188,7 @@
     submitting.value = true
     submitError.value = null
     try {
-      await instances.upgrade(props.instance.id, release.value)
+      await instances.upgrade(props.instance.id, release.value, build.value ?? undefined)
     } catch (error) {
       submitError.value = error instanceof Error ? error.message : String(error)
       return

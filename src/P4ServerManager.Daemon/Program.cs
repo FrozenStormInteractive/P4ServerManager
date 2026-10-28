@@ -12,6 +12,7 @@ using P4ServerManager.Daemon.Hosting;
 using P4ServerManager.Daemon.Hubs;
 using P4ServerManager.Daemon.Options;
 using P4ServerManager.Daemon.Services;
+using P4ServerManager.Daemon.Services.Builds;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Instances.Upgrade;
@@ -43,7 +44,14 @@ builder.Services.AddHttpClient(PerforceFtpClient.HttpClientName, (services, clie
 builder.Services.AddSingleton(_ => P4ServerPlatformDefinition.Detect());
 builder.Services.AddSingleton<PerforceFtpClient>();
 builder.Services.AddSingleton<IP4ServerReleaseCatalog, P4ServerReleaseCatalog>();
-builder.Services.AddSingleton<IP4ServerBuildCache, P4ServerBuildCache>();
+builder.Services.AddSingleton<P4ServerBuildArchive>();
+builder.Services.AddSingleton<P4ServerBuildCache>();
+builder.Services.AddSingleton<IP4ServerBuildCache>(services => services.GetRequiredService<P4ServerBuildCache>());
+builder.Services.AddSingleton<BuildNotifier>();
+builder.Services.AddSingleton<BuildImporter>();
+builder.Services.AddSingleton<BuildArchiveSynchronizer>();
+builder.Services.AddSingleton<BuildArchiveWorker>();
+builder.Services.AddHostedService(services => services.GetRequiredService<BuildArchiveWorker>());
 builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
 
 builder.Services.AddSingleton<InstanceRuntimeRegistry>();
@@ -95,6 +103,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<InstancesHub>(InstancesHub.Path);
+app.MapHub<BuildsHub>(BuildsHub.Path);
 
 app.MapFallbackToFile("/index.html");
 

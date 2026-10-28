@@ -19,7 +19,15 @@ public sealed class DaemonPaths
 
     public string DatabasePath => Path.Combine(DataDirectory, "p4servermanager.db");
 
+    /// <summary>
+    /// Extracted p4d builds, ready to run. p4d is recognized as such by its executable under this folder.
+    /// </summary>
     public string BuildsDirectory => Path.Combine(DataDirectory, "builds");
+
+    /// <summary>
+    /// Compressed p4d builds.
+    /// </summary>
+    public string ArchiveDirectory { get; }
 
     public string InstancesDirectory => Path.Combine(DataDirectory, "instances");
     
@@ -35,19 +43,33 @@ public sealed class DaemonPaths
     public string DismissedLegacyProfilesDirectory => Path.Combine(LegacyProfilesDirectory, "dismissed");
 
     public DaemonPaths(IOptions<DaemonOptions> options, IHostEnvironment environment)
-        : this(Path.GetFullPath(options.Value.DataDirectory, environment.ContentRootPath), options.Value.SocketPath)
+        : this(
+            Path.GetFullPath(options.Value.DataDirectory, environment.ContentRootPath),
+            options.Value.SocketPath,
+            options.Value.ArchiveDirectory)
     {
     }
 
-    public DaemonPaths(string dataDirectory, string? socketPath = DaemonOptions.DefaultSocketPath)
+    public DaemonPaths(
+        string dataDirectory,
+        string? socketPath = DaemonOptions.DefaultSocketPath,
+        string? archiveDirectory = null)
     {
         DataDirectory = dataDirectory;
         SocketPath = string.IsNullOrEmpty(socketPath) ? null : Path.GetFullPath(socketPath, dataDirectory);
+        ArchiveDirectory = Path.GetFullPath(
+            string.IsNullOrEmpty(archiveDirectory) ? "archive" : archiveDirectory,
+            dataDirectory);
     }
 
     public string GetBuildDirectory(string platform, string version, string build)
     {
         return Path.Combine(BuildsDirectory, platform, version, build);
+    }
+
+    public string GetArchivePath(string platform, string version, string build)
+    {
+        return Path.Combine(ArchiveDirectory, platform, version, build + ".tar.zst");
     }
 
     public string GetInstanceDirectory(Guid instanceId)

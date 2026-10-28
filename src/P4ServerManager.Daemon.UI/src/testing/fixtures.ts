@@ -1,5 +1,5 @@
 // Types
-import type { Instance, OperationSnapshot } from '@/api/types'
+import type { Build, BuildArchiveStatus, Instance, OperationSnapshot } from '@/api/types'
 
 export function createInstance (overrides: Partial<Instance> = {}): Instance {
   return {
@@ -40,6 +40,38 @@ export function createSnapshot (instanceId: string, overrides: Partial<Operation
     percent: 42,
     error: null,
     outcome: null,
+    ...overrides,
+  }
+}
+
+export function createBuild (overrides: Partial<Build> = {}): Build {
+  return {
+    id: '0c6f4a3e-2a51-4b8e-9d55-0c1f5b1e9a01',
+    release: 'r25.2',
+    version: '2025.2',
+    build: '3086021',
+    source: 'Ftp',
+    sha256: 'a'.repeat(64),
+    addedAt: '2026-10-21T23:06:43.318Z',
+    archiveSize: 13_000_000,
+    extracted: true,
+    protected: false,
+    instances: [],
+    ...overrides,
+  }
+}
+
+export function createArchiveStatus (overrides: Partial<BuildArchiveStatus> = {}): BuildArchiveStatus {
+  return {
+    running: false,
+    activity: null,
+    percent: null,
+    lastCheckAt: null,
+    lastCheckError: null,
+    nextCheckAt: null,
+    lastDownloadError: null,
+    checking: false,
+    fetches: [],
     ...overrides,
   }
 }

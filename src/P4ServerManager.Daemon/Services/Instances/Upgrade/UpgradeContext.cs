@@ -10,13 +10,15 @@ namespace P4ServerManager.Daemon.Services.Instances.Upgrade;
 /// </summary>
 /// <param name="db">Context that tracks <paramref name="instance"/>. Disposed once the upgrade ends.</param>
 /// <param name="instance">The instance, ready, with its <see cref="P4ServerInstance.Build"/> loaded.</param>
-/// <param name="release">Release the instance moves to: its latest build is the target.</param>
+/// <param name="release">Release the instance moves to: its latest build is the target, unless one is requested.</param>
 /// <param name="wasRunning">Whether p4d ran before the upgrade: it is started again only then.</param>
+/// <param name="requestedBuildId">Exact build of the archive the instance moves to, if any.</param>
 public sealed class UpgradeContext(
     DaemonDbContext db,
     P4ServerInstance instance,
     P4ServerRelease release,
-    bool wasRunning) : IOperationOutcome
+    bool wasRunning,
+    Guid? requestedBuildId = null) : IOperationOutcome
 {
     /// <summary>
     /// Outcome of an upgrade that moved the instance to another build.
@@ -37,18 +39,23 @@ public sealed class UpgradeContext(
     public bool WasRunning { get; } = wasRunning;
 
     /// <summary>
+    /// Exact build the instance moves to. Null for the latest build of <see cref="Release"/>.
+    /// </summary>
+    public Guid? RequestedBuildId { get; } = requestedBuildId;
+
+    /// <summary>
     /// Build the instance ran before the upgrade.
     /// </summary>
     public P4ServerBuild PreviousBuild { get; } = instance.Build
         ?? throw new ArgumentException("The instance has no p4d build.", nameof(instance));
 
     /// <summary>
-    /// Latest build of <see cref="Release"/>, once downloaded.
+    /// Build the instance moves to, once downloaded or extracted.
     /// </summary>
     public P4ServerBuild? TargetBuild { get; set; }
 
     /// <summary>
-    /// Set when the instance already runs the latest build of <see cref="Release"/>: there is nothing left to do.
+    /// Set when the instance already runs the target build: there is nothing left to do.
     /// </summary>
     public bool UpToDate { get; set; }
 

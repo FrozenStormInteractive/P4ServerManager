@@ -7,7 +7,8 @@ using P4ServerManager.Daemon.Services.Perforce;
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
 /// <summary>
-/// Pins the instance to the latest build of its release, downloading it when it is not cached yet.
+/// Pins the instance to the latest build of its release, downloading it when the daemon does not have it yet, or
+/// extracts the exact build it was created with.
 /// </summary>
 public sealed class ResolveBuildStep(IP4ServerBuildCache buildCache, InstanceNotifier notifier)
     : IOperationStep<ProvisioningContext>
@@ -27,7 +28,9 @@ public sealed class ResolveBuildStep(IP4ServerBuildCache buildCache, InstanceNot
             throw new InstanceOperationException($"{instance.Release} is not a p4d release.");
         }
 
-        P4ServerBuild build = await buildCache.EnsureAsync(release, ReportDownload(progress), cancellationToken);
+        P4ServerBuild build = instance.BuildId is { } buildId
+            ? await buildCache.EnsureAsync(buildId, ReportBuildProgress(progress), cancellationToken)
+            : await buildCache.EnsureAsync(release, ReportBuildProgress(progress), cancellationToken);
 
         instance.BuildId = build.Id;
         await context.Db.SaveChangesAsync(cancellationToken);
@@ -37,15 +40,16 @@ public sealed class ResolveBuildStep(IP4ServerBuildCache buildCache, InstanceNot
     }
 
     /// <summary>
-    /// Reports the download of a build as the progress of the step that gets it.
+    /// Reports how the cache gets a build ready, downloading, compressing or extracting it, as the progress of the step
+    /// that gets it.
     /// </summary>
-    internal static IProgress<BuildDownloadProgress> ReportDownload(IProgress<OperationStepProgress> progress)
+    internal static IProgress<BuildProgress> ReportBuildProgress(IProgress<OperationStepProgress> progress)
     {
-        return new InlineProgress<BuildDownloadProgress>(p =>
+        return new InlineProgress<BuildProgress>(p =>
         {
             string message = p.Percent is { } percent
-                ? string.Create(CultureInfo.InvariantCulture, $"Downloading {p.FileName} ({percent}%)")
-                : $"Downloading {p.FileName}";
+                ? string.Create(CultureInfo.InvariantCulture, $"{p.Description} ({percent}%)")
+                : p.Description;
             progress.Report(new OperationStepProgress(message, p.Percent));
         });
     }

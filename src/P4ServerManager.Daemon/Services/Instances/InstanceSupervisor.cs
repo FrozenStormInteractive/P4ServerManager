@@ -90,22 +90,24 @@ public sealed class InstanceSupervisor(
     }
 
     /// <summary>
-    /// Moves an instance to the latest build of <paramref name="release"/>: the same release for its latest patch, or a
-    /// newer one. The upgrade runs in the background, once this returns: the instance stays
+    /// Moves an instance to the latest build of <paramref name="release"/>, or to an exact build of it from the archive:
+    /// the same release for a newer patch, or a newer release. The upgrade runs in the background, once this returns: the instance stays
     /// <see cref="InstanceRuntimeStatus.Upgrading"/> until it ends, and its operation tells its progress. Only the
     /// shutdown of the daemon cancels it, and never while p4d upgrades the database.
     /// </summary>
     /// <param name="instanceId">Identifier of the instance.</param>
     /// <param name="release">Release to move to.</param>
+    /// <param name="build">Build number of <paramref name="release"/> in the archive, or null for its latest build.</param>
     /// <param name="cancellationToken">Aborts the wait for the instance to be free.</param>
     /// <returns>The instance, once its upgrade has begun.</returns>
     /// <exception cref="InstanceConflictException">
-    /// The instance is not ready, another operation is in progress, or the release is older than the one of the
-    /// instance: p4d cannot downgrade a database.
+    /// The instance is not ready, another operation is in progress, or the release or the build is older than the one
+    /// of the instance: p4d cannot downgrade a database.
     /// </exception>
     public async Task<P4ServerInstance> UpgradeInstanceAsync(
         Guid instanceId,
         P4ServerRelease release,
+        string? build,
         CancellationToken cancellationToken)
     {
         SemaphoreSlim? instanceLock = await AcquireLockAsync(instanceId, cancellationToken);
@@ -125,7 +127,24 @@ public sealed class InstanceSupervisor(
                     $"Instance {instance.Name} runs {current}: its database cannot go back to {release}.");
             }
 
-            UpgradeContext context = new(db, instance, release, launcher.IsRunning(instance));
+            Guid? requestedBuildId = null;
+            if (build is not null)
+            {
+                // Not tracked: the upgrade attaches the build it gets from the build cache.
+                P4ServerBuild target = await db.Builds.AsNoTracking().FirstOrDefaultAsync(
+                    b => b.Release == release.Name && b.BuildNumber == build,
+                    cancellationToken)
+                    ?? throw new InstanceConflictException($"Build {build} of {release} is not in the archive.");
+                if (P4ServerBuildNumber.Compare(target, instance.Build) < 0)
+                {
+                    throw new InstanceConflictException(
+                        $"Instance {instance.Name} runs p4d {instance.Build.Version}/{instance.Build.BuildNumber}: "
+                        + $"it cannot go back to {target.Version}/{target.BuildNumber}.");
+                }
+                requestedBuildId = target.Id;
+            }
+
+            UpgradeContext context = new(db, instance, release, launcher.IsRunning(instance), requestedBuildId);
             runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.Upgrading);
             await notifier.InstanceChangedAsync(instance);
 

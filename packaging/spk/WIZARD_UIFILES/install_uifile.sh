@@ -49,7 +49,7 @@ cat >"$SYNOPKG_TEMP_LOGFILE" <<EOF
         "items": [
             {
                 "type": "singleselect",
-                "desc": "P4 Server Manager is not affiliated with Perforce Software, nor is it an official P4 tool. It downloads the p4d builds you choose from the Perforce FTP server.<br><br>The P4ServerManager shared folder will hold its database, the p4d builds and the P4 servers you create in their default location.<br><br>The web interface listens on port @UI_PORT@: keep that port closed to untrusted networks.$legacy_note",
+                "desc": "P4 Server Manager is not affiliated with Perforce Software, nor is it an official P4 tool. It downloads the p4d builds you choose from Perforce.<br><br>The P4ServerManager shared folder will hold its database, the p4d builds and the P4 servers you create in their default location.<br><br>The web interface listens on port @UI_PORT@: keep that port closed to untrusted networks.$legacy_note",
                 "subitems": [
                     {
                         "key": "wizard_understood",

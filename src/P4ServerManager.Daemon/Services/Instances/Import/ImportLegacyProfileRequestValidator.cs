@@ -21,6 +21,6 @@ public sealed class ImportLegacyProfileRequestValidator : AbstractValidator<Impo
         RuleFor(r => r.Description).MustBeInstanceDescription();
         // A port still in use often means the server of the profile still runs.
         RuleFor(r => r.Port).MustBeFreeInstancePort(db);
-        RuleFor(r => r.Release).MustBeAvailableRelease(releaseCatalog);
+        RuleFor(r => r.Release).MustBeAvailableRelease(releaseCatalog, db);
     }
 }

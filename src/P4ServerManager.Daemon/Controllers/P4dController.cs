@@ -21,31 +21,48 @@ public sealed class P4dController(
     P4ServerPlatformDefinition platformDefinition) : ControllerBase
 {
     /// <summary>
-    /// Lists the p4d releases available for this platform on the Perforce FTP, with the builds already cached.
+    /// Lists the p4d releases that can be installed on this platform: those of the Perforce FTP, and those kept in the
+    /// archive, with the builds the daemon knows. When the Perforce FTP cannot be read, only the archived releases are
+    /// listed.
     /// </summary>
     /// <response code="200">The releases, newest first.</response>
-    /// <response code="502">The Perforce FTP could not be read.</response>
+    /// <response code="502">The Perforce FTP could not be read, and the archive is empty.</response>
     [HttpGet("versions")]
     [ProducesResponseType<IReadOnlyList<P4ServerVersionDto>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway, "application/problem+json")]
     public async Task<ActionResult<IReadOnlyList<P4ServerVersionDto>>> GetVersions(CancellationToken cancellationToken)
     {
-        // A Perforce FTP that cannot be read is answered by PerforceFtpExceptionFilter.
-        IReadOnlyList<P4ServerRelease> releases = await releaseCatalog.GetReleasesAsync(cancellationToken);
-
-        List<P4ServerBuild> cached = await db.Builds
+        List<P4ServerBuild> known = await db.Builds
             .AsNoTracking()
             .Where(b => b.Platform == platformDefinition.Name)
             .ToListAsync(cancellationToken);
 
-        return releases
+        IReadOnlyList<P4ServerRelease> published;
+        try
+        {
+            published = await releaseCatalog.GetReleasesAsync(cancellationToken);
+        }
+        catch (HttpRequestException) when (known.Count > 0)
+        {
+            published = [];
+        }
+        // Otherwise, a Perforce FTP that cannot be read is answered by PerforceFtpExceptionFilter.
+
+        IEnumerable<P4ServerRelease> archived = known
+            .Select(b => P4ServerRelease.TryParse(b.Release, out P4ServerRelease release) ? release : (P4ServerRelease?)null)
+            .OfType<P4ServerRelease>();
+
+        return published
+            .Concat(archived)
+            .Distinct()
+            .OrderDescending()
             .Select(release => new P4ServerVersionDto(
                 release.Name,
                 release.Version,
-                cached
+                known
                     .Where(b => b.Release == release.Name)
-                    .OrderByDescending(b => b.DownloadedAt)
-                    .Select(b => new CachedBuildDto(b.BuildNumber, b.DownloadedAt))
+                    .OrderByDescending(b => P4ServerBuildNumber.Parse(b.BuildNumber))
+                    .Select(b => new CachedBuildDto(b.BuildNumber, b.DownloadedAt, b.IsExtracted))
                     .ToList()))
             .ToList();
     }

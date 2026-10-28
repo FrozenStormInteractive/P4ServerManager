@@ -16,6 +16,14 @@ public sealed class OperationTracker
         return snapshots.GetValueOrDefault(instanceId);
     }
 
+    /// <summary>
+    /// Whether an operation runs on any instance, such as a provisioning or an upgrade.
+    /// </summary>
+    public bool HasRunningOperation()
+    {
+        return snapshots.Values.Any(s => s.Status == OperationStatus.Running);
+    }
+
     public void Remove(Guid instanceId)
     {
         snapshots.TryRemove(instanceId, out _);

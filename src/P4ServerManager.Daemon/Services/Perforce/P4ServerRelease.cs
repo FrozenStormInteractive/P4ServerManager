@@ -34,6 +34,24 @@ public readonly partial record struct P4ServerRelease(int Year, int Number) : IC
         return true;
     }
 
+    /// <summary>
+    /// Reads the release of a version reported by p4d, for example <c>r25.1</c> for <c>2025.1</c>.
+    /// </summary>
+    public static bool TryParseVersion([NotNullWhen(true)] string? value, out P4ServerRelease release)
+    {
+        Match match = value is null ? Match.Empty : VersionPattern().Match(value);
+        if (!match.Success)
+        {
+            release = default;
+            return false;
+        }
+
+        release = new P4ServerRelease(
+            int.Parse(match.Groups["year"].Value, CultureInfo.InvariantCulture),
+            int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture));
+        return true;
+    }
+
     public int CompareTo(P4ServerRelease other)
     {
         int year = Year.CompareTo(other.Year);
@@ -55,4 +73,7 @@ public readonly partial record struct P4ServerRelease(int Year, int Number) : IC
 
     [GeneratedRegex(@"^r(?<year>\d{2})\.(?<number>\d)$")]
     private static partial Regex ReleasePattern();
+
+    [GeneratedRegex(@"^20(?<year>\d{2})\.(?<number>\d)$")]
+    private static partial Regex VersionPattern();
 }

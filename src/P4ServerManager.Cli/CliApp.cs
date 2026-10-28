@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.CommandLine.Help;
 
+using P4ServerManager.Cli.Commands.Builds;
 using P4ServerManager.Cli.Commands.Instances;
 
 namespace P4ServerManager.Cli;
@@ -27,6 +28,7 @@ internal static class CliApp
             globalOptions.Json,
         };
         root.Subcommands.Add(InstanceCommand.Create(services));
+        root.Subcommands.Add(BuildCommand.Create(services));
         return root;
     }
 }

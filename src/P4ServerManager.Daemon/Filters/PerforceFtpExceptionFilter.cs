@@ -20,7 +20,7 @@ public sealed class PerforceFtpExceptionFilter(ProblemDetailsFactory problemDeta
         ProblemDetails problem = problemDetailsFactory.CreateProblemDetails(
             context.HttpContext,
             StatusCodes.Status502BadGateway,
-            detail: "The list of p4d releases could not be read from the Perforce FTP.");
+            detail: "The list of p4d releases could not be read from Perforce.");
         context.Result = new ObjectResult(problem)
         {
             StatusCode = problem.Status,

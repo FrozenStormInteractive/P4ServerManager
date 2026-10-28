@@ -77,6 +77,10 @@ export interface CreateInstanceRequest {
   name: string
   description?: string | null
   release: string
+  /**
+   * Exact build of the release from the archive. The latest build when missing.
+   */
+  build?: string
   port: number
   caseSensitive: boolean
   unicode: boolean
@@ -97,10 +101,15 @@ export interface UpdateInstanceRequest {
 }
 
 /**
- * The p4d release an instance moves to: its own release, for its latest patch, or a newer one.
+ * The p4d release an instance moves to: its own release, for a newer patch, or a newer one.
  */
 export interface UpgradeInstanceRequest {
   release: string
+  /**
+   * Exact build of the release from the archive, no older than the build of the instance. The latest build when
+   * missing.
+   */
+  build?: string
 }
 
 /**
@@ -153,12 +162,101 @@ export interface ImportLegacyProfileRequest {
 export interface CachedBuild {
   build: string
   downloadedAt: string
+  /**
+   * True when the build is extracted, ready to run, rather than only archived.
+   */
+  extracted: boolean
 }
 
 export interface P4dVersion {
   release: string
   version: string
   cachedBuilds: CachedBuild[]
+}
+
+export type BuildSource = 'Ftp' | 'Imported'
+
+/**
+ * A p4d build of the archive, kept compressed, and extracted while an instance uses it.
+ */
+export interface Build {
+  id: string
+  release: string
+  version: string
+  build: string
+  source: BuildSource
+  sha256: string
+  addedAt: string
+  /**
+   * Size of the compressed archive in bytes. Null while the build is not archived yet.
+   */
+  archiveSize: number | null
+  extracted: boolean
+  /**
+   * True when the retention policy never removes the build.
+   */
+  protected: boolean
+  instances: { id: string, name: string }[]
+}
+
+export type BuildArchiveScope = 'AllReleases' | 'SelectedReleases'
+
+/**
+ * How the daemon fills the archive: which new builds of the Perforce FTP it downloads, how often it checks, and how
+ * many builds of each release it keeps.
+ */
+export interface BuildArchivePolicy {
+  autoDownload: boolean
+  checkIntervalHours: number
+  scope: BuildArchiveScope
+  releases: string[]
+  /**
+   * Null to keep every build.
+   */
+  keepLatestPerRelease: number | null
+}
+
+export type BuildFetchState = 'Queued' | 'Checking' | 'Downloading' | 'Compressing'
+
+/**
+ * A build being fetched from Perforce into the archive.
+ */
+export interface BuildFetch {
+  release: string
+  state: BuildFetchState
+  /**
+   * `p4d` or `p4`, while downloading.
+   */
+  fileName: string | null
+  /**
+   * Version and build, such as `2025.1/2850123`, once known.
+   */
+  build: string | null
+  percent: number | null
+}
+
+export interface BuildArchiveStatus {
+  running: boolean
+  /**
+   * What the archive worker does, such as `Checking r25.1`. Null when idle.
+   */
+  activity: string | null
+  percent: number | null
+  lastCheckAt: string | null
+  lastCheckError: string | null
+  /**
+   * Null when the automatic download is off.
+   */
+  nextCheckAt: string | null
+  lastDownloadError: string | null
+  /**
+   * True while the worker checks Perforce for new builds, or is about to.
+   */
+  checking: boolean
+  /**
+   * The builds being fetched from Perforce: the current one first, then those waiting their turn.
+   */
+  fetches: BuildFetch[]
 }
 
 export type OperationStatus = 'Running' | 'Succeeded' | 'Failed'

@@ -37,8 +37,13 @@ The packages land in `artifacts/spk/`, named `P4ServerManager-<arch>-<version>-<
 
 ## On the NAS
 
-- **Data**: the `P4ServerManager` shared folder is the data directory of the daemon: `p4servermanager.db`, `builds/`
-  (the p4d builds) and `instances/` (logs, pid files and the default roots of the servers).
+- **Data**: the `P4ServerManager` shared folder is the data directory of the daemon: `p4servermanager.db`, `archive/`
+  (every p4d build, compressed with zstd), `builds/` (the builds the servers use, extracted) and `instances/` (logs,
+  pid files and the default roots of the servers). `Daemon__ArchiveDirectory` moves the archive to another folder.
+- **p4d builds**: Settings > p4d builds in the web UI, or `p4sm build`. The daemon can check the `SHA256SUMS` of the
+  Perforce FTP on a schedule and download the new builds of the chosen releases, and keeps the newest builds of each
+  release. A build can also be imported from p4d and p4, or from `helix-core-server.tgz`. Uploads go through the UI
+  port: a reverse proxy in front of it must accept requests of about 100 MB.
 - **Daemon**: `start-stop-status` runs `daemon/P4ServerManager.Daemon` in the background, listening on every
   interface on the UI port, and on the socket of the CLI. Its log is `/var/packages/P4ServerManager/var/daemon.log`, the previous one
   `daemon.log.1`.
@@ -48,8 +53,8 @@ The packages land in `artifacts/spk/`, named `P4ServerManager-<arch>-<version>-<
 - **CLI**: `p4sm`, linked in `/usr/local/bin`. It talks to the daemon through the Unix socket
   `/var/packages/P4ServerManager/var/daemon.sock`, open to the `Perforce` user and group only: run it with `sudo`, or
   as a member of the `Perforce` group. `P4SM_SOCKET` or `--socket` points it to another socket.
-- **Uninstallation**: the wizard keeps the data by default. Deleting it removes the database, `builds/`, `instances/`
-  and `import/`. The shared folder and the roots chosen outside of it are always kept.
+- **Uninstallation**: the wizard keeps the data by default. Deleting it removes the database, `archive/`, `builds/`,
+  `instances/` and `import/`. The shared folder and the roots chosen outside of it are always kept.
 - **HelixCoreServer package**: at each start, the package copies the p4dctl-ng profiles of the
   [Perforce-Synology](https://github.com/FrozenStormInteractive/Perforce-Synology) package to
   `import/HelixCoreServer/` in the shared folder, except the ones already there or dismissed. The install wizard

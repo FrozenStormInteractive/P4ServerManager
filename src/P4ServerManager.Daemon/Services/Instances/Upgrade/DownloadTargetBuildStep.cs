@@ -6,7 +6,8 @@ using P4ServerManager.Daemon.Services.Perforce;
 namespace P4ServerManager.Daemon.Services.Instances.Upgrade;
 
 /// <summary>
-/// Gets the latest build of the target release, downloading it when it is not cached yet. p4d still runs meanwhile.
+/// Gets the target build: the requested one, extracted from the archive when needed, or the latest build of the target
+/// release, downloaded when the daemon does not have it yet. p4d still runs meanwhile.
 /// When the instance already runs that build, the upgrade has nothing left to do: the next steps are skipped.
 /// </summary>
 public sealed class DownloadTargetBuildStep(IP4ServerBuildCache buildCache) : IOperationStep<UpgradeContext>
@@ -20,14 +21,16 @@ public sealed class DownloadTargetBuildStep(IP4ServerBuildCache buildCache) : IO
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {
-        P4ServerBuild build = await buildCache.EnsureAsync(
-            context.Release,
-            ResolveBuildStep.ReportDownload(progress),
-            cancellationToken);
+        IProgress<BuildProgress> downloadProgress = ResolveBuildStep.ReportBuildProgress(progress);
+        P4ServerBuild build = context.RequestedBuildId is { } buildId
+            ? await buildCache.EnsureAsync(buildId, downloadProgress, cancellationToken)
+            : await buildCache.EnsureAsync(context.Release, downloadProgress, cancellationToken);
         if (build.Id == context.PreviousBuild.Id)
         {
             context.UpToDate = true;
-            return $"Already on p4d {build.Version}/{build.BuildNumber}, the latest build of {context.Release}";
+            return context.RequestedBuildId is null
+                ? $"Already on p4d {build.Version}/{build.BuildNumber}, the latest build of {context.Release}"
+                : $"Already on p4d {build.Version}/{build.BuildNumber}";
         }
 
         context.TargetBuild = build;

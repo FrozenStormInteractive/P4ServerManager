@@ -25,6 +25,11 @@ internal static class UpgradeInstanceCommand
                 + "newer one. The database cannot go back to an older release.",
             Required = true,
         };
+        Option<string?> buildOption = new("--build")
+        {
+            Description = "Exact build of the release from the archive, for example 2850123, no older than the build "
+                + "of the instance. Defaults to the latest build. List them with 'p4sm build list'.",
+        };
         Option<bool> yesOption = new("--yes", "-y") { Description = "Upgrade without asking for a confirmation." };
         Option<bool> noWaitOption = new("--no-wait")
         {
@@ -36,6 +41,7 @@ internal static class UpgradeInstanceCommand
         {
             instanceArgument,
             releaseOption,
+            buildOption,
             yesOption,
             noWaitOption,
         };
@@ -47,6 +53,8 @@ internal static class UpgradeInstanceCommand
                 invocation.GetValue(instanceArgument),
                 cancellationToken);
             string release = invocation.GetValue(releaseOption)!;
+            string? build = invocation.GetValue(buildOption);
+            string target = build is null ? release : $"{release} build {build}";
 
             if (!invocation.GetValue(yesOption))
             {
@@ -57,7 +65,7 @@ internal static class UpgradeInstanceCommand
                         "Upgrading an instance asks for a confirmation. Without a terminal, pass --yes.");
                 }
                 string question = $"Upgrade {instance.Name} from p4d {InstanceFormatting.FormatVersion(instance)} to "
-                    + $"{release}? Its users are disconnected until it starts again, and its database cannot go back.";
+                    + $"{target}? Its users are disconnected until it starts again, and its database cannot go back.";
                 if (!prompter.Confirm(question))
                 {
                     await invocation.Error.WriteLineAsync("Nothing was upgraded.");
@@ -67,7 +75,7 @@ internal static class UpgradeInstanceCommand
 
             InstanceDto upgrading = await client.UpgradeInstanceAsync(
                 instance.Id,
-                new UpgradeInstanceRequest { Release = release },
+                new UpgradeInstanceRequest { Release = release, Build = build },
                 cancellationToken);
 
             if (invocation.GetValue(noWaitOption))
@@ -85,7 +93,7 @@ internal static class UpgradeInstanceCommand
                 return 0;
             }
 
-            await invocation.Progress.WriteLineAsync($"Upgrading {upgrading.Name} to {release}...");
+            await invocation.Progress.WriteLineAsync($"Upgrading {upgrading.Name} to {target}...");
             OperationSnapshot? snapshot;
             try
             {
@@ -107,7 +115,9 @@ internal static class UpgradeInstanceCommand
             {
                 string version = InstanceFormatting.FormatVersion(upgraded);
                 await invocation.Output.WriteLineAsync(snapshot?.Outcome == UpToDateOutcome
-                    ? $"{upgraded.Name} already runs the latest build, p4d {version}. Nothing was changed."
+                    ? build is null
+                        ? $"{upgraded.Name} already runs the latest build, p4d {version}. Nothing was changed."
+                        : $"{upgraded.Name} already runs p4d {version}. Nothing was changed."
                     : $"{upgraded.Name} now runs p4d {version}.");
             }
             else if (upgraded.LastError is { } lastError && lastError != snapshot?.Error)

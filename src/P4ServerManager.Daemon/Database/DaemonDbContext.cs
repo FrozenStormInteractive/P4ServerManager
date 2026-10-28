@@ -10,6 +10,8 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
 
     public DbSet<P4ServerBuild> Builds => Set<P4ServerBuild>();
 
+    public DbSet<BuildArchivePolicy> BuildArchivePolicies => Set<BuildArchivePolicy>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<P4ServerInstance>(instance =>
@@ -28,7 +30,14 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
             build.Property(b => b.BuildNumber).HasMaxLength(16);
             build.Property(b => b.Platform).HasMaxLength(16);
             build.Property(b => b.Sha256).HasMaxLength(64);
+            build.Property(b => b.P4Sha256).HasMaxLength(64);
             build.HasIndex(b => new { b.Platform, b.Version, b.BuildNumber }).IsUnique();
+        });
+
+        modelBuilder.Entity<BuildArchivePolicy>(policy =>
+        {
+            policy.Property(p => p.Id).ValueGeneratedNever();
+            policy.Property(p => p.Scope).HasConversion<string>().HasMaxLength(16);
         });
     }
 }

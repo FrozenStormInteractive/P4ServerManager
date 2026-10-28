@@ -121,8 +121,11 @@ export const useInstancesStore = defineStore('instances', () => {
   /**
    * Begins the upgrade of the instance to the latest build of `release`. The hub tells its progress.
    */
-  async function upgrade (id: string, release: string) {
-    upsertInstance(await api.upgradeInstance(id, { release }))
+  /**
+   * Upgrades an instance to the latest build of a release, or to an exact build of it from the archive.
+   */
+  async function upgrade (id: string, release: string, build?: string) {
+    upsertInstance(await api.upgradeInstance(id, build ? { release, build } : { release }))
   }
 
   /**

@@ -1,5 +1,6 @@
 // Types
-import type { Instance, OperationSnapshot } from './types'
+import type { Build, BuildArchiveStatus, Instance, OperationSnapshot } from './types'
+import type { HubConnection } from '@microsoft/signalr'
 
 // Utilities
 import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr'
@@ -14,19 +15,57 @@ export interface InstancesHubHandlers {
   onConnected: () => void
 }
 
+export interface BuildsHubHandlers {
+  onBuildUpdated: (build: Build) => void
+  onBuildDeleted: (buildId: string) => void
+  onArchiveStatusChanged: (status: BuildArchiveStatus) => void
+  /**
+   * Called on the first connection and after each reconnection: events may have been missed until then.
+   */
+  onConnected: () => void
+}
+
 export interface InstancesHub {
   stop: () => Promise<void>
 }
 
+export type BuildsHub = InstancesHub
+
 const RETRY_DELAY_MS = 5000
 
 /**
- * Connects to the `/hubs/instances` hub of the daemon. Connecting is retried until it succeeds, and again whenever
- * SignalR gives up reconnecting, for example while the daemon restarts.
+ * Connects to the `/hubs/instances` hub of the daemon.
  */
 export function connectInstancesHub (handlers: InstancesHubHandlers): InstancesHub {
+  return connectHub('/hubs/instances', handlers.onConnected, connection => {
+    connection.on('InstanceUpdated', handlers.onInstanceUpdated)
+    connection.on('InstanceDeleted', handlers.onInstanceDeleted)
+    connection.on('OperationProgress', handlers.onOperationProgress)
+  })
+}
+
+/**
+ * Connects to the `/hubs/builds` hub of the daemon.
+ */
+export function connectBuildsHub (handlers: BuildsHubHandlers): BuildsHub {
+  return connectHub('/hubs/builds', handlers.onConnected, connection => {
+    connection.on('BuildUpdated', handlers.onBuildUpdated)
+    connection.on('BuildDeleted', handlers.onBuildDeleted)
+    connection.on('ArchiveStatusChanged', handlers.onArchiveStatusChanged)
+  })
+}
+
+/**
+ * Connects to a hub of the daemon. Connecting is retried until it succeeds, and again whenever SignalR gives up
+ * reconnecting, for example while the daemon restarts.
+ */
+function connectHub (
+  url: string,
+  onConnected: () => void,
+  subscribe: (connection: HubConnection) => void,
+): InstancesHub {
   const connection = new HubConnectionBuilder()
-    .withUrl('/hubs/instances')
+    .withUrl(url)
     .withAutomaticReconnect()
     .configureLogging(LogLevel.Warning)
     .build()
@@ -37,7 +76,7 @@ export function connectInstancesHub (handlers: InstancesHubHandlers): InstancesH
   async function start () {
     try {
       await connection.start()
-      handlers.onConnected()
+      onConnected()
     } catch {
       scheduleStart()
     }
@@ -49,10 +88,8 @@ export function connectInstancesHub (handlers: InstancesHubHandlers): InstancesH
     }
   }
 
-  connection.on('InstanceUpdated', handlers.onInstanceUpdated)
-  connection.on('InstanceDeleted', handlers.onInstanceDeleted)
-  connection.on('OperationProgress', handlers.onOperationProgress)
-  connection.onreconnected(() => handlers.onConnected())
+  subscribe(connection)
+  connection.onreconnected(() => onConnected())
   connection.onclose(() => scheduleStart())
 
   void start()

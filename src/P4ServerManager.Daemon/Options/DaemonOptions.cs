@@ -19,6 +19,12 @@ public sealed class DaemonOptions
     public string DataDirectory { get; set; } = "data";
 
     /// <summary>
+    /// Folder of the compressed p4d builds, to keep the archive on another volume. A relative path is resolved against
+    /// the data directory. Defaults to the <c>archive</c> folder of the data directory.
+    /// </summary>
+    public string? ArchiveDirectory { get; set; }
+
+    /// <summary>
     /// Unix domain socket the CLI reaches the API through, next to the TCP port of the web UI. A relative path is
     /// resolved against the data directory. Empty to listen on no socket.
     /// </summary>

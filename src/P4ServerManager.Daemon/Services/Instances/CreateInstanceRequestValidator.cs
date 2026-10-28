@@ -9,7 +9,7 @@ using P4ServerManager.Daemon.Services.Perforce;
 namespace P4ServerManager.Daemon.Services.Instances;
 
 /// <summary>
-/// Checks a <see cref="CreateInstanceRequest"/> against the other instances, the p4d catalog and the machine.
+/// Checks a <see cref="CreateInstanceRequest"/> against the other instances, the p4d builds and the machine.
 /// </summary>
 public sealed class CreateInstanceRequestValidator : AbstractValidator<CreateInstanceRequest>
 {
@@ -24,7 +24,10 @@ public sealed class CreateInstanceRequestValidator : AbstractValidator<CreateIns
         RuleFor(r => r.Name).MustBeNewInstanceName(db);
         RuleFor(r => r.Description).MustBeInstanceDescription();
         RuleFor(r => r.Port).MustBeFreeInstancePort(db);
-        RuleFor(r => r.Release).MustBeAvailableRelease(releaseCatalog);
+        RuleFor(r => r.Release).MustBeAvailableRelease(releaseCatalog, db);
+        RuleFor(r => r.Build!)
+            .MustBeArchivedBuild(db, r => r.Release)
+            .When(r => r.Build is not null);
 
         RuleFor(r => r.ServerDirectory!)
             .Must(Path.IsPathFullyQualified)

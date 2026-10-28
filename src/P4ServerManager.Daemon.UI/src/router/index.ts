@@ -32,6 +32,15 @@ export const routes: RouteRecordRaw[] = [
     path: '/settings',
     name: 'settings',
     component: () => import('@/pages/SettingsPage.vue'),
+    // The settings have one page per section, listed by the settings page.
+    redirect: { name: 'settings-builds' },
+    children: [
+      {
+        path: 'builds',
+        name: 'settings-builds',
+        component: () => import('@/pages/settings/SettingsBuildsPage.vue'),
+      },
+    ],
   },
   {
     path: '/:path(.*)*',

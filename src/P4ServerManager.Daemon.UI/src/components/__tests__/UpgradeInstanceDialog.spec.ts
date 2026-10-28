@@ -100,3 +100,47 @@ describe('compareReleases', () => {
     expect(['r25.1', 'r24.2', 'r25.2', 'r23.1'].toSorted(compareReleases)).toEqual(['r23.1', 'r24.2', 'r25.1', 'r25.2'])
   })
 })
+
+describe('UpgradeInstanceDialog with archived builds', () => {
+  let bodies: unknown[]
+
+  beforeEach(() => {
+    bodies = []
+    server.use(
+      http.get('/api/p4d/versions', () => HttpResponse.json<P4dVersion[]>([
+        {
+          release: 'r25.1',
+          version: '2025.1',
+          cachedBuilds: [
+            { build: '2860000', downloadedAt: '2026-10-21T23:06:43Z', extracted: false },
+            { build: '2850123', downloadedAt: '2026-10-01T23:06:43Z', extracted: true },
+            { build: '2800000', downloadedAt: '2026-09-01T23:06:43Z', extracted: false },
+          ],
+        },
+      ])),
+      http.post(`/api/instances/${instance.id}/upgrade`, async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json({ ...instance, runtimeStatus: 'Upgrading' }, { status: 202 })
+      }),
+    )
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('offers the newer builds of the release of the instance, and sends the one chosen', async () => {
+    const { wrapper } = await mountDialog()
+
+    const buildSelect = wrapper.findAllComponents({ name: 'VSelect' })[1]!
+    const items = buildSelect.props('items') as { build: string | null }[]
+    expect(items.map(item => item.build)).toEqual([null, '2860000'])
+
+    buildSelect.vm.$emit('update:modelValue', '2860000')
+    await flushPromises()
+    upgradeButton().click()
+    await flushPromises()
+
+    expect(bodies).toEqual([{ release: 'r25.1', build: '2860000' }])
+  })
+})

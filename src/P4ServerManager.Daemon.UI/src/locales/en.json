@@ -21,7 +21,9 @@
     "upgrade": "Upgrade",
     "delete": "Delete",
     "import": "Import",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "save": "Save",
+    "checkNow": "Check now"
   },
   "status": {
     "provisioning": "Provisioning",
@@ -186,7 +188,12 @@
       "userNameFormat": "Start with a letter, then up to 63 letters, digits, '.', '-' or '_'.",
       "passwordStrength": "Use at least 8 characters, from at least two of: upper case, lower case, digits or symbols.",
       "passwordMatch": "The passwords do not match."
-    }
+    },
+    "build": "Build",
+    "latestBuild": "Latest build",
+    "buildHint": "An exact build from the archive.",
+    "archivedBuild": "{build}, archived",
+    "extractedBuild": "{build}, extracted"
   },
   "importInstance": {
     "title": "Import {name}",
@@ -202,7 +209,7 @@
   "upgradeInstance": {
     "title": "Upgrade {name}",
     "current": "Runs p4d {version}.",
-    "versionHint": "The latest build of the version is installed. The database cannot go back to an older version.",
+    "versionHint": "The latest build of the version is installed, unless you pick one of the archive. The database cannot go back to an older version.",
     "latestPatch": "{version} ({release}), latest patch",
     "noVersions": "No newer p4d version available",
     "warningRunning": "The server is stopped while its database is upgraded: its users are disconnected until it starts again. No backup of the database is taken: make one first.",
@@ -224,7 +231,108 @@
   },
   "settings": {
     "title": "Settings",
-    "placeholder": "The settings of the manager will be available here."
+    "openSections": "Settings sections",
+    "sections": {
+      "builds": "p4d builds"
+    }
+  },
+  "builds": {
+    "title": "p4d builds",
+    "text": "Every build is kept compressed in the archive. The builds that servers run are also extracted, ready to run.",
+    "loadError": "The builds could not be loaded: {message}",
+    "empty": "The archive is empty. Fetch a build from Perforce, or import one from your computer.",
+    "headers": {
+      "version": "Version",
+      "source": "Source",
+      "size": "Archive",
+      "usedBy": "Used by",
+      "addedAt": "Added",
+      "protected": "Protected"
+    },
+    "sources": {
+      "Ftp": "Downloaded",
+      "Imported": "Imported"
+    },
+    "extracted": "extracted",
+    "notArchived": "Not archived yet",
+    "unused": "Unused",
+    "protectHint": "The retention policy never removes a protected build.",
+    "protectError": "The build could not be changed: {message}",
+    "inUse": "This build cannot be deleted while a server uses it.",
+    "fetch": "Fetch from Perforce",
+    "downloadError": "The last fetch from Perforce failed: {message}",
+    "deleted": "p4d {version} is deleted.",
+    "imported": "p4d {version} is in the archive.",
+    "downloading": "The manager is fetching the current build of {release} from Perforce."
+  },
+  "buildPolicy": {
+    "title": "Archive policy",
+    "autoDownload": "Download new builds automatically",
+    "autoDownloadHint": "The manager checks Perforce for new builds of the chosen releases.",
+    "interval": "Check every",
+    "intervalSuffix": "hours",
+    "scope": "Releases to download",
+    "scopes": {
+      "AllReleases": "All releases",
+      "SelectedReleases": "Selected releases"
+    },
+    "releases": "Releases",
+    "releasesHint": "Every new patch of these releases is downloaded.",
+    "keepAll": "Keep every build",
+    "keepLatest": "Builds kept per release",
+    "keepLatestHint": "The newest ones. The builds that servers use and the protected ones are always kept.",
+    "saved": "The archive policy is saved.",
+    "error": "The policy could not be saved: {message}",
+    "loadError": "The policy could not be loaded: {message}",
+    "lastCheck": "Last check: {date}",
+    "neverChecked": "Never checked",
+    "nextCheck": "Next check: {date}",
+    "checkError": "The last check failed: {message}",
+    "idle": "Idle",
+    "checking": "Checking Perforce for new builds…",
+    "rules": {
+      "interval": "Enter a number of hours between 1 and 720.",
+      "releases": "Select at least one release.",
+      "keep": "Keep at least one build."
+    }
+  },
+  "fetches": {
+    "title": "Fetching from Perforce",
+    "states": {
+      "Queued": "Waiting for its turn",
+      "Checking": "Looking for the current build",
+      "Downloading": "Downloading {file}",
+      "Compressing": "Compressing into the archive"
+    }
+  },
+  "importBuild": {
+    "title": "Import a p4d build",
+    "text": "The manager runs p4d to read its version and build: it must be a p4d for the platform of the manager.",
+    "files": "p4d and p4",
+    "package": "Server package",
+    "p4d": "p4d executable",
+    "p4": "p4 executable",
+    "packageFile": "helix-core-server.tgz",
+    "packageHint": "The server package of Perforce, or any tar archive that holds p4d and p4.",
+    "compressing": "The build is compressed before it is added: this can take a minute.",
+    "error": "The build could not be imported: {message}",
+    "rules": {
+      "fileRequired": "Choose a file."
+    }
+  },
+  "downloadBuild": {
+    "title": "Fetch a p4d build from Perforce",
+    "text": "The manager downloads the current build of the release from Perforce and keeps it in its archive. Perforce only offers the latest patch of each release.",
+    "submit": "Fetch",
+    "alreadyFetching": "Already in the queue",
+    "release": "Release",
+    "error": "The download could not begin: {message}"
+  },
+  "deleteBuild": {
+    "title": "Delete p4d {version}?",
+    "textFtp": "Perforce may no longer offer this build: once deleted, it may be gone for good.",
+    "textImported": "This build was imported: only a new import brings it back.",
+    "error": "The build could not be deleted: {message}"
   },
   "notFound": {
     "title": "Page not found",

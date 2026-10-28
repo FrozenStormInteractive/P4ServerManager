@@ -18,5 +18,10 @@ namespace P4ServerManager.Cli.Json;
 [JsonSerializable(typeof(OperationSnapshot))]
 [JsonSerializable(typeof(InstanceSelectionRequest))]
 [JsonSerializable(typeof(IReadOnlyList<InstanceActionResult>))]
+[JsonSerializable(typeof(IReadOnlyList<BuildDto>))]
+[JsonSerializable(typeof(DownloadBuildRequest))]
+[JsonSerializable(typeof(UpdateBuildRequest))]
+[JsonSerializable(typeof(BuildArchivePolicyDto))]
+[JsonSerializable(typeof(BuildArchiveStatusDto))]
 [JsonSerializable(typeof(ApiProblem))]
 internal sealed partial class CliJsonContext : JsonSerializerContext;
