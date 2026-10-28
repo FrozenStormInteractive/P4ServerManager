@@ -33,11 +33,14 @@ public sealed class P4AdminSession
         this.superUser = superUser;
         this.p4Path = p4Path;
 
-        connection = ["-p", $"{(instance.Ssl ? "ssl:" : string.Empty)}localhost:{instance.Port}", "-u", superUser.Name];
-        if (instance.Unicode)
-        {
-            connection.AddRange(["-C", "utf8"]);
-        }
+        // The character set is always given: otherwise p4 falls back to P4CHARSET from the environment or, on Windows,
+        // the registry, and a Unicode one makes a server not in Unicode mode refuse every command.
+        connection =
+        [
+            "-p", $"{(instance.Ssl ? "ssl:" : string.Empty)}localhost:{instance.Port}",
+            "-u", superUser.Name,
+            "-C", instance.Unicode ? "utf8" : "none",
+        ];
         environment = new Dictionary<string, string>
         {
             ["P4CONFIG"] = ".p4config-unused",
