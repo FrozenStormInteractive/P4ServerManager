@@ -103,6 +103,12 @@ describe('InstanceDetailsPage', () => {
     ])
   })
 
+  it('offers nothing while a health check holds the instance', async () => {
+    const buttons = await mountWith('CheckingHealth')
+
+    expect(buttons.filter(button => !button.disabled)).toEqual([])
+  })
+
   it('offers to edit and delete a failed instance', async () => {
     expect(await mountWith('Stopped', 'Failed')).toEqual([
       { text: 'Start', loading: false, disabled: true },

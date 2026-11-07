@@ -53,6 +53,27 @@ public static class ContractMappings
                 .ToList());
     }
 
+    /// <summary>
+    /// A run that is not in progress, or one as it begins: only the runner knows the progress.
+    /// </summary>
+    /// <param name="run">The run, with its <see cref="HealthCheckRun.Findings"/> loaded.</param>
+    public static HealthCheckRunDto ToDto(this HealthCheckRun run)
+    {
+        return new HealthCheckRunDto(
+            run.Id,
+            run.InstanceId,
+            run.Status,
+            run.Checks,
+            run.P4dVersion,
+            run.StartedAt,
+            run.FinishedAt,
+            run.Error,
+            run.HasFixJournal,
+            null,
+            run.Findings.Select(f => new HealthCheckFindingDto(f.Check, f.Table, f.Message)).ToList(),
+            run.ReportHidden);
+    }
+
     public static BuildArchivePolicyDto ToDto(this BuildArchivePolicy policy)
     {
         return new BuildArchivePolicyDto

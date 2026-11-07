@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace P4ServerManager.Daemon.Services.Processes;
 
@@ -38,8 +39,8 @@ public sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRunne
 
         try
         {
-            Task<string> standardOutput = process.StandardOutput.ReadToEndAsync(timeout.Token);
-            Task<string> standardError = process.StandardError.ReadToEndAsync(timeout.Token);
+            Task<string> standardOutput = ReadAsync(process.StandardOutput, command.OnOutputLine, timeout.Token);
+            Task<string> standardError = ReadAsync(process.StandardError, command.OnErrorLine, timeout.Token);
 
             if (command.StandardInput is not null)
             {
@@ -60,6 +61,25 @@ public sealed class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRunne
             throw new TimeoutException($"{Path.GetFileName(command.FileName)} did not finish in time.");
         }
     }
+
+    private static async Task<string> ReadAsync(
+        StreamReader reader,
+        Func<string, Task>? onLine,
+        CancellationToken cancellationToken)
+    {
+        if (onLine is null)
+        {
+            return await reader.ReadToEndAsync(cancellationToken);
+        }
+
+        StringBuilder text = new();
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            text.AppendLine(line);
+            await onLine(line);
+        }
+        return text.ToString();
+    }
 }
 
 /// <summary>
@@ -75,12 +95,18 @@ public interface IProcessRunner
 /// <param name="StandardInput">Text written to the standard input. It is never logged: it may hold a password.</param>
 /// <param name="Environment">Variables added to the environment of the process.</param>
 /// <param name="Timeout">Time after which the process is killed.</param>
+/// <param name="OnOutputLine">
+/// Called with each line of the standard output as it comes. Both handlers may run at the same time.
+/// </param>
+/// <param name="OnErrorLine">Called with each line of the error output as it comes.</param>
 public sealed record ProcessCommand(
     string FileName,
     IReadOnlyList<string> Arguments,
     string? StandardInput = null,
     IReadOnlyDictionary<string, string>? Environment = null,
-    TimeSpan? Timeout = null);
+    TimeSpan? Timeout = null,
+    Func<string, Task>? OnOutputLine = null,
+    Func<string, Task>? OnErrorLine = null);
 
 public sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError)
 {

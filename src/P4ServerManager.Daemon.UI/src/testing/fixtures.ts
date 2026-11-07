@@ -1,5 +1,5 @@
 // Types
-import type { Build, BuildArchiveStatus, Instance, OperationSnapshot } from '@/api/types'
+import type { Build, BuildArchiveStatus, HealthCheckRun, Instance, OperationSnapshot } from '@/api/types'
 
 export function createInstance (overrides: Partial<Instance> = {}): Instance {
   return {
@@ -72,6 +72,24 @@ export function createArchiveStatus (overrides: Partial<BuildArchiveStatus> = {}
     lastDownloadError: null,
     checking: false,
     fetches: [],
+    ...overrides,
+  }
+}
+
+export function createHealthCheckRun (instanceId: string, overrides: Partial<HealthCheckRun> = {}): HealthCheckRun {
+  return {
+    id: '8b1f5c2e-6d0a-4e7b-9c3d-2a4f1e0b7c11',
+    instanceId,
+    status: 'Healthy',
+    checks: ['Validate', 'CrossCheck'],
+    p4dVersion: '2026.1/3089746',
+    startedAt: '2026-11-01T00:00:00.000Z',
+    finishedAt: '2026-11-01T00:02:05.000Z',
+    error: null,
+    hasFixJournal: false,
+    progress: null,
+    findings: [],
+    reportHidden: false,
     ...overrides,
   }
 }

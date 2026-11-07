@@ -134,6 +134,56 @@ internal sealed class DaemonClient(HttpClient httpClient, string socketPath) : I
         return await ReadAsync(response, Json.OperationSnapshot, cancellationToken);
     }
 
+    public Task<IReadOnlyList<HealthCheckRunDto>> GetHealthChecksAsync(Guid instanceId, CancellationToken cancellationToken)
+    {
+        return SendAsync(
+            HttpMethod.Get,
+            $"api/instances/{instanceId}/health-checks",
+            Json.IReadOnlyListHealthCheckRunDto,
+            cancellationToken);
+    }
+
+    public Task<HealthCheckRunDto> GetHealthCheckAsync(Guid instanceId, Guid id, CancellationToken cancellationToken)
+    {
+        return SendAsync(
+            HttpMethod.Get,
+            $"api/instances/{instanceId}/health-checks/{id}",
+            Json.HealthCheckRunDto,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Begins a health check of an instance. It goes on in the daemon: follow it with <see cref="GetHealthCheckAsync"/>.
+    /// </summary>
+    public Task<HealthCheckRunDto> StartHealthCheckAsync(
+        Guid instanceId,
+        StartHealthCheckRequest request,
+        CancellationToken cancellationToken)
+    {
+        return SendAsync(
+            HttpMethod.Post,
+            $"api/instances/{instanceId}/health-checks",
+            Json.HealthCheckRunDto,
+            cancellationToken,
+            JsonContent.Create(request, Json.StartHealthCheckRequest));
+    }
+
+    public async Task CancelHealthCheckAsync(Guid instanceId, Guid id, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(
+            new HttpRequestMessage(HttpMethod.Post, $"api/instances/{instanceId}/health-checks/{id}/cancel"),
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+    }
+
+    public async Task DeleteHealthCheckAsync(Guid instanceId, Guid id, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(
+            new HttpRequestMessage(HttpMethod.Delete, $"api/instances/{instanceId}/health-checks/{id}"),
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+    }
+
     public Task<IReadOnlyList<BuildDto>> GetBuildsAsync(CancellationToken cancellationToken)
     {
         return SendAsync(HttpMethod.Get, "api/p4d/builds", Json.IReadOnlyListBuildDto, cancellationToken);

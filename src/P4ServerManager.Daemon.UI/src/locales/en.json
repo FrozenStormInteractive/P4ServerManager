@@ -37,6 +37,7 @@
     "restarting": "Restarting",
     "upgrading": "Upgrading",
     "convertingToUnicode": "Converting to Unicode",
+    "checkingHealth": "Checking health",
     "deleting": "Deleting",
     "unknown": "Unknown"
   },
@@ -125,7 +126,97 @@
     "lastError": "Last error",
     "autoStart": "Start with the manager",
     "autoStartHint": "Starts the server whenever the manager starts, unless it already runs.",
-    "autoStartError": "The setting could not be saved: {message}"
+    "autoStartError": "The setting could not be saved: {message}",
+    "openSections": "Instance sections",
+    "sections": {
+      "overview": "Overview",
+      "health": "Health"
+    }
+  },
+  "health": {
+    "title": "Health",
+    "run": "Run a check",
+    "cancelRun": "Cancel the check",
+    "loadError": "The reports could not be loaded: {message}",
+    "state": {
+      "running": "Check in progress",
+      "healthy": "Healthy",
+      "problems": "Problems found",
+      "unknown": "Not checked yet"
+    },
+    "stateText": {
+      "unknown": "Run a check to learn the state of the database.",
+      "healthy": "As of the last complete check, on {date}, no problems are known.",
+      "problems": "As of the last complete check, on {date}, {count} problem is known. | As of the last complete check, on {date}, {count} problems are known.",
+      "partial": "Never checked: {checks}.",
+      "newerIncomplete": "A later check did not run to its end: see the reports below.",
+      "advice": "Do not replay the fix journal without the advice of Perforce Support. Save a checkpoint and your archives before any repair."
+    },
+    "progress": {
+      "reached": "{count} checked",
+      "estimate": "The progress counts tables, not time: it can stay long on a large table."
+    },
+    "checks": {
+      "Validate": "Table validation",
+      "CrossCheck": "Consistency between tables"
+    },
+    "checkHints": {
+      "Validate": "Reads the structure of each table of the database (p4d -xv).",
+      "CrossCheck": "Compares the tables that refer to each other (p4d -xx)."
+    },
+    "findings": {
+      "title": "Problems",
+      "titleSoFar": "Problems found so far",
+      "none": "No problems found so far.",
+      "general": "General"
+    },
+    "fixJournal": "Download the fix journal",
+    "history": {
+      "title": "Reports",
+      "empty": "No reports yet.",
+      "started": "Started",
+      "status": "Result",
+      "checks": "Checks",
+      "duration": "Duration",
+      "problems": "Problems",
+      "version": "p4d",
+      "view": "View the report",
+      "delete": "Delete the report"
+    },
+    "statuses": {
+      "Running": "Running",
+      "Healthy": "Healthy",
+      "ProblemsFound": "Problems found",
+      "Failed": "Failed",
+      "Canceled": "Canceled",
+      "Interrupted": "Interrupted"
+    },
+    "runDialog": {
+      "title": "Check {name}",
+      "text": "The checks only read the database: nothing is repaired or changed.",
+      "warningRunning": "The server is stopped before the check, which disconnects its users, then started again at the end. On a large database this can take hours, so prefer a quiet time.",
+      "warningStopped": "The server is stopped, and it cannot be started until the check ends.",
+      "error": "The check could not begin: {message}",
+      "submit": "Run"
+    },
+    "reportDialog": {
+      "title": "Report of {date}",
+      "version": "p4d version",
+      "started": "Started",
+      "finished": "Finished",
+      "checks": "Checks",
+      "error": "Error"
+    },
+    "deleteDialog": {
+      "title": "Delete this report?",
+      "text": "The report of {date} leaves the list, and this cannot be undone. If the health of the server rests on it, the state and the fix journal stay until a later check replaces them.",
+      "error": "The report could not be deleted: {message}"
+    },
+    "notifications": {
+      "healthy": "{name} is healthy: the check found no problems.",
+      "problems": "The check of {name} found {count} problem. | The check of {name} found {count} problems.",
+      "failed": "The check of {name} could not run to its end."
+    }
   },
   "operations": {
     "kinds": {

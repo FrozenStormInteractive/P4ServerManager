@@ -51,6 +51,86 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.ToTable("BuildArchivePolicies");
                 });
 
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.HealthCheckFinding", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Check")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Table")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("HealthCheckFindings");
+                });
+
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.HealthCheckRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.PrimitiveCollection<string>("Checks")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CrossCheckPairs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HasFixJournal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("P4dVersion")
+                        .IsRequired()
+                        .HasMaxLength(33)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ReportHidden")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ServerRestartPending")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstanceId");
+
+                    b.ToTable("HealthCheckRuns");
+                });
+
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.P4ServerBuild", b =>
                 {
                     b.Property<Guid>("Id")
@@ -179,6 +259,24 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.ToTable("Instances");
                 });
 
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.HealthCheckFinding", b =>
+                {
+                    b.HasOne("P4ServerManager.Daemon.Database.Entities.HealthCheckRun", null)
+                        .WithMany("Findings")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.HealthCheckRun", b =>
+                {
+                    b.HasOne("P4ServerManager.Daemon.Database.Entities.P4ServerInstance", null)
+                        .WithMany()
+                        .HasForeignKey("InstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.P4ServerInstance", b =>
                 {
                     b.HasOne("P4ServerManager.Daemon.Database.Entities.P4ServerBuild", "Build")
@@ -187,6 +285,11 @@ namespace P4ServerManager.Daemon.Database.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Build");
+                });
+
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.HealthCheckRun", b =>
+                {
+                    b.Navigation("Findings");
                 });
 
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.P4ServerBuild", b =>

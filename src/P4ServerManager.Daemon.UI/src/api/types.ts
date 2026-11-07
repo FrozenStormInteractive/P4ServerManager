@@ -14,6 +14,7 @@ export type RuntimeStatus
     | 'Deleting'
     | 'Upgrading'
     | 'ConvertingToUnicode'
+    | 'CheckingHealth'
 
 export interface Instance {
   id: string
@@ -310,4 +311,59 @@ export interface ProblemDetails {
   status?: number
   detail?: string
   errors?: Record<string, string[]>
+}
+
+/**
+ * `Validate` runs `p4d -xv`, `CrossCheck` runs `p4d -xx`.
+ */
+export type HealthCheckKind = 'Validate' | 'CrossCheck'
+
+/**
+ * `Healthy` and `ProblemsFound` tell the health of the instance. The others say nothing of its database: a check could
+ * not run (`Failed`), or was cut short (`Canceled`, `Interrupted`).
+ */
+export type HealthCheckStatus = 'Running' | 'Healthy' | 'ProblemsFound' | 'Failed' | 'Canceled' | 'Interrupted'
+
+export interface HealthCheckFinding {
+  check: HealthCheckKind
+  /**
+   * The table or the pair of tables, when p4d names it.
+   */
+  table: string | null
+  message: string
+}
+
+export interface HealthCheckProgress {
+  check: HealthCheckKind
+  /**
+   * The table or the pair of tables the check is on.
+   */
+  item: string | null
+  itemsChecked: number
+  /**
+   * Progress of the whole run. It counts tables, not time, from an estimate of their number.
+   */
+  percent: number
+}
+
+/**
+ * A health check of an instance, running or kept as a report.
+ */
+export interface HealthCheckRun {
+  id: string
+  instanceId: string
+  status: HealthCheckStatus
+  checks: HealthCheckKind[]
+  p4dVersion: string
+  startedAt: string
+  finishedAt: string | null
+  error: string | null
+  hasFixJournal: boolean
+  progress: HealthCheckProgress | null
+  findings: HealthCheckFinding[]
+  /**
+   * The report was deleted while it still tells the health of the instance: it is left out of the list of reports. The
+   * daemon deletes it once a later check replaces it.
+   */
+  reportHidden: boolean
 }

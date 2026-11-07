@@ -12,6 +12,10 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
 
     public DbSet<BuildArchivePolicy> BuildArchivePolicies => Set<BuildArchivePolicy>();
 
+    public DbSet<HealthCheckRun> HealthCheckRuns => Set<HealthCheckRun>();
+
+    public DbSet<HealthCheckFinding> HealthCheckFindings => Set<HealthCheckFinding>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<P4ServerInstance>(instance =>
@@ -38,6 +42,26 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
         {
             policy.Property(p => p.Id).ValueGeneratedNever();
             policy.Property(p => p.Scope).HasConversion<string>().HasMaxLength(16);
+        });
+
+        modelBuilder.Entity<HealthCheckRun>(run =>
+        {
+            run.Property(r => r.Status).HasConversion<string>().HasMaxLength(16);
+            run.PrimitiveCollection(r => r.Checks).ElementType().HasConversion<string>();
+            run.HasIndex(r => r.InstanceId);
+            run.HasOne<P4ServerInstance>()
+                .WithMany()
+                .HasForeignKey(r => r.InstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            run.HasMany(r => r.Findings)
+                .WithOne()
+                .HasForeignKey(f => f.RunId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<HealthCheckFinding>(finding =>
+        {
+            finding.Property(f => f.Check).HasConversion<string>().HasMaxLength(16);
         });
     }
 }

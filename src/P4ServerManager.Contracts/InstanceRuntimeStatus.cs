@@ -2,7 +2,7 @@ namespace P4ServerManager.Contracts;
 
 /// <summary>
 /// Whether the p4d process of an instance runs, or is being started, stopped, restarted, upgraded, converted to Unicode
-/// mode or deleted by the daemon.
+/// mode, checked or deleted by the daemon.
 /// </summary>
 public enum InstanceRuntimeStatus
 {
@@ -34,12 +34,18 @@ public enum InstanceRuntimeStatus
     /// Moved to Unicode mode: stopped, its database saved and switched, then started again if it ran.
     /// </summary>
     ConvertingToUnicode,
+
+    /// <summary>
+    /// Its database is being checked: stopped, checked, then started again if it ran.
+    /// </summary>
+    CheckingHealth,
 }
 
 public static class InstanceRuntimeStatusExtensions
 {
     /// <summary>
-    /// Whether a start, a stop, a restart, an upgrade, a conversion to Unicode mode or a deletion is in progress.
+    /// Whether a start, a stop, a restart, an upgrade, a conversion to Unicode mode, a health check or a deletion is in
+    /// progress.
     /// </summary>
     public static bool IsTransitional(this InstanceRuntimeStatus status)
     {
@@ -48,6 +54,7 @@ public static class InstanceRuntimeStatusExtensions
             or InstanceRuntimeStatus.Restarting
             or InstanceRuntimeStatus.Deleting
             or InstanceRuntimeStatus.Upgrading
-            or InstanceRuntimeStatus.ConvertingToUnicode;
+            or InstanceRuntimeStatus.ConvertingToUnicode
+            or InstanceRuntimeStatus.CheckingHealth;
     }
 }

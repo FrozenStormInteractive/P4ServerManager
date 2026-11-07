@@ -53,4 +53,28 @@ public sealed class InstanceNotifier(
             logger.LogWarning(exception, "Could not push the operation on instance {Id}", snapshot.InstanceId);
         }
     }
+
+    public async Task HealthCheckChangedAsync(HealthCheckRunDto run)
+    {
+        try
+        {
+            await hubContext.Clients.All.HealthCheckUpdated(run);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not push the health check of instance {Id}", run.InstanceId);
+        }
+    }
+
+    public async Task HealthCheckDeletedAsync(Guid instanceId, Guid runId)
+    {
+        try
+        {
+            await hubContext.Clients.All.HealthCheckDeleted(instanceId, runId);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not push the deletion of a health check of instance {Id}", instanceId);
+        }
+    }
 }

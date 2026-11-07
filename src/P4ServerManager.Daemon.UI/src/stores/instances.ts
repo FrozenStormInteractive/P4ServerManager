@@ -2,6 +2,7 @@
 import type { InstancesHub } from '@/api/hub'
 import type {
   CreateInstanceRequest,
+  HealthCheckRun,
   Instance,
   InstanceAction,
   InstanceActionResult,
@@ -18,6 +19,7 @@ import { computed, ref } from 'vue'
 import { connectInstancesHub } from '@/api/hub'
 import * as api from '@/api/instances'
 import i18n from '@/plugins/i18n'
+import { useHealthChecksStore } from '@/stores/healthChecks'
 import { useNotificationsStore } from '@/stores/notifications'
 
 /**
@@ -46,6 +48,7 @@ export const useInstancesStore = defineStore('instances', () => {
   function removeInstance (id: string) {
     delete instances.value[id]
     delete operations.value[id]
+    useHealthChecksStore().removeInstance(id)
   }
 
   function setOperation (snapshot: OperationSnapshot) {
@@ -88,6 +91,45 @@ export const useInstancesStore = defineStore('instances', () => {
       upToDate ? t('upgradeInstance.upToDate', params) : t('upgradeInstance.upgraded', params),
       upToDate ? 'info' : 'success',
     )
+  }
+
+  function setHealthCheck (run: HealthCheckRun) {
+    const healthChecks = useHealthChecksStore()
+    const wasRunning = healthChecks.getRuns(run.instanceId).some(r => r.id === run.id && r.status === 'Running')
+    healthChecks.setRun(run)
+    if (wasRunning && run.status !== 'Running') {
+      notifyHealthCheckEnded(run)
+    }
+  }
+
+  /**
+   * Tells every client how a health check ended: it may run for hours, with no one looking at its page.
+   */
+  function notifyHealthCheckEnded (run: HealthCheckRun) {
+    const name = instances.value[run.instanceId]?.name
+    if (!name) {
+      return
+    }
+    const { t } = i18n.global
+    const notifications = useNotificationsStore()
+    switch (run.status) {
+      case 'Healthy': {
+        notifications.notify(t('health.notifications.healthy', { name }), 'success')
+        break
+      }
+      case 'ProblemsFound': {
+        const count = run.findings.length
+        notifications.notify(t('health.notifications.problems', { name, count }, count), 'error')
+        break
+      }
+      case 'Failed': {
+        notifications.notify(t('health.notifications.failed', { name }), 'warning')
+        break
+      }
+      default: {
+        break
+      }
+    }
   }
 
   async function fetchAll () {
@@ -171,7 +213,12 @@ export const useInstancesStore = defineStore('instances', () => {
       onInstanceUpdated: upsertInstance,
       onInstanceDeleted: removeInstance,
       onOperationProgress: setOperation,
-      onConnected: () => void fetchAll(),
+      onHealthCheckUpdated: setHealthCheck,
+      onHealthCheckDeleted: (instanceId, runId) => useHealthChecksStore().removeRun(instanceId, runId),
+      onConnected: () => {
+        void fetchAll()
+        void useHealthChecksStore().refresh()
+      },
     })
   }
 
@@ -191,6 +238,7 @@ export const useInstancesStore = defineStore('instances', () => {
     upsertInstance,
     removeInstance,
     setOperation,
+    setHealthCheck,
     fetchAll,
     fetchOperation,
     create,

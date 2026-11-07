@@ -19,4 +19,8 @@ public interface IInstancesClient
     Task InstanceDeleted(Guid instanceId);
 
     Task OperationProgress(OperationSnapshot snapshot);
+
+    Task HealthCheckUpdated(HealthCheckRunDto run);
+
+    Task HealthCheckDeleted(Guid instanceId, Guid runId);
 }

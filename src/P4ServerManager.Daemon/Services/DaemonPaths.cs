@@ -120,6 +120,15 @@ public sealed class DaemonPaths
         return Path.Combine(GetInstanceDirectory(instanceId), $"checkpoint-before-unicode-{timestamp}.gz");
     }
 
+    /// <summary>
+    /// Fix journal of a health check. It is not the <c>jnl.fix</c> of the root: it would replace the one an earlier
+    /// check, or an administrator, left there.
+    /// </summary>
+    public string GetHealthCheckFixJournalPath(Guid instanceId, Guid runId)
+    {
+        return Path.Combine(GetInstanceDirectory(instanceId), "health-checks", $"{runId:N}.jnl.fix");
+    }
+
     public string GetPidFilePath(Guid instanceId)
     {
         return Path.Combine(GetInstanceDirectory(instanceId), "p4d.pid");

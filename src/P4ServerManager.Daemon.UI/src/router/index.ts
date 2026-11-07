@@ -24,9 +24,23 @@ export const routes: RouteRecordRaw[] = [
   },
   {
     path: '/instances/:id',
-    name: 'instance',
-    component: () => import('@/pages/InstanceDetailsPage.vue'),
+    component: () => import('@/pages/InstancePage.vue'),
     props: true,
+    // An instance has one page per section, listed by the instance page.
+    children: [
+      {
+        path: '',
+        name: 'instance',
+        component: () => import('@/pages/InstanceDetailsPage.vue'),
+        props: true,
+      },
+      {
+        path: 'health',
+        name: 'instance-health',
+        component: () => import('@/pages/InstanceHealthPage.vue'),
+        props: true,
+      },
+    ],
   },
   {
     path: '/settings',

@@ -21,6 +21,7 @@ internal static class InstanceCommand
         command.Subcommands.Add(SetInstanceCommand.Create(services));
         command.Subcommands.Add(UpgradeInstanceCommand.Create(services));
         command.Subcommands.Add(ConvertInstanceToUnicodeCommand.Create(services));
+        command.Subcommands.Add(InstanceHealthCommand.Create(services));
         command.Subcommands.Add(DeleteInstanceCommand.Create(services));
         command.Subcommands.Add(InstanceOperationCommand.Create(services));
         return command;

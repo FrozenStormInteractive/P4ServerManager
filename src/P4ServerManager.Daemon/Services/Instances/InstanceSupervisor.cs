@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.HealthChecks;
 using P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
 using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
@@ -15,13 +16,14 @@ namespace P4ServerManager.Daemon.Services.Instances;
 /// <summary>
 /// Keeps track of the p4d processes. At startup it adopts the instances that still run, without restarting them, then
 /// starts the stopped ones marked for auto-start and checks them periodically. It also starts, stops, upgrades, converts
-/// to Unicode mode and deletes them on request.
+/// to Unicode mode, checks the health of and deletes them on request.
 /// </summary>
 public sealed class InstanceSupervisor(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
     P4ServerLauncher launcher,
     InstanceUpgrader upgrader,
     InstanceUnicodeConverter unicodeConverter,
+    HealthCheckRunner healthCheckRunner,
     InstanceRuntimeRegistry runtimeRegistry,
     OperationTracker operationTracker,
     InstanceNotifier notifier,
@@ -34,9 +36,13 @@ public sealed class InstanceSupervisor(
     // The lock of a deleted instance is kept: a caller may still wait on it.
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> instanceLocks = new();
 
+    // The servers a health check left stopped when the previous daemon ended. They start with the others.
+    private IReadOnlyList<Guid> serversLeftStopped = [];
+
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
         await AdoptAsync(cancellationToken);
+        serversLeftStopped = await healthCheckRunner.EndLeftRunsAsync(cancellationToken);
         await base.StartAsync(cancellationToken);
     }
 
@@ -227,6 +233,56 @@ public sealed class InstanceSupervisor(
     }
 
     /// <summary>
+    /// Begins a health check of an instance. It runs in the background, once this returns: p4d is stopped if it runs, its
+    /// database is checked, then p4d is started again if it ran. The instance stays
+    /// <see cref="InstanceRuntimeStatus.CheckingHealth"/> until it ends, so that nothing starts p4d or changes the database
+    /// meanwhile. Only a cancellation of the run or the shutdown of the daemon stops it.
+    /// </summary>
+    /// <param name="instanceId">Identifier of the instance.</param>
+    /// <param name="checks">The checks to run.</param>
+    /// <param name="cancellationToken">Aborts the wait for the instance to be free.</param>
+    /// <returns>The run, once it has begun.</returns>
+    /// <exception cref="InstanceConflictException">
+    /// The instance is not ready, or another operation is in progress.
+    /// </exception>
+    public async Task<HealthCheckRunDto> StartHealthCheckAsync(
+        Guid instanceId,
+        IReadOnlyList<HealthCheckKind> checks,
+        CancellationToken cancellationToken)
+    {
+        SemaphoreSlim? instanceLock = await AcquireLockAsync(instanceId, cancellationToken);
+        DaemonDbContext? db = null;
+        try
+        {
+            db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            P4ServerInstance instance = await FindAsync(db, instanceId, cancellationToken);
+            EnsureReady(instance);
+
+            HealthCheckRunDto run = await healthCheckRunner.BeginAsync(instance, checks, cancellationToken);
+            runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.CheckingHealth);
+            await notifier.InstanceChangedAsync(instance);
+
+            // The check outlives the request: it releases the instance and the context once it ends.
+            _ = RunInBackgroundAsync(
+                db,
+                instance,
+                instanceLock,
+                stoppingToken => Task.Run(() => healthCheckRunner.RunAsync(instance, stoppingToken), CancellationToken.None));
+            instanceLock = null;
+            db = null;
+            return run;
+        }
+        finally
+        {
+            if (db is not null)
+            {
+                await db.DisposeAsync();
+            }
+            instanceLock?.Release();
+        }
+    }
+
+    /// <summary>
     /// Stops the p4d of an instance if it runs, then removes the instance. The instance stays
     /// <see cref="InstanceRuntimeStatus.Deleting"/> meanwhile. A failed instance can be deleted, but not one that is
     /// being provisioned. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
@@ -343,7 +399,8 @@ public sealed class InstanceSupervisor(
     }
 
     /// <summary>
-    /// Starts the ready instances marked for auto-start whose p4d was not adopted. It runs once, after the adoption and
+    /// Starts the ready instances marked for auto-start whose p4d was not adopted, and the ones a health check left
+    /// stopped when the previous daemon ended. It runs once, after the adoption and
     /// outside the startup of the host, so that the API answers while p4d starts. A failed start is logged and kept as
     /// the last error of the instance; it does not stop the other starts.
     /// </summary>
@@ -353,7 +410,7 @@ public sealed class InstanceSupervisor(
         await using (DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(stoppingToken))
         {
             instanceIds = await db.Instances
-                .Where(i => i.State == P4ServerInstanceState.Ready && i.AutoStart)
+                .Where(i => i.State == P4ServerInstanceState.Ready && (i.AutoStart || serversLeftStopped.Contains(i.Id)))
                 .Select(i => i.Id)
                 .ToListAsync(stoppingToken);
         }
