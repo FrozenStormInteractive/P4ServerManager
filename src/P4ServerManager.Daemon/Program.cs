@@ -15,6 +15,7 @@ using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Builds;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
+using P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
 using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
@@ -64,6 +65,7 @@ builder.Services.AddSingleton<OperationTracker>();
 builder.Services.AddSingleton<OperationRunner>();
 builder.Services.AddInstanceProvisioningServices();
 builder.Services.AddInstanceUpgradeServices();
+builder.Services.AddInstanceUnicodeConversionServices();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 builder.Services.AddControllers(options =>

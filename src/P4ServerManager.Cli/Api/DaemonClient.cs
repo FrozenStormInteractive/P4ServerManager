@@ -84,6 +84,15 @@ internal sealed class DaemonClient(HttpClient httpClient, string socketPath) : I
     }
 
     /// <summary>
+    /// Begins the conversion of an instance to Unicode mode. It goes on in the daemon: follow it with
+    /// <see cref="GetOperationAsync"/>.
+    /// </summary>
+    public Task<InstanceDto> ConvertInstanceToUnicodeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return SendAsync(HttpMethod.Post, $"api/instances/{id}/convert-to-unicode", Json.InstanceDto, cancellationToken);
+    }
+
+    /// <summary>
     /// Starts, stops or restarts several instances at once.
     /// </summary>
     /// <param name="action">The action: <c>start</c>, <c>stop</c> or <c>restart</c>.</param>

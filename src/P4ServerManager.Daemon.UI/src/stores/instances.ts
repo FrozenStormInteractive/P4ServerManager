@@ -51,8 +51,23 @@ export const useInstancesStore = defineStore('instances', () => {
   function setOperation (snapshot: OperationSnapshot) {
     const previous = operations.value[snapshot.instanceId]
     operations.value[snapshot.instanceId] = snapshot
-    if (previous?.status === 'Running' && snapshot.status === 'Succeeded' && snapshot.kind === 'upgrade') {
-      notifyUpgraded(snapshot)
+    if (previous?.status === 'Running' && snapshot.status === 'Succeeded') {
+      if (snapshot.kind === 'upgrade') {
+        notifyUpgraded(snapshot)
+      } else if (snapshot.kind === 'convert-to-unicode') {
+        notifyConvertedToUnicode(snapshot)
+      }
+    }
+  }
+
+  /**
+   * Tells every client that a conversion to Unicode mode ended well. A failure is kept as the last error of the
+   * instance instead.
+   */
+  function notifyConvertedToUnicode (snapshot: OperationSnapshot) {
+    const instance = instances.value[snapshot.instanceId]
+    if (instance) {
+      useNotificationsStore().notify(i18n.global.t('convertToUnicode.converted', { name: instance.name }), 'success')
     }
   }
 
@@ -129,6 +144,13 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   /**
+   * Begins the conversion of the instance to Unicode mode. The hub tells its progress.
+   */
+  async function convertToUnicode (id: string) {
+    upsertInstance(await api.convertInstanceToUnicode(id))
+  }
+
+  /**
    * Starts, stops or restarts several instances, or all of them, and keeps the states returned by the daemon.
    */
   async function runAction (action: InstanceAction, selection: InstanceSelection): Promise<InstanceActionResult[]> {
@@ -177,6 +199,7 @@ export const useInstancesStore = defineStore('instances', () => {
     stop,
     restart,
     upgrade,
+    convertToUnicode,
     runAction,
     remove,
     connect,

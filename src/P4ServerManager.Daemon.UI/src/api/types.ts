@@ -13,6 +13,7 @@ export type RuntimeStatus
     | 'Restarting'
     | 'Deleting'
     | 'Upgrading'
+    | 'ConvertingToUnicode'
 
 export interface Instance {
   id: string

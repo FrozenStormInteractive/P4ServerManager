@@ -344,6 +344,37 @@ public sealed class InstancesController(
     }
 
     /// <summary>
+    /// Converts an instance to Unicode mode. It cannot be undone. The conversion runs in the background: it stops p4d if
+    /// it runs, saves a checkpoint to the folder of the instance, switches the database with <c>p4d -xi</c>, then starts
+    /// p4d again if it ran. The instance is <c>ConvertingToUnicode</c> meanwhile. Follow it with
+    /// <c>GET /api/instances/{id}/operation</c> or the <c>OperationProgress</c> event of the <c>/hubs/instances</c> hub.
+    /// p4d refuses metadata that is not valid UTF-8: the instance then stays as it was, started again if it ran, and the
+    /// error, which names the tables, is kept as its last error.
+    /// </summary>
+    /// <param name="id">Identifier of the instance.</param>
+    /// <param name="supervisor">Runs the conversion.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the conversion runs to its end: only the shutdown of the daemon cancels it, and
+    /// never while p4d switches the database.
+    /// </param>
+    /// <response code="202">The conversion has begun.</response>
+    /// <response code="404">No instance has this identifier.</response>
+    /// <response code="409">
+    /// The instance is not ready, another operation is in progress, or it already runs in Unicode mode.
+    /// </response>
+    [HttpPost("{id:guid}/convert-to-unicode")]
+    [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    public Task<ActionResult<InstanceDto>> ConvertInstanceToUnicode(
+        Guid id,
+        [FromServices] InstanceSupervisor supervisor,
+        CancellationToken cancellationToken)
+    {
+        return RunOperationAsync(() => supervisor.ConvertInstanceToUnicodeAsync(id, cancellationToken));
+    }
+
+    /// <summary>
     /// Starts the p4d of several instances in parallel, and waits until each one accepts connections or fails. An
     /// instance that already runs is skipped.
     /// </summary>

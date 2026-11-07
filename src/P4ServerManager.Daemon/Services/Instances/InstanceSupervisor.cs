@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
 using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
@@ -13,13 +14,14 @@ namespace P4ServerManager.Daemon.Services.Instances;
 
 /// <summary>
 /// Keeps track of the p4d processes. At startup it adopts the instances that still run, without restarting them, then
-/// starts the stopped ones marked for auto-start and checks them periodically. It also starts, stops, upgrades and
-/// deletes them on request.
+/// starts the stopped ones marked for auto-start and checks them periodically. It also starts, stops, upgrades, converts
+/// to Unicode mode and deletes them on request.
 /// </summary>
 public sealed class InstanceSupervisor(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
     P4ServerLauncher launcher,
     InstanceUpgrader upgrader,
+    InstanceUnicodeConverter unicodeConverter,
     InstanceRuntimeRegistry runtimeRegistry,
     OperationTracker operationTracker,
     InstanceNotifier notifier,
@@ -149,7 +151,67 @@ public sealed class InstanceSupervisor(
             await notifier.InstanceChangedAsync(instance);
 
             // The upgrade outlives the request: it releases the instance and the context once it ends.
-            _ = UpgradeAsync(context, instanceLock);
+            _ = RunInBackgroundAsync(
+                db,
+                instance,
+                instanceLock,
+                stoppingToken => upgrader.UpgradeAsync(context, stoppingToken));
+            instanceLock = null;
+            db = null;
+            return instance;
+        }
+        finally
+        {
+            if (db is not null)
+            {
+                await db.DisposeAsync();
+            }
+            instanceLock?.Release();
+        }
+    }
+
+    /// <summary>
+    /// Converts an instance to Unicode mode. It cannot be undone. The conversion runs in the background, once this
+    /// returns: the instance stays <see cref="InstanceRuntimeStatus.ConvertingToUnicode"/> until it ends, and its
+    /// operation tells its progress. Only the shutdown of the daemon cancels it, and never while p4d switches the
+    /// database.
+    /// </summary>
+    /// <param name="instanceId">Identifier of the instance.</param>
+    /// <param name="cancellationToken">Aborts the wait for the instance to be free.</param>
+    /// <returns>The instance, once its conversion has begun.</returns>
+    /// <exception cref="InstanceConflictException">
+    /// The instance is not ready, another operation is in progress, or it already runs in Unicode mode.
+    /// </exception>
+    public async Task<P4ServerInstance> ConvertInstanceToUnicodeAsync(
+        Guid instanceId,
+        CancellationToken cancellationToken)
+    {
+        SemaphoreSlim? instanceLock = await AcquireLockAsync(instanceId, cancellationToken);
+        DaemonDbContext? db = null;
+        try
+        {
+            db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            P4ServerInstance instance = await FindAsync(db, instanceId, cancellationToken);
+            EnsureReady(instance);
+            if (instance.Build is null)
+            {
+                throw new InstanceConflictException($"Instance {instance.Name} has no p4d build yet.");
+            }
+            if (instance.Unicode)
+            {
+                throw new InstanceConflictException($"Instance {instance.Name} already runs in Unicode mode.");
+            }
+
+            UnicodeConversionContext context = new(db, instance, launcher.IsRunning(instance));
+            runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.ConvertingToUnicode);
+            await notifier.InstanceChangedAsync(instance);
+
+            // The conversion outlives the request: it releases the instance and the context once it ends.
+            _ = RunInBackgroundAsync(
+                db,
+                instance,
+                instanceLock,
+                stoppingToken => unicodeConverter.ConvertAsync(context, stoppingToken));
             instanceLock = null;
             db = null;
             return instance;
@@ -321,35 +383,38 @@ public sealed class InstanceSupervisor(
     }
 
     /// <summary>
-    /// Runs an upgrade begun by <see cref="UpgradeInstanceAsync"/>, then reads the status back from the process and
-    /// saves the instance, whatever the outcome.
+    /// Runs an operation that outlives the request that began it, then reads the status back from the process and saves
+    /// the instance, whatever the outcome. It releases the instance and disposes of the context once it ends.
     /// </summary>
-    private async Task UpgradeAsync(UpgradeContext context, SemaphoreSlim instanceLock)
+    private async Task RunInBackgroundAsync(
+        DaemonDbContext db,
+        P4ServerInstance instance,
+        SemaphoreSlim instanceLock,
+        Func<CancellationToken, Task> operation)
     {
-        P4ServerInstance instance = context.Instance;
         try
         {
-            await upgrader.UpgradeAsync(context, lifetime.ApplicationStopping);
+            await operation(lifetime.ApplicationStopping);
         }
         catch (Exception exception)
         {
             // Any failure is caught: nothing awaits this task.
-            logger.LogWarning(exception, "The upgrade of instance {Name} was interrupted", instance.Name);
+            logger.LogWarning(exception, "The operation on instance {Name} was interrupted", instance.Name);
         }
 
         try
         {
             runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
-            await context.Db.SaveChangesAsync(CancellationToken.None);
+            await db.SaveChangesAsync(CancellationToken.None);
             await notifier.InstanceChangedAsync(instance);
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Could not save instance {Name} after its upgrade", instance.Name);
+            logger.LogError(exception, "Could not save instance {Name} after its operation", instance.Name);
         }
         finally
         {
-            await context.Db.DisposeAsync();
+            await db.DisposeAsync();
             instanceLock.Release();
         }
     }

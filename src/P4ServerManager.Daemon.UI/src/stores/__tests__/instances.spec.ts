@@ -84,6 +84,17 @@ describe('instances store', () => {
     })
   })
 
+  it('tells that the instance runs in Unicode mode at the end of its conversion', () => {
+    const store = useInstancesStore()
+    store.connect()
+    handlers.onInstanceUpdated(createInstance({ id: 'a', name: 'main', unicode: true }))
+    handlers.onOperationProgress(createSnapshot('a', { kind: 'convert-to-unicode', status: 'Running' }))
+
+    handlers.onOperationProgress(createSnapshot('a', { kind: 'convert-to-unicode', status: 'Succeeded' }))
+
+    expect(useNotificationsStore().queue).toEqual([{ text: 'main now runs in Unicode mode.', color: 'success' }])
+  })
+
   it('reloads the instances once connected, as events may have been missed', async () => {
     server.use(http.get('/api/instances', () => HttpResponse.json([createInstance({ id: 'c', name: 'reloaded' })])))
     const store = useInstancesStore()

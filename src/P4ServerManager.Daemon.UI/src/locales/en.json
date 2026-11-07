@@ -20,6 +20,7 @@
     "stop": "Stop",
     "restart": "Restart",
     "upgrade": "Upgrade",
+    "convertToUnicode": "Convert to Unicode",
     "delete": "Delete",
     "import": "Import",
     "dismiss": "Dismiss",
@@ -35,6 +36,7 @@
     "stopping": "Stopping",
     "restarting": "Restarting",
     "upgrading": "Upgrading",
+    "convertingToUnicode": "Converting to Unicode",
     "deleting": "Deleting",
     "unknown": "Unknown"
   },
@@ -129,7 +131,8 @@
     "kinds": {
       "provision": "Provisioning",
       "import": "Import",
-      "upgrade": "Upgrade"
+      "upgrade": "Upgrade",
+      "convert-to-unicode": "Conversion to Unicode"
     },
     "steps": {
       "resolve-build": "Get the p4d build",
@@ -145,7 +148,8 @@
       "save-checkpoint": "Save a checkpoint",
       "read-settings": "Read the server settings",
       "upgrade-database": "Upgrade the database",
-      "stop-server": "Stop the server"
+      "stop-server": "Stop the server",
+      "switch-to-unicode": "Switch to Unicode mode"
     },
     "skipped": "Skipped"
   },
@@ -223,6 +227,16 @@
     "error": "The upgrade could not begin: {message}",
     "upgraded": "{name} now runs p4d {version}.",
     "upToDate": "{name} already runs the latest build, p4d {version}. Nothing was changed."
+  },
+  "convertToUnicode": {
+    "title": "Convert {name} to Unicode?",
+    "text": "This cannot be undone: a server in Unicode mode cannot go back. A checkpoint of the database is saved to the folder of the instance first.",
+    "clients": "Clients then need a character set (P4CHARSET). Check your triggers and scripts too.",
+    "invalidMetadata": "If the metadata holds text that is not valid UTF-8, p4d refuses the conversion and names the tables. The server then stays as it was.",
+    "warningRunning": "The server is stopped during the conversion: its users are disconnected until it starts again.",
+    "warningStopped": "The server stays stopped.",
+    "error": "The conversion could not begin: {message}",
+    "converted": "{name} now runs in Unicode mode."
   },
   "deleteInstance": {
     "title": "Delete {name}?",

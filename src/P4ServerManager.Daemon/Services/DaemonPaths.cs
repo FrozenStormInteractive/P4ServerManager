@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Microsoft.Extensions.Options;
 
 using P4ServerManager.Daemon.Options;
@@ -107,6 +109,15 @@ public sealed class DaemonPaths
     public string GetImportCheckpointPath(Guid instanceId)
     {
         return Path.Combine(GetInstanceDirectory(instanceId), "checkpoint-before-import.gz");
+    }
+
+    /// <summary>
+    /// Checkpoint of the database of a server, taken before it is converted to Unicode mode. Each attempt has its own file.
+    /// </summary>
+    public string GetUnicodeCheckpointPath(Guid instanceId, DateTimeOffset savedAt)
+    {
+        string timestamp = savedAt.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
+        return Path.Combine(GetInstanceDirectory(instanceId), $"checkpoint-before-unicode-{timestamp}.gz");
     }
 
     public string GetPidFilePath(Guid instanceId)

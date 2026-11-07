@@ -68,6 +68,14 @@ export function upgradeInstance (id: string, body: UpgradeInstanceRequest): Prom
 }
 
 /**
+ * Begins the conversion of the instance to Unicode mode. The daemon answers once it has begun: the instance is
+ * `ConvertingToUnicode` until it ends, and its operation tells its progress.
+ */
+export function convertInstanceToUnicode (id: string): Promise<Instance> {
+  return request('POST', `/api/instances/${encodeURIComponent(id)}/convert-to-unicode`)
+}
+
+/**
  * Starts, stops or restarts several instances in parallel. The daemon answers once they are all done, with one result
  * per instance, by name: one failure does not stop the others.
  */

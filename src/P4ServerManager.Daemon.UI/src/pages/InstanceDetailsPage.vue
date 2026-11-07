@@ -71,6 +71,8 @@
 
       <UpgradeInstanceDialog v-model="upgradeDialog" :instance="instance" />
 
+      <ConvertToUnicodeDialog v-model="convertDialog" :instance="instance" />
+
       <ConfirmInstanceActionDialog
         v-model="confirmDialog"
         :action="confirmAction"
@@ -102,7 +104,18 @@
         <v-col cols="12" :md="showOperation ? 6 : 12">
           <v-card :title="t('instance.details')">
             <v-list density="compact">
-              <v-list-item v-for="detail in details" :key="detail.label" :subtitle="detail.value" :title="t(detail.label)" />
+              <v-list-item v-for="detail in details" :key="detail.label" :subtitle="detail.value" :title="t(detail.label)">
+                <template v-if="detail.label === 'instance.unicode' && !instance.unicode" #append>
+                  <v-btn
+                    :disabled="!canAct"
+                    :loading="status === 'convertingToUnicode'"
+                    size="small"
+                    :text="t('actions.convertToUnicode')"
+                    variant="tonal"
+                    @click="convertDialog = true"
+                  />
+                </template>
+              </v-list-item>
 
               <v-list-item :subtitle="t('instance.autoStartHint')" :title="t('instance.autoStart')">
                 <template #append>
@@ -152,6 +165,7 @@
 
   // Components, stores and utilities
   import ConfirmInstanceActionDialog from '@/components/instances/ConfirmInstanceActionDialog.vue'
+  import ConvertToUnicodeDialog from '@/components/instances/ConvertToUnicodeDialog.vue'
   import DeleteInstanceDialog from '@/components/instances/DeleteInstanceDialog.vue'
   import EditInstanceDialog from '@/components/instances/EditInstanceDialog.vue'
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
@@ -176,6 +190,7 @@
   const editDialog = ref(false)
   const deleteDialog = ref(false)
   const upgradeDialog = ref(false)
+  const convertDialog = ref(false)
   const confirmDialog = ref(false)
   const confirmAction = ref<'stop' | 'restart'>('stop')
   const savingAutoStart = ref(false)

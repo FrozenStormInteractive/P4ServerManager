@@ -937,10 +937,191 @@ public sealed class InstancesApiTests : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task ConvertToUnicode_SavesACheckpointThenSwitchesTheDatabase()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        StubConfigDump(UnicodeConfigDump);
+
+        HttpResponseMessage response = await _client.PostAsync(
+            $"/api/instances/{id}/convert-to-unicode",
+            null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await WaitForConversionAsync(id);
+        instance.GetProperty("unicode").GetBoolean().ShouldBeTrue();
+        instance.GetProperty("runtimeStatus").GetString().ShouldBe("Stopped");
+        instance.GetProperty("lastError").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        JsonElement operation = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}/operation",
+            TestContext.Current.CancellationToken);
+        operation.GetProperty("kind").GetString().ShouldBe("convert-to-unicode");
+        operation.GetProperty("status").GetString().ShouldBe("Succeeded");
+        // p4d did not run: it is neither stopped nor started.
+        operation.GetProperty("steps").EnumerateArray()
+            .Select(s => (s.GetProperty("key").GetString(), s.GetProperty("status").GetString()))
+            .ShouldBe(
+            [
+                ("stop-server", "Skipped"),
+                ("save-checkpoint", "Succeeded"),
+                ("switch-to-unicode", "Succeeded"),
+                ("start-server", "Skipped"),
+            ]);
+        operation.GetProperty("steps")[1].GetProperty("message").GetString()!
+            .ShouldContain("checkpoint-before-unicode-");
+
+        // The database is saved before it is switched, then the mode is read back from it.
+        List<ProcessCommand> commands = _processRunner.ReceivedCalls()
+            .Select(call => (ProcessCommand)call.GetArguments()[0]!)
+            .ToList();
+        commands.Count.ShouldBe(3);
+        commands[0].Arguments.ShouldContain("-z");
+        commands[0].Arguments.ShouldContain("-jd");
+        commands[1].Arguments.ShouldContain("-xi");
+        commands[2].Arguments.ShouldContain("db.config");
+    }
+
+    [Fact]
+    public async Task ConvertToUnicode_KeepsTheInstanceAsItWasWhenP4dRefusesTheMetadata()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        _processRunner.RunAsync(Arg.Is<ProcessCommand>(c => c.Arguments.Contains("-xi")), Arg.Any<CancellationToken>())
+            .Returns(new ProcessResult(
+                127,
+                "Table db.desc has 1 rows with invalid UTF8.\r\n",
+                "Perforce server error:\r\n\tDatabase has 1 tables with non-UTF8 text and can't be switched to Unicode mode.\r\n"));
+
+        await _client.PostAsync(
+            $"/api/instances/{id}/convert-to-unicode",
+            null,
+            TestContext.Current.CancellationToken);
+
+        JsonElement instance = await WaitForConversionAsync(id);
+        instance.GetProperty("unicode").GetBoolean().ShouldBeFalse();
+        instance.GetProperty("state").GetString().ShouldBe("Ready");
+        // The tables are named on the standard output, and only counted on the error output.
+        instance.GetProperty("lastError").GetString().ShouldBe(
+            "'p4d -xi' failed: Table db.desc has 1 rows with invalid UTF8. "
+            + "Database has 1 tables with non-UTF8 text and can't be switched to Unicode mode.");
+    }
+
+    [Fact]
+    public async Task ConvertToUnicode_FailsWhenTheDatabaseIsNotInUnicodeModeAfterwards()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        // p4d exits with 0 but the unicode configurable is not set.
+        StubConfigDump("@pv@ 1 @db.config@ @any@ @monitor@ @1@");
+
+        await _client.PostAsync(
+            $"/api/instances/{id}/convert-to-unicode",
+            null,
+            TestContext.Current.CancellationToken);
+
+        JsonElement instance = await WaitForConversionAsync(id);
+        instance.GetProperty("unicode").GetBoolean().ShouldBeFalse();
+        instance.GetProperty("lastError").GetString().ShouldBe("p4d did not switch the server to Unicode mode.");
+    }
+
+    [Fact]
+    public async Task ConvertToUnicode_DoesNotSwitchTheDatabaseWhenTheCheckpointFails()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        _processRunner.RunAsync(Arg.Is<ProcessCommand>(c => c.Arguments.Contains("-z")), Arg.Any<CancellationToken>())
+            .Returns(new ProcessResult(1, string.Empty, "No space left on device."));
+
+        await _client.PostAsync(
+            $"/api/instances/{id}/convert-to-unicode",
+            null,
+            TestContext.Current.CancellationToken);
+
+        JsonElement instance = await WaitForConversionAsync(id);
+        instance.GetProperty("unicode").GetBoolean().ShouldBeFalse();
+        instance.GetProperty("lastError").GetString().ShouldEndWith("failed: No space left on device.");
+        await _processRunner.DidNotReceive().RunAsync(
+            Arg.Is<ProcessCommand>(c => c.Arguments.Contains("-xi")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ConvertToUnicode_ConflictsWhenTheInstanceIsAlreadyInUnicodeMode()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        StubConfigDump(UnicodeConfigDump);
+        await _client.PostAsync(
+            $"/api/instances/{id}/convert-to-unicode",
+            null,
+            TestContext.Current.CancellationToken);
+        await WaitForConversionAsync(id);
+
+        HttpResponseMessage response = await _client.PostAsync(
+            $"/api/instances/{id}/convert-to-unicode",
+            null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().ShouldBe("Instance main already runs in Unicode mode.");
+    }
+
+    [Fact]
+    public async Task ConvertToUnicode_ConflictsWhenTheInstanceIsNotReady()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+
+        HttpResponseMessage response = await _client.PostAsync(
+            $"/api/instances/{id}/convert-to-unicode",
+            null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task ConvertToUnicode_ReturnsNotFoundForAnUnknownInstance()
+    {
+        HttpResponseMessage response = await _client.PostAsync(
+            $"/api/instances/{Guid.NewGuid()}/convert-to-unicode",
+            null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private const string UnicodeConfigDump = "@pv@ 1 @db.config@ @any@ @unicode@ @1@";
+
+    private void StubConfigDump(string dump)
+    {
+        _processRunner.RunAsync(
+                Arg.Is<ProcessCommand>(c => c.Arguments.Contains("db.config")),
+                Arg.Any<CancellationToken>())
+            .Returns(new ProcessResult(0, dump, string.Empty));
+    }
+
     /// <summary>
     /// Reads the instance until its upgrade has ended.
     /// </summary>
-    private async Task<JsonElement> WaitForUpgradeAsync(Guid id)
+    private Task<JsonElement> WaitForUpgradeAsync(Guid id)
+    {
+        return WaitWhileAsync(id, "Upgrading");
+    }
+
+    /// <summary>
+    /// Reads the instance until its conversion to Unicode mode has ended.
+    /// </summary>
+    private Task<JsonElement> WaitForConversionAsync(Guid id)
+    {
+        return WaitWhileAsync(id, "ConvertingToUnicode");
+    }
+
+    private async Task<JsonElement> WaitWhileAsync(Guid id, string runtimeStatus)
     {
         using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);
@@ -948,7 +1129,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
         while (true)
         {
             JsonElement instance = await _client.GetFromJsonAsync<JsonElement>($"/api/instances/{id}", timeout.Token);
-            if (instance.GetProperty("runtimeStatus").GetString() != "Upgrading")
+            if (instance.GetProperty("runtimeStatus").GetString() != runtimeStatus)
             {
                 return instance;
             }

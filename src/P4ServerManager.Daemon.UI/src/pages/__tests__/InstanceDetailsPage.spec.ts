@@ -11,7 +11,8 @@ import { createInstance } from '@/testing/fixtures'
 import { mountWithPlugins } from '@/testing/mount'
 import { server } from '@/testing/server'
 
-const instance = createInstance()
+// In Unicode mode, so that the lists of buttons below do not hold the conversion, which has its own tests.
+const instance = createInstance({ unicode: true })
 
 // The state of the instance comes from the daemon only: a page loaded in the middle of an operation, or opened by
 // another client, shows it the same way.
@@ -136,6 +137,74 @@ describe('InstanceDetailsPage', () => {
 
     expect(requests).toBe(1)
     expect(useInstancesStore(pinia).getInstance(instance.id)?.runtimeStatus).toBe('Stopped')
+  })
+
+  describe('conversion to Unicode mode', () => {
+    async function mountNotUnicode (runtimeStatus: RuntimeStatus, state: InstanceState = 'Ready') {
+      const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, {
+        props: { id: instance.id },
+        attachTo: document.body,
+      })
+      useInstancesStore(pinia).upsertInstance({ ...instance, unicode: false, state, runtimeStatus })
+      await flushPromises()
+      return { wrapper, pinia, button: wrapper.findAll('button').find(b => b.text() === 'Convert to Unicode') }
+    }
+
+    it('is not offered to a server already in Unicode mode', async () => {
+      expect((await mountWith('Running')).map(button => button.text)).not.toContain('Convert to Unicode')
+    })
+
+    it('is shown in progress', async () => {
+      const { button } = await mountNotUnicode('ConvertingToUnicode')
+
+      expect(button!.classes()).toContain('v-btn--loading')
+      expect(button!.attributes('disabled')).toBeDefined()
+    })
+
+    it('is not offered to a failed instance', async () => {
+      const { button } = await mountNotUnicode('Stopped', 'Failed')
+
+      expect(button!.attributes('disabled')).toBeDefined()
+    })
+
+    it('asks before it converts the server', async () => {
+      let requests = 0
+      server.use(http.post(`/api/instances/${instance.id}/convert-to-unicode`, () => {
+        requests++
+        return HttpResponse.json({ ...instance, unicode: false, runtimeStatus: 'ConvertingToUnicode' }, { status: 202 })
+      }))
+      const { button, pinia } = await mountNotUnicode('Running')
+
+      await button!.trigger('click')
+      await flushPromises()
+
+      expect(document.body.textContent).toContain(`Convert ${instance.name} to Unicode?`)
+      expect(document.body.textContent).toContain('This cannot be undone')
+      expect(document.body.textContent).toContain('its users are disconnected until it starts again')
+      expect(requests).toBe(0)
+
+      const confirm = [...document.querySelectorAll('button')].findLast(b => b.textContent?.trim() === 'Convert to Unicode')
+      confirm!.click()
+      await flushPromises()
+
+      expect(requests).toBe(1)
+      expect(useInstancesStore(pinia).getInstance(instance.id)?.runtimeStatus).toBe('ConvertingToUnicode')
+    })
+
+    it('shows why the daemon refused the conversion', async () => {
+      server.use(http.post(`/api/instances/${instance.id}/convert-to-unicode`, () =>
+        HttpResponse.json({ detail: 'Another operation is in progress on this instance.' }, { status: 409 })))
+      const { button } = await mountNotUnicode('Stopped')
+
+      await button!.trigger('click')
+      await flushPromises()
+      const confirm = [...document.querySelectorAll('button')].findLast(b => b.textContent?.trim() === 'Convert to Unicode')
+      confirm!.click()
+      await flushPromises()
+
+      expect(document.body.textContent)
+        .toContain('The conversion could not begin: Another operation is in progress on this instance.')
+    })
   })
 
   it('turns the auto-start off and shows the setting saved by the daemon', async () => {
