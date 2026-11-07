@@ -12,6 +12,15 @@ internal static class SetInstanceCommand
     public static Command Create(CliServices services)
     {
         Argument<string> instanceArgument = InstanceArgument.Create();
+        Option<string?> nameOption = new("--name")
+        {
+            Description = "New unique name: a letter, then up to 31 letters, digits, '-' or '_'. The p4d server keeps "
+                + "its server ID and the prefix of its journals.",
+        };
+        Option<string?> descriptionOption = new("--description")
+        {
+            Description = "Free text. An empty text removes the description.",
+        };
         Option<bool?> autoStartOption = new("--auto-start")
         {
             Description = "Whether the daemon starts p4d when it starts: true or false.",
@@ -20,13 +29,17 @@ internal static class SetInstanceCommand
         Command command = new("set", "Change the settings of an instance that can change after its creation.")
         {
             instanceArgument,
+            nameOption,
+            descriptionOption,
             autoStartOption,
         };
         command.Validators.Add(result =>
         {
-            if (result.GetResult(autoStartOption) is null)
+            if (result.GetResult(nameOption) is null
+                && result.GetResult(descriptionOption) is null
+                && result.GetResult(autoStartOption) is null)
             {
-                result.AddError("Give at least one setting to change, such as --auto-start.");
+                result.AddError("Give at least one setting to change: --name, --description or --auto-start.");
             }
         });
 
@@ -37,7 +50,12 @@ internal static class SetInstanceCommand
                 invocation.GetValue(instanceArgument),
                 cancellationToken);
 
-            UpdateInstanceRequest request = new() { AutoStart = invocation.GetValue(autoStartOption) };
+            UpdateInstanceRequest request = new()
+            {
+                Name = invocation.GetValue(nameOption),
+                Description = invocation.GetValue(descriptionOption),
+                AutoStart = invocation.GetValue(autoStartOption),
+            };
             InstanceDto updated = await client.UpdateInstanceAsync(instance.Id, request, cancellationToken);
 
             if (invocation.Json)

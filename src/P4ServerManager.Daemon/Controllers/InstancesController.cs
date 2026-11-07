@@ -133,18 +133,23 @@ public sealed class InstancesController(
 
     /// <summary>
     /// Changes the settings of an instance that can change after its creation. The settings left out are kept. The
-    /// change takes effect without a restart of p4d.
+    /// change takes effect without a restart of p4d. A new name only changes the name in the daemon: the p4d server
+    /// keeps its server ID and the prefix of its journals.
     /// </summary>
     /// <param name="id">Identifier of the instance.</param>
     /// <param name="request">Settings to change, checked by <see cref="UpdateInstanceRequestValidator"/>.</param>
     /// <param name="cancellationToken">Aborts the request.</param>
     /// <response code="200">The instance with its new settings.</response>
-    /// <response code="400">No setting is given, or one is not valid. The errors are keyed by field.</response>
+    /// <response code="400">
+    /// No setting is given, one is not valid, or another instance has the name. The errors are keyed by field.
+    /// </response>
     /// <response code="404">No instance has this identifier.</response>
+    /// <response code="409">The name or the description is given while an operation is in progress on the instance.</response>
     [HttpPatch("{id:guid}")]
     [ProducesResponseType<InstanceDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
     public async Task<ActionResult<InstanceDto>> UpdateInstance(
         Guid id,
         UpdateInstanceRequest request,
@@ -158,13 +163,49 @@ public sealed class InstancesController(
             return Problem(statusCode: StatusCodes.Status404NotFound);
         }
 
+        // An operation in progress pushes its own copy of the instance to the clients: they would see the old texts again.
+        bool changesTexts = request.Name is not null || request.Description is not null;
+        if (changesTexts
+            && (instance.State == P4ServerInstanceState.Provisioning || runtimeRegistry.Get(id).IsTransitional()))
+        {
+            return Problem(
+                "Another operation is in progress on this instance.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (request.Name is string name)
+        {
+            // The instance can change the case of its own name.
+            if (await db.Instances.AnyAsync(i => i.Id != id && i.Name.ToLower() == name.ToLower(), cancellationToken))
+            {
+                ModelState.AddModelError("name", $"An instance named {name} already exists.");
+                return ValidationProblem(ModelState);
+            }
+
+            instance.Name = name;
+        }
+
+        if (request.Description is string description)
+        {
+            instance.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        }
+
         if (request.AutoStart is bool autoStart)
         {
             instance.AutoStart = autoStart;
         }
 
         // Only the changed columns are written: an operation running on the instance keeps its own changes.
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Another request took the name in the meantime.
+            return Problem("Another instance already uses this name.", statusCode: StatusCodes.Status409Conflict);
+        }
+
         await notifier.InstanceChangedAsync(instance);
         return ToDto(instance);
     }

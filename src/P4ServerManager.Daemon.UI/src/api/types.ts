@@ -97,6 +97,9 @@ export interface CreateInstanceRequest {
  * Settings that can change after the creation. A missing setting is left as it is.
  */
 export interface UpdateInstanceRequest {
+  name?: string
+  /** An empty text removes the description. */
+  description?: string
   autoStart?: boolean
 }
 

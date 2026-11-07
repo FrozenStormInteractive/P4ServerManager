@@ -40,6 +40,7 @@ describe('InstanceDetailsPage', () => {
     expect(await mountWith('Running')).toEqual([
       { text: 'Restart', loading: false, disabled: false },
       { text: 'Stop', loading: false, disabled: false },
+      { text: 'Edit', loading: false, disabled: false },
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
     ])
@@ -49,6 +50,7 @@ describe('InstanceDetailsPage', () => {
     expect(await mountWith('Restarting')).toEqual([
       { text: 'Restart', loading: true, disabled: true },
       { text: 'Stop', loading: false, disabled: true },
+      { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
     ])
@@ -58,6 +60,7 @@ describe('InstanceDetailsPage', () => {
     expect(await mountWith('Stopping')).toEqual([
       { text: 'Restart', loading: false, disabled: true },
       { text: 'Stop', loading: true, disabled: true },
+      { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
     ])
@@ -66,6 +69,7 @@ describe('InstanceDetailsPage', () => {
   it('shows the start in progress', async () => {
     expect(await mountWith('Starting')).toEqual([
       { text: 'Start', loading: true, disabled: true },
+      { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
     ])
@@ -74,6 +78,7 @@ describe('InstanceDetailsPage', () => {
   it('offers a start while p4d is stopped', async () => {
     expect(await mountWith('Stopped')).toEqual([
       { text: 'Start', loading: false, disabled: false },
+      { text: 'Edit', loading: false, disabled: false },
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
     ])
@@ -82,6 +87,7 @@ describe('InstanceDetailsPage', () => {
   it('shows the deletion in progress', async () => {
     expect(await mountWith('Deleting')).toEqual([
       { text: 'Start', loading: false, disabled: true },
+      { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: true, disabled: true },
     ])
@@ -90,14 +96,16 @@ describe('InstanceDetailsPage', () => {
   it('shows the upgrade in progress', async () => {
     expect(await mountWith('Upgrading')).toEqual([
       { text: 'Start', loading: false, disabled: true },
+      { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: true, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
     ])
   })
 
-  it('offers to delete a failed instance', async () => {
+  it('offers to edit and delete a failed instance', async () => {
     expect(await mountWith('Stopped', 'Failed')).toEqual([
       { text: 'Start', loading: false, disabled: true },
+      { text: 'Edit', loading: false, disabled: false },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: false },
     ])
@@ -163,6 +171,7 @@ describe('InstanceDetailsPage', () => {
   it('does not offer to delete an instance being provisioned', async () => {
     expect(await mountWith('Unknown', 'Provisioning')).toEqual([
       { text: 'Start', loading: false, disabled: true },
+      { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
     ])

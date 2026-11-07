@@ -4,7 +4,9 @@ namespace P4ServerManager.Contracts;
 /// A p4d server managed by the daemon.
 /// </summary>
 /// <param name="Id">Identifier of the instance.</param>
-/// <param name="Name">Unique name, also used as the p4d server ID.</param>
+/// <param name="Name">
+/// Unique name. A new server takes it as its p4d server ID, which stays the same if the instance is renamed.
+/// </param>
 /// <param name="Description">Optional free text.</param>
 /// <param name="Port">TCP port p4d listens on.</param>
 /// <param name="Ssl">True when p4d listens with SSL, on <c>ssl:</c> followed by the port.</param>

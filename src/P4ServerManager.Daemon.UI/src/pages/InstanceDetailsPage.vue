@@ -38,6 +38,14 @@
         />
 
         <v-btn
+          :disabled="!canManage"
+          prepend-icon="mdi-pencil"
+          :text="t('actions.edit')"
+          variant="text"
+          @click="editDialog = true"
+        />
+
+        <v-btn
           :disabled="!canAct"
           :loading="status === 'upgrading'"
           prepend-icon="mdi-update"
@@ -48,7 +56,7 @@
 
         <v-btn
           color="error"
-          :disabled="!canDelete"
+          :disabled="!canManage"
           :loading="status === 'deleting'"
           prepend-icon="mdi-delete"
           :text="t('actions.delete')"
@@ -56,6 +64,8 @@
           @click="deleteDialog = true"
         />
       </div>
+
+      <EditInstanceDialog v-model="editDialog" :instance="instance" />
 
       <DeleteInstanceDialog v-model="deleteDialog" :instance="instance" @deleted="onDeleted" />
 
@@ -143,6 +153,7 @@
   // Components, stores and utilities
   import ConfirmInstanceActionDialog from '@/components/instances/ConfirmInstanceActionDialog.vue'
   import DeleteInstanceDialog from '@/components/instances/DeleteInstanceDialog.vue'
+  import EditInstanceDialog from '@/components/instances/EditInstanceDialog.vue'
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
   import OperationProgress from '@/components/instances/OperationProgress.vue'
   import UpgradeInstanceDialog from '@/components/instances/UpgradeInstanceDialog.vue'
@@ -162,6 +173,7 @@
   // other clients and survives a reload of the page.
   const sending = ref(false)
   const actionError = ref<string | null>(null)
+  const editDialog = ref(false)
   const deleteDialog = ref(false)
   const upgradeDialog = ref(false)
   const confirmDialog = ref(false)
@@ -174,8 +186,8 @@
   const canAct = computed(() =>
     instance.value?.state === 'Ready' && !sending.value && !!status.value && !isInstanceStatusInProgress(status.value),
   )
-  // A failed instance can be deleted too, but not one being provisioned.
-  const canDelete = computed(() =>
+  // A failed instance can be edited and deleted too, but not one being provisioned.
+  const canManage = computed(() =>
     instance.value?.state !== 'Provisioning' && !sending.value && !!status.value
     && !isInstanceStatusInProgress(status.value),
   )

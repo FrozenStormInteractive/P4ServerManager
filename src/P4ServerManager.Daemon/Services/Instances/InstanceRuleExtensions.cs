@@ -30,11 +30,20 @@ public static partial class InstanceRuleExtensions
         DaemonDbContext db)
     {
         return rule
-            .Matches(NamePattern())
-            .WithMessage("The name starts with a letter and has up to 32 letters, digits, '-' or '_'.")
+            .MustBeInstanceName()
             .MustAsync((name, cancellationToken) =>
                 db.Instances.AllAsync(i => i.Name.ToLower() != name.ToLower(), cancellationToken))
             .WithMessage((_, name) => $"An instance named {name} already exists.");
+    }
+
+    /// <summary>
+    /// A well-formed name, whether another instance has it or not.
+    /// </summary>
+    public static IRuleBuilderOptions<T, string> MustBeInstanceName<T>(this IRuleBuilder<T, string> rule)
+    {
+        return rule
+            .Matches(NamePattern())
+            .WithMessage("The name starts with a letter and has up to 32 letters, digits, '-' or '_'.");
     }
 
     public static IRuleBuilderOptions<T, string?> MustBeInstanceDescription<T>(this IRuleBuilder<T, string?> rule)

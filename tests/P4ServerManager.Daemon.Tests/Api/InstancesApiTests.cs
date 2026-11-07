@@ -286,6 +286,138 @@ public sealed class InstancesApiTests : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task UpdateInstance_ChangesTheNameAndTheDescriptionOnly()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Running);
+        JsonElement before = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new { name = "renamed", description = "  The new text  " },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonElement instance = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+        instance.GetProperty("name").GetString().ShouldBe("renamed");
+        instance.GetProperty("description").GetString().ShouldBe("The new text");
+        instance.GetProperty("rootPath").GetString().ShouldBe(before.GetProperty("rootPath").GetString());
+        instance.GetProperty("port").GetInt32().ShouldBe(before.GetProperty("port").GetInt32());
+        instance.GetProperty("autoStart").GetBoolean().ShouldBe(before.GetProperty("autoStart").GetBoolean());
+        // p4d is not touched: its server ID stays, and it keeps running.
+        instance.GetProperty("runtimeStatus").GetString().ShouldBe("Running");
+        _processRunner.ReceivedCalls().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateInstance_KeepsTheDescriptionLeftOutAndRemovesAnEmptyOne()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+        await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new { description = "Some text" },
+            TestContext.Current.CancellationToken);
+
+        JsonElement renamed = await (await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new { name = "renamed" },
+            TestContext.Current.CancellationToken)).Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        JsonElement emptied = await (await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new { description = string.Empty },
+            TestContext.Current.CancellationToken)).Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+
+        renamed.GetProperty("description").GetString().ShouldBe("Some text");
+        emptied.GetProperty("name").GetString().ShouldBe("renamed");
+        emptied.GetProperty("description").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Theory]
+    [InlineData("main")]
+    [InlineData("MAIN")]
+    public async Task UpdateInstance_LetsAnInstanceKeepItsNameOrChangeItsCase(string name)
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+
+        HttpResponseMessage response = await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new { name },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonElement instance = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        instance.GetProperty("name").GetString().ShouldBe(name);
+    }
+
+    [Fact]
+    public async Task UpdateInstance_RejectsTheNameOfAnotherInstanceWhateverItsCase()
+    {
+        await CreateFailedInstanceAsync("main");
+        Guid id = await CreateFailedInstanceAsync("other");
+
+        HttpResponseMessage response = await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new { name = "MAIN" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").GetProperty("name")[0].GetString().ShouldBe("An instance named MAIN already exists.");
+    }
+
+    [Theory]
+    [InlineData("1abc", 0, "name")]
+    [InlineData("", 0, "name")]
+    [InlineData("main", 513, "description")]
+    public async Task UpdateInstance_RejectsAnInvalidField(string name, int descriptionLength, string field)
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+
+        HttpResponseMessage response = await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new { name, description = new string('a', descriptionLength) },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).ShouldBe([field]);
+    }
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("description")]
+    public async Task UpdateInstance_RefusesTheTextsWhileAnOperationIsInProgress(string field)
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Upgrading);
+
+        HttpResponseMessage response = await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new Dictionary<string, string> { [field] = "changed" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task UpdateInstance_DuringAProvisioningRefusesTheNameButNotTheAutoStart()
+    {
+        HttpResponseMessage created = await _client.PostAsJsonAsync(
+            "/api/instances",
+            ValidRequest("main", GetFreePort()),
+            TestContext.Current.CancellationToken);
+        JsonElement instance = await created.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        string url = $"/api/instances/{instance.GetProperty("id").GetString()}";
+
+        (await _client.PatchAsJsonAsync(url, new { name = "renamed" }, TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await _client.PatchAsJsonAsync(url, new { autoStart = false }, TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     [Theory]
     [InlineData("1abc", 0, "r25.1", "admin", "secret-password", "name")]
     [InlineData("main", 80, "r25.1", "admin", "secret-password", "port")]

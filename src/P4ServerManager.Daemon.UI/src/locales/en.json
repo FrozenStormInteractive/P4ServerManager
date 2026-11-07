@@ -14,6 +14,7 @@
     "cancel": "Cancel",
     "close": "Close",
     "create": "Create",
+    "edit": "Edit",
     "retry": "Retry",
     "start": "Start",
     "stop": "Stop",
@@ -151,7 +152,7 @@
   "createInstance": {
     "title": "New server",
     "name": "Name",
-    "nameHint": "Also used as the server ID.",
+    "nameHint": "Also used as the server ID, which stays the same if the server is renamed later.",
     "description": "Description",
     "version": "p4d version",
     "versionsError": "The p4d versions could not be loaded: {message}",
@@ -205,6 +206,11 @@
     "sslNote": "The server listens with SSL. It keeps the key and the certificate in the ssl folder of its root, so clients keep trusting it.",
     "warning": "Stop the server in the HelixCoreServer package first. A checkpoint of the database is saved to the folder of the instance before the upgrade.",
     "error": "The server could not be imported: {message}"
+  },
+  "editInstance": {
+    "title": "Edit {name}",
+    "nameHint": "Only the name in the manager changes. The server keeps its server ID and the prefix of its journals.",
+    "error": "The server could not be changed: {message}"
   },
   "upgradeInstance": {
     "title": "Upgrade {name}",
