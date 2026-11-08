@@ -67,7 +67,7 @@
 
       <EditInstanceDialog v-model="editDialog" :instance="instance" />
 
-      <DeleteInstanceDialog v-model="deleteDialog" :instance="instance" @deleted="onDeleted" />
+      <DeleteInstanceDialog v-model="deleteDialog" :instance="instance" />
 
       <UpgradeInstanceDialog v-model="upgradeDialog" :instance="instance" />
 
@@ -329,9 +329,13 @@
     void instances.fetchOperation(id).catch(() => {})
   }, { immediate: true })
 
-  function onDeleted () {
-    void router.push({ name: 'instances' })
-  }
+  // Once deleted, by this page or by another client, the instance leaves the store, which unmounts the delete dialog
+  // before it could tell this page: the page goes back to the list as soon as its instance is gone.
+  watch(instance, (value, previous) => {
+    if (!value && previous?.id === props.id) {
+      void router.replace({ name: 'instances' })
+    }
+  })
 
   async function setAutoStart (value: boolean | null) {
     savingAutoStart.value = true

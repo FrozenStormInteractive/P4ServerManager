@@ -4,7 +4,7 @@ import type { InstanceState, RuntimeStatus } from '@/api/types'
 // Utilities
 import { flushPromises } from '@vue/test-utils'
 import { http, HttpResponse } from 'msw'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import InstanceDetailsPage from '@/pages/InstanceDetailsPage.vue'
 import { useInstancesStore } from '@/stores/instances'
 import { createInstance } from '@/testing/fixtures'
@@ -418,5 +418,16 @@ describe('InstanceDetailsPage', () => {
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
     ])
+  })
+  it('goes back to the list once its instance is deleted', async () => {
+    const { router, pinia } = await mountWithPlugins(InstanceDetailsPage, { props: { id: instance.id } })
+    const store = useInstancesStore(pinia)
+    store.upsertInstance(instance)
+    await flushPromises()
+
+    store.removeInstance(instance.id)
+    await flushPromises()
+
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('instances'))
   })
 })
