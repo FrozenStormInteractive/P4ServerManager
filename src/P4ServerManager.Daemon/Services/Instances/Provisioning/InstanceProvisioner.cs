@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Operations;
 
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
@@ -19,6 +20,7 @@ public sealed class InstanceProvisioner(
     P4ServerLauncher launcher,
     InstanceRuntimeRegistry runtimeRegistry,
     InstanceNotifier notifier,
+    SuperUserMonitor superUserMonitor,
     DaemonPaths paths,
     ILogger<InstanceProvisioner> logger)
 {
@@ -43,6 +45,9 @@ public sealed class InstanceProvisioner(
             await db.SaveChangesAsync(cancellationToken);
             await notifier.InstanceChangedAsync(instance);
             logger.LogInformation("Instance {Name} is ready", instance.Name);
+
+            // Its server started while it was not ready: its stored super user is checked now.
+            superUserMonitor.RequestCheck(instance.Id);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

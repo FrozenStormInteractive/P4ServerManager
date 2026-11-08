@@ -14,6 +14,7 @@ namespace P4ServerManager.Cli.Json;
 [JsonSerializable(typeof(IReadOnlyList<InstanceDto>))]
 [JsonSerializable(typeof(CreateInstanceRequest))]
 [JsonSerializable(typeof(UpdateInstanceRequest))]
+[JsonSerializable(typeof(SetSuperUserRequest))]
 [JsonSerializable(typeof(UpgradeInstanceRequest))]
 [JsonSerializable(typeof(OperationSnapshot))]
 [JsonSerializable(typeof(InstanceSelectionRequest))]

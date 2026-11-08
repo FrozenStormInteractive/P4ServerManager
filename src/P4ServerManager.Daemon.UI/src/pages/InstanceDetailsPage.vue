@@ -73,6 +73,8 @@
 
       <ConvertToUnicodeDialog v-model="convertDialog" :instance="instance" />
 
+      <SuperUserDialog v-model="superUserDialog" :instance="instance" />
+
       <ConfirmInstanceActionDialog
         v-model="confirmDialog"
         :action="confirmAction"
@@ -148,8 +150,48 @@
                   />
                 </template>
               </v-list-item>
+
+              <v-list-item :subtitle="superUserSummary" :title="t('superUser.title')">
+                <template #append>
+                  <div class="d-flex ga-2">
+                    <v-btn
+                      v-if="instance.superUser"
+                      :disabled="!canAct || status !== 'running'"
+                      :loading="checkingSuperUser"
+                      name="checkSuperUser"
+                      size="small"
+                      :text="t('actions.checkNow')"
+                      variant="text"
+                      @click="checkSuperUser"
+                    />
+
+                    <v-btn
+                      :disabled="!canAct"
+                      name="changeSuperUser"
+                      prepend-icon="mdi-account-key"
+                      size="small"
+                      :text="instance.superUser ? t('superUser.change') : t('superUser.set')"
+                      variant="tonal"
+                      @click="superUserDialog = true"
+                    />
+                  </div>
+                </template>
+              </v-list-item>
             </v-list>
           </v-card>
+
+          <v-alert
+            v-if="superUserProblem && instance.state === 'Ready'"
+            class="mt-4"
+            density="compact"
+            name="superUserWarning"
+            :title="t('superUser.warning.title')"
+            type="warning"
+            variant="tonal"
+          >
+            <div>{{ t(`superUser.warning.${superUserProblem}`) }}</div>
+            <div v-if="instance.superUser?.error" class="text-body-small mt-1">{{ instance.superUser.error }}</div>
+          </v-alert>
 
           <v-alert
             v-if="instance.lastError && !showOperation"
@@ -186,10 +228,12 @@
   import EditInstanceDialog from '@/components/instances/EditInstanceDialog.vue'
   import InstanceStatusChip from '@/components/instances/InstanceStatusChip.vue'
   import OperationProgress from '@/components/instances/OperationProgress.vue'
+  import SuperUserDialog from '@/components/instances/SuperUserDialog.vue'
   import UpgradeInstanceDialog from '@/components/instances/UpgradeInstanceDialog.vue'
   import { useInstancesStore } from '@/stores/instances'
   import { formatPort } from '@/utils/instancePort'
   import { getInstanceStatus, isInstanceStatusInProgress } from '@/utils/instanceStatus'
+  import { getSuperUserProblem } from '@/utils/superUser'
 
   const props = defineProps<{
     id: string
@@ -213,6 +257,8 @@
   const confirmDialog = ref(false)
   const confirmAction = ref<ConfirmableAction>('stop')
   const savingAutoStart = ref(false)
+  const superUserDialog = ref(false)
+  const checkingSuperUser = ref(false)
 
   const instance = computed(() => instances.getInstance(props.id))
   const snapshot = computed(() => instances.operations[props.id] ?? null)
@@ -241,6 +287,19 @@
   const showOperation = computed(() =>
     instance.value?.state !== 'Ready' || snapshot.value?.status === 'Running',
   )
+
+  const superUserProblem = computed(() => instance.value ? getSuperUserProblem(instance.value) : null)
+  const superUserSummary = computed(() => {
+    const superUser = instance.value?.superUser
+    if (!superUser) {
+      return t('superUser.none')
+    }
+    const statusText = t(`superUser.status.${superUser.status}`)
+    const summary = superUser.checkedAt
+      ? t('superUser.checkedAt', { status: statusText, date: d(new Date(superUser.checkedAt), 'long') })
+      : statusText
+    return `${superUser.userName} · ${summary}`
+  })
 
   const details = computed(() => {
     const value = instance.value
@@ -284,6 +343,19 @@
       actionError.value = t('instance.autoStartError', { message })
     } finally {
       savingAutoStart.value = false
+    }
+  }
+
+  async function checkSuperUser () {
+    checkingSuperUser.value = true
+    actionError.value = null
+    try {
+      await instances.checkSuperUser(props.id)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      actionError.value = t('superUser.checkError', { message })
+    } finally {
+      checkingSuperUser.value = false
     }
   }
 

@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 using FluentValidation;
 
 using P4ServerManager.Contracts;
@@ -40,24 +38,4 @@ public sealed class CreateInstanceRequestValidator : AbstractValidator<CreateIns
 
         RuleFor(r => r.SuperUser).SetValidator(superUserValidator);
     }
-}
-
-/// <summary>
-/// Checks the super user of a new instance.
-/// </summary>
-public sealed partial class SuperUserRequestValidator : AbstractValidator<SuperUserRequest>
-{
-    public SuperUserRequestValidator()
-    {
-        RuleFor(u => u.Name)
-            .Matches(UserNamePattern())
-            .WithMessage("The user name starts with a letter and has up to 64 letters, digits, '.', '-' or '_'.");
-
-        RuleFor(u => u.Password)
-            .Must(SuperUserPassword.IsStrong)
-            .WithMessage(SuperUserPassword.Requirement);
-    }
-
-    [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9._-]{0,63}$")]
-    private static partial Regex UserNamePattern();
 }

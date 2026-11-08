@@ -8,6 +8,7 @@ import type {
   InstanceActionResult,
   InstanceSelection,
   OperationSnapshot,
+  SetSuperUserRequest,
   UpdateInstanceRequest,
 } from '@/api/types'
 
@@ -163,6 +164,14 @@ export const useInstancesStore = defineStore('instances', () => {
     upsertInstance(await api.updateInstance(id, request))
   }
 
+  async function setSuperUser (id: string, request: SetSuperUserRequest) {
+    upsertInstance(await api.setSuperUser(id, request))
+  }
+
+  async function checkSuperUser (id: string) {
+    upsertInstance(await api.checkSuperUser(id))
+  }
+
   async function start (id: string) {
     upsertInstance(await api.startInstance(id))
   }
@@ -251,6 +260,8 @@ export const useInstancesStore = defineStore('instances', () => {
     fetchOperation,
     create,
     update,
+    setSuperUser,
+    checkSuperUser,
     start,
     stop,
     restart,

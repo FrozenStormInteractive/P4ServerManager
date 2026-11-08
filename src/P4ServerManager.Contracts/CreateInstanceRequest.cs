@@ -66,8 +66,8 @@ public sealed record CreateInstanceRequest
     public string? ServerDirectory { get; init; }
 
     /// <summary>
-    /// Super user created with the server, required: it is the only account that can administer it. Its password is
-    /// only given to p4d and never stored.
+    /// Super user created with the server, required: it is the only account that can administer it. The daemon stores
+    /// it, with its password encrypted, to administer the server.
     /// </summary>
     [Required]
     public SuperUserRequest SuperUser { get; init; } = null!;

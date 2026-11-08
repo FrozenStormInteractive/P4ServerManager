@@ -20,6 +20,7 @@ export function createInstance (overrides: Partial<Instance> = {}): Instance {
     state: 'Ready',
     runtimeStatus: 'Running',
     lastError: null,
+    superUser: { userName: 'admin', status: 'Valid', checkedAt: '2026-10-22T08:00:00.000Z', error: null },
     createdAt: '2026-10-21T23:06:43.318Z',
     ...overrides,
   }

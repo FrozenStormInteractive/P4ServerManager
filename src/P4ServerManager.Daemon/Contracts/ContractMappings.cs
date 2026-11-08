@@ -31,6 +31,9 @@ public static class ContractMappings
             instance.State,
             runtimeStatus,
             instance.LastError,
+            instance.SuperUser is { } superUser
+                ? new SuperUserDto(superUser.UserName, superUser.Status, superUser.CheckedAt, superUser.LastError)
+                : null,
             instance.CreatedAt);
     }
 

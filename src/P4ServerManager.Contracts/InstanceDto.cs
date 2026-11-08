@@ -29,6 +29,10 @@ namespace P4ServerManager.Contracts;
 /// Whether the p4d process runs, or is being started, stopped, restarted, upgraded or deleted.
 /// </param>
 /// <param name="LastError">Error of the last failed operation.</param>
+/// <param name="SuperUser">
+/// Super user account the daemon stores to administer the server, with the result of its last check. Null when none is
+/// stored, as for an imported instance.
+/// </param>
 /// <param name="CreatedAt">Creation date.</param>
 public sealed record InstanceDto(
     Guid Id,
@@ -48,6 +52,7 @@ public sealed record InstanceDto(
     P4ServerInstanceState State,
     InstanceRuntimeStatus RuntimeStatus,
     string? LastError,
+    SuperUserDto? SuperUser,
     DateTimeOffset CreatedAt);
 
 /// <summary>

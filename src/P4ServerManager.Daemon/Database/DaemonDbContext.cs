@@ -25,6 +25,12 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
                 .WithMany(b => b.Instances)
                 .HasForeignKey(i => i.BuildId)
                 .OnDelete(DeleteBehavior.Restrict);
+            instance.OwnsOne(i => i.SuperUser, superUser =>
+            {
+                superUser.ToTable("InstanceSuperUsers");
+                superUser.WithOwner().HasForeignKey("InstanceId");
+                superUser.Property(u => u.Status).HasConversion<string>().HasMaxLength(32);
+            });
         });
 
         modelBuilder.Entity<P4ServerBuild>(build =>

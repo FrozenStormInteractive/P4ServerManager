@@ -54,7 +54,8 @@ internal sealed class CliRunner
         InstanceRuntimeStatus runtimeStatus = InstanceRuntimeStatus.Running,
         int port = 1666,
         Guid? id = null,
-        bool maintenanceMode = false)
+        bool maintenanceMode = false,
+        SuperUserDto? superUser = null)
     {
         return new InstanceDto(
             id ?? Guid.NewGuid(),
@@ -74,6 +75,7 @@ internal sealed class CliRunner
             state,
             runtimeStatus,
             LastError: null,
+            superUser,
             CreatedAt: new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero));
     }
 }

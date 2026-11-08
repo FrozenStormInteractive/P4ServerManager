@@ -16,7 +16,7 @@ delete_data() {
         return 0
     fi
 
-    rm -rf "$data_dir/builds" "$data_dir/archive" "$data_dir/instances" "$data_dir/import"
+    rm -rf "$data_dir/builds" "$data_dir/archive" "$data_dir/instances" "$data_dir/import" "$data_dir/keys"
     rm -f "$data_dir"/p4servermanager.db "$data_dir"/p4servermanager.db-*
     rm -f "$DATA_DIR_FILE"
 }

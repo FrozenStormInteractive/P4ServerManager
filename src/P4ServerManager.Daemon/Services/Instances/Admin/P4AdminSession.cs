@@ -1,9 +1,10 @@
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
 
-namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
+namespace P4ServerManager.Daemon.Services.Instances.Admin;
 
 /// <summary>
 /// Runs p4 commands on an instance as its super user, with p4 settings of its own in the folder of the instance: the
@@ -55,7 +56,7 @@ public sealed class P4AdminSession
     /// Opens a session on the running p4d of the instance. With SSL, its certificate is trusted first: the daemon
     /// talks to it on the same machine.
     /// </summary>
-    public static async Task<P4AdminSession> OpenAsync(
+    public static Task<P4AdminSession> OpenAsync(
         IP4ServerBuildCache buildCache,
         IProcessRunner processRunner,
         DaemonPaths paths,
@@ -63,8 +64,22 @@ public sealed class P4AdminSession
         ISuperUserContext context,
         CancellationToken cancellationToken)
     {
-        P4ServerInstance instance = context.Instance;
-        SuperUserCredentials superUser = context.SuperUser;
+        return OpenAsync(buildCache, processRunner, paths, logger, context.Instance, context.SuperUser, cancellationToken);
+    }
+
+    /// <summary>
+    /// Opens a session on the running p4d of <paramref name="instance"/>, with its <see cref="P4ServerInstance.Build"/>
+    /// loaded, as <paramref name="superUser"/>.
+    /// </summary>
+    public static async Task<P4AdminSession> OpenAsync(
+        IP4ServerBuildCache buildCache,
+        IProcessRunner processRunner,
+        DaemonPaths paths,
+        ILogger logger,
+        P4ServerInstance instance,
+        SuperUserCredentials superUser,
+        CancellationToken cancellationToken)
+    {
         P4AdminSession session = new(
             processRunner,
             logger,

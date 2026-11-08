@@ -71,5 +71,10 @@ public sealed class P4ServerInstance
 
     public string? LastError { get; set; }
 
+    /// <summary>
+    /// Super user account stored to administer the server. Null when none is stored, as for an imported instance.
+    /// </summary>
+    public InstanceSuperUser? SuperUser { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 }

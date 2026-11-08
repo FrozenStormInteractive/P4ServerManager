@@ -45,6 +45,8 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
       { text: 'Enable maintenance mode', loading: false, disabled: false },
+      { text: 'Check now', loading: false, disabled: false },
+      { text: 'Change', loading: false, disabled: false },
     ])
   })
 
@@ -56,6 +58,8 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
+      { text: 'Check now', loading: false, disabled: true },
+      { text: 'Change', loading: false, disabled: true },
     ])
   })
 
@@ -67,6 +71,8 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
+      { text: 'Check now', loading: false, disabled: true },
+      { text: 'Change', loading: false, disabled: true },
     ])
   })
 
@@ -77,6 +83,8 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
+      { text: 'Check now', loading: false, disabled: true },
+      { text: 'Change', loading: false, disabled: true },
     ])
   })
 
@@ -87,6 +95,8 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
       { text: 'Start in maintenance mode', loading: false, disabled: false },
+      { text: 'Check now', loading: false, disabled: true },
+      { text: 'Change', loading: false, disabled: false },
     ])
   })
 
@@ -97,6 +107,8 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: true, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
+      { text: 'Check now', loading: false, disabled: true },
+      { text: 'Change', loading: false, disabled: true },
     ])
   })
 
@@ -107,6 +119,8 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: true, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
+      { text: 'Check now', loading: false, disabled: true },
+      { text: 'Change', loading: false, disabled: true },
     ])
   })
 
@@ -123,6 +137,8 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: false },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
+      { text: 'Check now', loading: false, disabled: true },
+      { text: 'Change', loading: false, disabled: true },
     ])
   })
 
@@ -341,6 +357,57 @@ describe('InstanceDetailsPage', () => {
     expect(wrapper.text()).toContain(fingerprint)
   })
 
+  describe('super user', () => {
+    it('shows the stored account without a warning while it is valid', async () => {
+      const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, { props: { id: instance.id } })
+      useInstancesStore(pinia).upsertInstance(instance)
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('admin · Valid, checked')
+      expect(wrapper.find('[name="superUserWarning"]').exists()).toBe(false)
+    })
+
+    it('warns when no account is stored, and offers to set one', async () => {
+      const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, { props: { id: instance.id } })
+      useInstancesStore(pinia).upsertInstance({ ...instance, superUser: null })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('None stored')
+      expect(wrapper.find('[name="superUserWarning"]').text()).toContain('No super user is stored for this server.')
+      expect(wrapper.find('button[name="changeSuperUser"]').text()).toBe('Set')
+      expect(wrapper.find('button[name="checkSuperUser"]').exists()).toBe(false)
+    })
+
+    it('warns with the message of p4 when the server refuses the account', async () => {
+      const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, { props: { id: instance.id } })
+      useInstancesStore(pinia).upsertInstance({
+        ...instance,
+        superUser: { userName: 'admin', status: 'InvalidCredentials', checkedAt: null, error: 'Password invalid.' },
+      })
+      await flushPromises()
+
+      const warning = wrapper.find('[name="superUserWarning"]')
+      expect(warning.text()).toContain('If the password was changed in P4, enter the new one.')
+      expect(warning.text()).toContain('Password invalid.')
+    })
+
+    it('checks the account on request and shows the result of the daemon', async () => {
+      server.use(http.post(`/api/instances/${instance.id}/super-user/check`, () => HttpResponse.json({
+        ...instance,
+        superUser: { userName: 'admin', status: 'InsufficientAccess', checkedAt: null, error: 'No super access.' },
+      })))
+      const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, { props: { id: instance.id } })
+      useInstancesStore(pinia).upsertInstance(instance)
+      await flushPromises()
+
+      await wrapper.find('button[name="checkSuperUser"]').trigger('click')
+      await flushPromises()
+
+      expect(useInstancesStore(pinia).getInstance(instance.id)?.superUser?.status).toBe('InsufficientAccess')
+      expect(wrapper.find('[name="superUserWarning"]').text()).toContain('does not have super access')
+    })
+  })
+
   it('does not offer to delete an instance being provisioned', async () => {
     expect(await mountWith('Unknown', 'Provisioning')).toEqual([
       { text: 'Start', loading: false, disabled: true },
@@ -348,6 +415,8 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
+      { text: 'Check now', loading: false, disabled: true },
+      { text: 'Change', loading: false, disabled: true },
     ])
   })
 })

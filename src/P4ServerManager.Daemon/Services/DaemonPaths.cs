@@ -32,6 +32,12 @@ public sealed class DaemonPaths
     public string ArchiveDirectory { get; }
 
     public string InstancesDirectory => Path.Combine(DataDirectory, "instances");
+
+    /// <summary>
+    /// Keys of ASP.NET Core Data Protection, which encrypt the stored passwords. Without them, the passwords cannot be
+    /// read: a backup of the data directory must include them.
+    /// </summary>
+    public string KeysDirectory => Path.Combine(DataDirectory, "keys");
     
     /// <summary>
     /// Profiles of the p4dctl-ng servers of the HelixCoreServer Synology package, copied there by the package of the

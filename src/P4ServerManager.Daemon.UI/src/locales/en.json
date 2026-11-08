@@ -285,7 +285,7 @@
     "superUserName": "User name",
     "password": "Password",
     "confirmPassword": "Confirm the password",
-    "passwordHint": "Only given to p4d, never stored by the manager.",
+    "passwordHint": "Stored encrypted: the manager uses this account to administer the server.",
     "showPassword": "Show the password",
     "error": "The server could not be created: {message}",
     "rules": {
@@ -321,6 +321,37 @@
     "title": "Edit {name}",
     "nameHint": "Only the name in the manager changes. The server keeps its server ID and the prefix of its journals.",
     "error": "The server could not be changed: {message}"
+  },
+  "superUser": {
+    "title": "Super user",
+    "dialogTitle": "Super user of {name}",
+    "intro": "The manager uses this account to administer the server: it must have super access. Its password is stored encrypted. Nothing changes in P4: to change the password, change it in P4 first, then enter the new one here.",
+    "stoppedNote": "The server is stopped: the account is checked once it runs.",
+    "userName": "User name",
+    "password": "Current password",
+    "none": "None stored",
+    "set": "Set",
+    "change": "Change",
+    "checkedAt": "{status}, checked {date}",
+    "status": {
+      "Unchecked": "Not checked yet",
+      "Valid": "Valid",
+      "InvalidCredentials": "Wrong user name or password",
+      "PasswordExpired": "Password expired",
+      "InsufficientAccess": "No super access"
+    },
+    "warning": {
+      "title": "The manager cannot administer this server",
+      "missing": "No super user is stored for this server. Set one so that the manager can administer it.",
+      "InvalidCredentials": "The server refuses the stored user name or password. If the password was changed in P4, enter the new one.",
+      "PasswordExpired": "The password of the stored super user has expired. Change it in P4, then enter the new one here.",
+      "InsufficientAccess": "The stored user does not have super access. Give it super access in the protections table, or choose another account."
+    },
+    "checkError": "The super user could not be checked: {message}",
+    "error": "The super user could not be saved: {message}",
+    "rules": {
+      "passwordRequired": "Enter the password."
+    }
   },
   "upgradeInstance": {
     "title": "Upgrade {name}",

@@ -46,6 +46,16 @@ public static partial class InstanceRuleExtensions
             .WithMessage("The name starts with a letter and has up to 32 letters, digits, '-' or '_'.");
     }
 
+    /// <summary>
+    /// A well-formed P4 user name, such as the one of a super user.
+    /// </summary>
+    public static IRuleBuilderOptions<T, string> MustBeUserName<T>(this IRuleBuilder<T, string> rule)
+    {
+        return rule
+            .Matches(UserNamePattern())
+            .WithMessage("The user name starts with a letter and has up to 64 letters, digits, '.', '-' or '_'.");
+    }
+
     public static IRuleBuilderOptions<T, string?> MustBeInstanceDescription<T>(this IRuleBuilder<T, string?> rule)
     {
         return rule
@@ -118,4 +128,7 @@ public static partial class InstanceRuleExtensions
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9_-]{0,31}$")]
     private static partial Regex NamePattern();
+
+    [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9._-]{0,63}$")]
+    private static partial Regex UserNamePattern();
 }

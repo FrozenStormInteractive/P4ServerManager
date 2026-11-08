@@ -67,6 +67,30 @@ internal sealed class DaemonClient(HttpClient httpClient, string socketPath) : I
     }
 
     /// <summary>
+    /// Stores the super user of an instance. The daemon checks it first when the server runs.
+    /// </summary>
+    public Task<InstanceDto> SetSuperUserAsync(
+        Guid id,
+        SetSuperUserRequest request,
+        CancellationToken cancellationToken)
+    {
+        return SendAsync(
+            HttpMethod.Put,
+            $"api/instances/{id}/super-user",
+            Json.InstanceDto,
+            cancellationToken,
+            JsonContent.Create(request, Json.SetSuperUserRequest));
+    }
+
+    /// <summary>
+    /// Checks the stored super user of a running instance now.
+    /// </summary>
+    public Task<InstanceDto> CheckSuperUserAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return SendAsync(HttpMethod.Post, $"api/instances/{id}/super-user/check", Json.InstanceDto, cancellationToken);
+    }
+
+    /// <summary>
     /// Enables the maintenance mode of an instance: its p4d is restarted, or started, with <c>-n</c>.
     /// </summary>
     public Task<InstanceDto> EnableMaintenanceModeAsync(Guid id, CancellationToken cancellationToken)

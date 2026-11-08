@@ -43,4 +43,11 @@ public sealed class DaemonOptions
     [Required]
     [RegularExpression(@"^r\d{2}\.\d$")]
     public string MinimumRelease { get; set; } = "r20.1";
+
+    /// <summary>
+    /// Interval between two checks of the stored super user account of each running instance. An account found
+    /// invalid is not checked again until it is changed or checked on demand.
+    /// </summary>
+    [Range(typeof(TimeSpan), "00:01:00", "7.00:00:00")]
+    public TimeSpan SuperUserCheckInterval { get; set; } = TimeSpan.FromHours(1);
 }

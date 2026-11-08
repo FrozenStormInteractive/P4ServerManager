@@ -44,6 +44,8 @@ internal static class ShowInstanceCommand
                 ("Unicode", InstanceFormatting.FormatYesNo(instance.Unicode)),
                 ("Auto-start", InstanceFormatting.FormatYesNo(instance.AutoStart)),
                 ("Maintenance mode", InstanceFormatting.FormatYesNo(instance.MaintenanceMode)),
+                ("Super user", InstanceFormatting.FormatSuperUser(instance) ?? "none stored"),
+                ("Super user error", instance.SuperUser?.Error),
                 ("Created", instance.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)),
                 ("Last error", instance.LastError),
             ];

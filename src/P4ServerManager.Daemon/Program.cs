@@ -2,6 +2,9 @@ using System.Text.Json.Serialization;
 
 using FluentValidation;
 
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -14,6 +17,7 @@ using P4ServerManager.Daemon.Options;
 using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Builds;
 using P4ServerManager.Daemon.Services.Instances;
+using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.HealthChecks;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Instances.Steps;
@@ -70,7 +74,14 @@ builder.Services.AddSharedInstanceSteps();
 builder.Services.AddInstanceProvisioningServices();
 builder.Services.AddInstanceUpgradeServices();
 builder.Services.AddInstanceUnicodeConversionServices();
+builder.Services.AddInstanceAdminServices();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+// Encrypts the stored passwords. The keys live in the data directory, readable by the daemon only.
+builder.Services.AddDataProtection().SetApplicationName("P4ServerManager");
+builder.Services.AddOptions<KeyManagementOptions>()
+    .Configure<DaemonPaths, ILoggerFactory>((options, paths, loggerFactory) =>
+        options.XmlRepository = new FileSystemXmlRepository(new DirectoryInfo(paths.KeysDirectory), loggerFactory));
 
 builder.Services.AddControllers(options =>
     {
@@ -120,6 +131,14 @@ static async Task PrepareDataDirectoryAsync(IServiceProvider services)
 {
     DaemonPaths paths = services.GetRequiredService<DaemonPaths>();
     Directory.CreateDirectory(paths.DataDirectory);
+    if (OperatingSystem.IsWindows())
+    {
+        Directory.CreateDirectory(paths.KeysDirectory);
+    }
+    else
+    {
+        Directory.CreateDirectory(paths.KeysDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
 
     IDbContextFactory<DaemonDbContext> dbContextFactory =
         services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();

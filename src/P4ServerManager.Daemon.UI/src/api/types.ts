@@ -44,7 +44,41 @@ export interface Instance {
   state: InstanceState
   runtimeStatus: RuntimeStatus
   lastError: string | null
+  /**
+   * Super user account the daemon stores to administer the server. Null when none is stored, as for an imported
+   * instance.
+   */
+  superUser: StoredSuperUser | null
   createdAt: string
+}
+
+/**
+ * Result of the last check of the stored super user: `Unchecked` until the server ran since it was stored.
+ */
+export type SuperUserStatus = 'Unchecked' | 'Valid' | 'InvalidCredentials' | 'PasswordExpired' | 'InsufficientAccess'
+
+/**
+ * Super user account stored for an instance. Its password is never returned.
+ */
+export interface StoredSuperUser {
+  userName: string
+  status: SuperUserStatus
+  /**
+   * Date of the last check that reached the server. Null until checked.
+   */
+  checkedAt: string | null
+  /**
+   * Message of p4 when the last check failed.
+   */
+  error: string | null
+}
+
+/**
+ * Another account, or the new password of the same one after it was changed in P4. Nothing changes in P4.
+ */
+export interface SetSuperUserRequest {
+  userName: string
+  password: string
 }
 
 /**

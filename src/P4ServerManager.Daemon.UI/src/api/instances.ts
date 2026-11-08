@@ -6,6 +6,7 @@ import type {
   InstanceActionResult,
   InstanceSelection,
   OperationSnapshot,
+  SetSuperUserRequest,
   UpdateInstanceRequest,
   UpgradeInstanceRequest,
 } from './types'
@@ -23,6 +24,21 @@ export function createInstance (body: CreateInstanceRequest): Promise<Instance> 
 
 export function updateInstance (id: string, body: UpdateInstanceRequest): Promise<Instance> {
   return request('PATCH', `/api/instances/${encodeURIComponent(id)}`, body)
+}
+
+/**
+ * Stores the super user of the instance. When the server runs, the daemon checks it first and refuses an account that
+ * does not log in with super access.
+ */
+export function setSuperUser (id: string, body: SetSuperUserRequest): Promise<Instance> {
+  return request('PUT', `/api/instances/${encodeURIComponent(id)}/super-user`, body)
+}
+
+/**
+ * Checks the stored super user of a running instance now.
+ */
+export function checkSuperUser (id: string): Promise<Instance> {
+  return request('POST', `/api/instances/${encodeURIComponent(id)}/super-user/check`)
 }
 
 /**

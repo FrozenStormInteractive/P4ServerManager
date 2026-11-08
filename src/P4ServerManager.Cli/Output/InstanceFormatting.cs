@@ -33,6 +33,15 @@ internal static class InstanceFormatting
         return instance.MaintenanceMode ? $"{status} (maintenance)" : status;
     }
 
+    /// <summary>
+    /// The stored super user and the result of its last check, such as <c>admin (Valid)</c>, or null when none is
+    /// stored.
+    /// </summary>
+    public static string? FormatSuperUser(InstanceDto instance)
+    {
+        return instance.SuperUser is { } superUser ? $"{superUser.UserName} ({superUser.Status})" : null;
+    }
+
     public static string FormatYesNo(bool value)
     {
         return value ? "yes" : "no";

@@ -287,7 +287,45 @@ namespace P4ServerManager.Daemon.Database.Migrations
                         .HasForeignKey("BuildId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.OwnsOne("P4ServerManager.Daemon.Database.Entities.InstanceSuperUser", "SuperUser", b1 =>
+                        {
+                            b1.Property<Guid>("InstanceId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTimeOffset?>("CheckedAt")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("LastError")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ProtectedPassword")
+                                .IsRequired()
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Status")
+                                .IsRequired()
+                                .HasMaxLength(32)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateTimeOffset>("UpdatedAt")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("UserName")
+                                .IsRequired()
+                                .HasMaxLength(64)
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("InstanceId");
+
+                            b1.ToTable("InstanceSuperUsers", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("InstanceId");
+                        });
+
                     b.Navigation("Build");
+
+                    b.Navigation("SuperUser");
                 });
 
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.HealthCheckRun", b =>

@@ -7,6 +7,7 @@ using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances;
+using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
@@ -72,6 +73,7 @@ public sealed class InstancesController(
     /// <param name="request">Settings of the instance, checked by <see cref="CreateInstanceRequestValidator"/>.</param>
     /// <param name="queue">Queue of the provisionings.</param>
     /// <param name="paths">Paths of the data directory.</param>
+    /// <param name="passwordProtector">Encrypts the password of the super user, which the daemon stores.</param>
     /// <param name="cancellationToken">Aborts the request.</param>
     /// <response code="202">The instance is created and its provisioning has started.</response>
     /// <response code="400">The settings are not valid. The errors are keyed by field.</response>
@@ -84,9 +86,11 @@ public sealed class InstancesController(
         CreateInstanceRequest request,
         [FromServices] ProvisioningQueue queue,
         [FromServices] DaemonPaths paths,
+        [FromServices] SuperUserPasswordProtector passwordProtector,
         CancellationToken cancellationToken)
     {
         Guid id = Guid.NewGuid();
+        DateTimeOffset now = timeProvider.GetUtcNow();
         P4ServerInstance instance = new()
         {
             Id = id,
@@ -109,7 +113,15 @@ public sealed class InstancesController(
             Unicode = request.Unicode,
             AutoStart = request.AutoStart,
             State = P4ServerInstanceState.Provisioning,
-            CreatedAt = timeProvider.GetUtcNow(),
+            // Stored now, checked once the server is provisioned.
+            SuperUser = new InstanceSuperUser
+            {
+                UserName = request.SuperUser.Name,
+                ProtectedPassword = passwordProtector.Protect(request.SuperUser.Password),
+                Status = SuperUserStatus.Unchecked,
+                UpdatedAt = now,
+            },
+            CreatedAt = now,
         };
         db.Instances.Add(instance);
         try

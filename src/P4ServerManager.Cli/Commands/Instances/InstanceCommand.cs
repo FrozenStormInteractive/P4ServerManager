@@ -20,6 +20,7 @@ internal static class InstanceCommand
         }
         command.Subcommands.Add(MaintenanceModeCommand.Create(services));
         command.Subcommands.Add(SetInstanceCommand.Create(services));
+        command.Subcommands.Add(SuperUserCommand.Create(services));
         command.Subcommands.Add(UpgradeInstanceCommand.Create(services));
         command.Subcommands.Add(ConvertInstanceToUnicodeCommand.Create(services));
         command.Subcommands.Add(InstanceHealthCommand.Create(services));

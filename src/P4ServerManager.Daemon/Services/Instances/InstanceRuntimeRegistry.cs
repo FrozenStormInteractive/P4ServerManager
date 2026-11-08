@@ -16,11 +16,21 @@ public sealed class InstanceRuntimeRegistry
         return statuses.GetValueOrDefault(instanceId, InstanceRuntimeStatus.Unknown);
     }
 
+    /// <summary>
+    /// Raised when the p4d of an instance is found running and was not before: started, restarted, or adopted. The
+    /// handlers run on the caller of <see cref="Set"/> and must return at once.
+    /// </summary>
+    public event Action<Guid>? Started;
+
     /// <returns>True when the status changed.</returns>
     public bool Set(Guid instanceId, InstanceRuntimeStatus status)
     {
         InstanceRuntimeStatus previous = statuses.GetValueOrDefault(instanceId, InstanceRuntimeStatus.Unknown);
         statuses[instanceId] = status;
+        if (status == InstanceRuntimeStatus.Running && previous != InstanceRuntimeStatus.Running)
+        {
+            Started?.Invoke(instanceId);
+        }
         return previous != status;
     }
 

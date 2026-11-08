@@ -11,6 +11,7 @@ using Microsoft.Extensions.Hosting;
 
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services;
+using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Perforce;
 

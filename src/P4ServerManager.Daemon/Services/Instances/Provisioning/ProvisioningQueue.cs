@@ -1,17 +1,8 @@
 using System.Threading.Channels;
 
-namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
+using P4ServerManager.Daemon.Services.Instances.Admin;
 
-/// <param name="Name">User name.</param>
-/// <param name="Password">Password. It only lives in memory until p4d has it.</param>
-public sealed record SuperUserCredentials(string Name, string Password)
-{
-    // Keeps the password out of logs that print the record.
-    public override string ToString()
-    {
-        return $"SuperUserCredentials {{ Name = {Name} }}";
-    }
-}
+namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
 /// <summary>
 /// How an instance comes to life. Each kind has its own steps.
