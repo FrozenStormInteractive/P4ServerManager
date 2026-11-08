@@ -4,20 +4,15 @@ using P4ServerManager.Daemon.Services.Operations;
 namespace P4ServerManager.Daemon.Services.Instances.Upgrade;
 
 /// <summary>
-/// Moves an instance to another p4d build by running the upgrade steps, in the order they were registered by
-/// <see cref="UpgradeServiceCollectionExtensions.AddInstanceUpgradeServices"/>: get the build, stop p4d, upgrade the
-/// database, start p4d again. The <see cref="InstanceSupervisor"/> runs it while it holds the instance.
+/// Moves an instance to another p4d build with the <see cref="UpgradeOperation"/>. The <see cref="InstanceSupervisor"/>
+/// runs it while it holds the instance.
 /// </summary>
 public sealed class InstanceUpgrader(
-    IEnumerable<IOperationStep<UpgradeContext>> steps,
+    UpgradeOperation operation,
     OperationRunner operationRunner,
     P4ServerLauncher launcher,
     ILogger<InstanceUpgrader> logger)
 {
-    public const string OperationKind = "upgrade";
-
-    private readonly IReadOnlyList<IOperationStep<UpgradeContext>> upgradeSteps = steps.ToList();
-
     /// <summary>
     /// Runs the upgrade. The operation is begun before the first await, so its snapshot replaces the previous one as
     /// soon as this returns. A failure is kept as the last error of the instance, which is not saved: the caller saves
@@ -29,10 +24,9 @@ public sealed class InstanceUpgrader(
         P4ServerInstance instance = context.Instance;
         try
         {
-            Task operation = operationRunner.RunAsync(
+            Task run = operationRunner.RunAsync(
                 instance.Id,
-                OperationKind,
-                upgradeSteps,
+                operation,
                 context,
                 cancellationToken);
             logger.LogInformation(
@@ -41,7 +35,7 @@ public sealed class InstanceUpgrader(
                 context.PreviousBuild.Version,
                 context.PreviousBuild.BuildNumber,
                 context.Release);
-            await operation;
+            await run;
 
             if (context.UpToDate)
             {

@@ -5,9 +5,15 @@ namespace P4ServerManager.Daemon.Services.Operations;
 public readonly record struct OperationStepProgress(string? Message, int? Percent);
 
 /// <summary>
-/// One step of an operation run by the <see cref="OperationRunner"/>. An operation is the ordered list of its steps.
+/// One step of an operation run by the <see cref="OperationRunner"/>. A step does not know the operations it is part
+/// of: an <see cref="IOperationDefinition{TContext}"/> puts it in its <see cref="OperationPlan{TContext}"/>, with the
+/// conditions of that operation.
 /// </summary>
-/// <typeparam name="TContext">State shared by the steps of the operation.</typeparam>
+/// <typeparam name="TContext">
+/// What the step needs from the state of the operation. Typed on the smallest interface it needs, or on
+/// <see cref="object"/> when it needs nothing, the same step fits the plan of any operation whose context implements
+/// it.
+/// </typeparam>
 public interface IOperationStep<in TContext>
 {
     /// <summary>
@@ -21,9 +27,8 @@ public interface IOperationStep<in TContext>
     string Title { get; }
 
     /// <summary>
-    /// Whether the step is part of this run at all. Read before the first step runs: a step that is not is left out of
-    /// the list of the steps, for a step the clients would have no reason to show, such as one for an option the
-    /// instance does not use.
+    /// Whether the step is part of this run at all, for a reason of its own: whether an operation includes it is
+    /// decided by its plan. Read before the first step runs: a step that is not is left out of the list of the steps.
     /// </summary>
     bool IsIncluded(TContext context)
     {
@@ -31,9 +36,8 @@ public interface IOperationStep<in TContext>
     }
 
     /// <summary>
-    /// Whether the step applies to this run. Read before the first step runs: a step that does not apply is shown as
-    /// skipped from the start. Read again right before the step runs: a step that an earlier one made unnecessary is
-    /// skipped then.
+    /// Whether the step applies to this run, for a reason of its own: when an operation skips it is decided by its
+    /// plan. Read before the first step runs, and again right before the step runs.
     /// </summary>
     bool ShouldRun(TContext context)
     {

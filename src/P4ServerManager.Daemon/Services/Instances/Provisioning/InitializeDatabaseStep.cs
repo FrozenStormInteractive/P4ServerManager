@@ -1,4 +1,5 @@
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
@@ -10,14 +11,14 @@ namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 /// its journal and its log to the folders next to the root.
 /// </summary>
 public sealed class InitializeDatabaseStep(IP4ServerBuildCache buildCache, IProcessRunner processRunner)
-    : IOperationStep<ProvisioningContext>
+    : IOperationStep<IInstanceOperationContext>
 {
     public string Key => "initialize-database";
 
     public string Title => "Initialize the database";
 
     public async Task<string?> RunAsync(
-        ProvisioningContext context,
+        IInstanceOperationContext context,
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {

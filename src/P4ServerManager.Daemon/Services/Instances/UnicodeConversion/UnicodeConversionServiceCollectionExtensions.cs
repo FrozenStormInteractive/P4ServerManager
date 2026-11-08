@@ -1,26 +1,17 @@
-using P4ServerManager.Daemon.Services.Operations;
-
 namespace P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
 
 public static class UnicodeConversionServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the conversion of the instances to Unicode mode. The steps run in the order they are registered here.
+    /// Registers the conversion of the instances to Unicode mode and its own steps. The steps it shares with other
+    /// operations are registered by <see cref="Steps.StepsServiceCollectionExtensions.AddSharedInstanceSteps"/>.
     /// </summary>
     public static IServiceCollection AddInstanceUnicodeConversionServices(this IServiceCollection services)
     {
-        services.AddStep<StopServerForConversionStep>();
-        services.AddStep<SaveConversionCheckpointStep>();
-        services.AddStep<SwitchToUnicodeStep>();
-        services.AddStep<StartConvertedServerStep>();
+        services.AddSingleton<SwitchToUnicodeStep>();
 
+        services.AddSingleton<UnicodeConversionOperation>();
         services.AddSingleton<InstanceUnicodeConverter>();
         return services;
-    }
-
-    private static void AddStep<TStep>(this IServiceCollection services)
-        where TStep : class, IOperationStep<UnicodeConversionContext>
-    {
-        services.AddSingleton<IOperationStep<UnicodeConversionContext>, TStep>();
     }
 }

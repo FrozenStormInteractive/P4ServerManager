@@ -1,3 +1,4 @@
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
@@ -12,7 +13,7 @@ public sealed class CreateSuperUserStep(
     IP4ServerBuildCache buildCache,
     IProcessRunner processRunner,
     DaemonPaths paths,
-    ILogger<CreateSuperUserStep> logger) : IOperationStep<ProvisioningContext>
+    ILogger<CreateSuperUserStep> logger) : IOperationStep<ISuperUserContext>
 {
     /// <summary>
     /// Added after the <c>write user</c> line of the default table.
@@ -24,7 +25,7 @@ public sealed class CreateSuperUserStep(
     public string Title => "Create the super user";
 
     public async Task<string?> RunAsync(
-        ProvisioningContext context,
+        ISuperUserContext context,
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {
@@ -35,7 +36,7 @@ public sealed class CreateSuperUserStep(
             logger,
             context,
             cancellationToken);
-        string name = context.SuperUser!.Name;
+        string name = context.SuperUser.Name;
 
         bool specSaved = await session.SetPasswordAsync(cancellationToken);
         return await session.RunLoggedInAsync(async () =>

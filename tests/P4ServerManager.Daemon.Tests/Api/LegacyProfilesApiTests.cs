@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
+using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Perforce;
@@ -293,12 +294,21 @@ public sealed class LegacyProfilesApiTests : IAsyncLifetime
     public void Provisioner_ResolvesTheStepsOfBothKinds()
     {
         _factory.Services.GetRequiredService<InstanceProvisioner>().ShouldNotBeNull();
-        _factory.Services
-            .GetKeyedServices<Daemon.Services.Operations.IOperationStep<ProvisioningContext>>(ProvisioningKind.Import)
-            .Select(step => step.Key)
+        P4ServerInstance instance = new() { Name = "main", RootPath = CreateRoot("main"), Release = "r25.1", Ssl = true };
+
+        _factory.Services.GetRequiredService<ImportInstanceOperation>()
+            .Plan(new ImportInstanceContext(null!, instance, "checkpoint.gz"))
+            .Steps.Select(s => s.Step.Key)
             .ShouldBe([
                 "resolve-build", "check-root", "read-ssl-fingerprint", "save-checkpoint", "read-settings",
                 "upgrade-database", "start-server",
+            ]);
+        _factory.Services.GetRequiredService<CreateInstanceOperation>()
+            .Plan(new CreateInstanceContext(null!, instance, new SuperUserCredentials("admin", "secret")))
+            .Steps.Select(s => s.Step.Key)
+            .ShouldBe([
+                "resolve-build", "prepare-directories", "initialize-database", "generate-ssl-certificate",
+                "start-server", "create-super-user", "configure-server", "create-specs",
             ]);
     }
 

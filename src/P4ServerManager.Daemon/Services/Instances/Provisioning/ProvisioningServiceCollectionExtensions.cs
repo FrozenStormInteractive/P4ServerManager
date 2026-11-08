@@ -1,43 +1,31 @@
 using P4ServerManager.Daemon.Services.Instances.Import;
-using P4ServerManager.Daemon.Services.Operations;
 
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
 public static class ProvisioningServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the provisioning of the instances. The steps of each <see cref="ProvisioningKind"/> run in the order
-    /// they are registered here.
+    /// Registers the provisioning of the instances and its own steps. The steps it shares with other operations are
+    /// registered by <see cref="Steps.StepsServiceCollectionExtensions.AddSharedInstanceSteps"/>.
     /// </summary>
     public static IServiceCollection AddInstanceProvisioningServices(this IServiceCollection services)
     {
-        services.AddStep<ResolveBuildStep>(ProvisioningKind.Create);
-        services.AddStep<PrepareDirectoriesStep>(ProvisioningKind.Create);
-        services.AddStep<InitializeDatabaseStep>(ProvisioningKind.Create);
-        services.AddStep<GenerateSslCertificateStep>(ProvisioningKind.Create);
-        services.AddStep<StartServerStep>(ProvisioningKind.Create);
-        services.AddStep<CreateSuperUserStep>(ProvisioningKind.Create);
-        services.AddStep<ConfigureServerStep>(ProvisioningKind.Create);
-        services.AddStep<CreateSpecsStep>(ProvisioningKind.Create);
+        services.AddSingleton<PrepareDirectoriesStep>();
+        services.AddSingleton<InitializeDatabaseStep>();
+        services.AddSingleton<GenerateSslCertificateStep>();
+        services.AddSingleton<CreateSuperUserStep>();
+        services.AddSingleton<ConfigureServerStep>();
+        services.AddSingleton<CreateSpecsStep>();
+        services.AddSingleton<CheckRootStep>();
+        services.AddSingleton<ReadSslFingerprintStep>();
+        services.AddSingleton<ReadServerSettingsStep>();
 
-        services.AddStep<ResolveBuildStep>(ProvisioningKind.Import);
-        services.AddStep<CheckRootStep>(ProvisioningKind.Import);
-        services.AddStep<ReadSslFingerprintStep>(ProvisioningKind.Import);
-        services.AddStep<SaveCheckpointStep>(ProvisioningKind.Import);
-        services.AddStep<ReadServerSettingsStep>(ProvisioningKind.Import);
-        services.AddStep<UpgradeDatabaseStep>(ProvisioningKind.Import);
-        services.AddStep<StartServerStep>(ProvisioningKind.Import);
-
+        services.AddSingleton<CreateInstanceOperation>();
+        services.AddSingleton<ImportInstanceOperation>();
         services.AddSingleton<ProvisioningQueue>();
         services.AddSingleton<InstanceProvisioner>();
         services.AddSingleton<LegacyProfileStore>();
         services.AddHostedService<ProvisioningWorker>();
         return services;
-    }
-
-    private static void AddStep<TStep>(this IServiceCollection services, ProvisioningKind kind)
-        where TStep : class, IOperationStep<ProvisioningContext>
-    {
-        services.AddKeyedSingleton<IOperationStep<ProvisioningContext>, TStep>(kind);
     }
 }

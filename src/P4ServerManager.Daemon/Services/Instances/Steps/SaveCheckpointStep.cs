@@ -4,36 +4,38 @@ using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
 
-namespace P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
+namespace P4ServerManager.Daemon.Services.Instances.Steps;
 
 /// <summary>
-/// Dumps the database to a compressed checkpoint in the folder of the instance: it is the only way back, as a server in
-/// Unicode mode cannot leave it. Each attempt has its own file, so a retry never replaces an earlier checkpoint.
+/// Dumps the database to a compressed checkpoint, with the build the instance runs, before anything writes to it.
 /// <c>-jd</c> leaves the journal as it is, unlike <c>-jc</c>.
 /// </summary>
-public sealed class SaveConversionCheckpointStep(
-    IP4ServerBuildCache buildCache,
-    IProcessRunner processRunner,
-    DaemonPaths paths,
-    TimeProvider timeProvider) : IOperationStep<UnicodeConversionContext>
+public sealed class SaveCheckpointStep(IP4ServerBuildCache buildCache, IProcessRunner processRunner)
+    : IOperationStep<ICheckpointContext>
 {
+    /// <summary>
+    /// The dump reads every table, and an upgrade or a conversion may rewrite them: both take as long as the database
+    /// is big.
+    /// </summary>
+    public static readonly TimeSpan Timeout = TimeSpan.FromHours(2);
+
     public string Key => "save-checkpoint";
 
     public string Title => "Save a checkpoint";
 
     public async Task<string?> RunAsync(
-        UnicodeConversionContext context,
+        ICheckpointContext context,
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {
         P4ServerInstance instance = context.Instance;
-        string checkpointPath = paths.GetUnicodeCheckpointPath(instance.Id, timeProvider.GetUtcNow());
+        string checkpointPath = context.CheckpointPath;
         Directory.CreateDirectory(Path.GetDirectoryName(checkpointPath)!);
         await processRunner.RunCheckedAsync(
             new ProcessCommand(
-                buildCache.GetP4dPath(context.Build),
+                buildCache.GetP4dPath(instance.Build!),
                 [.. P4ServerLauncher.GetRootArguments(instance), "-z", "-jd", checkpointPath],
-                Timeout: SaveCheckpointStep.Timeout),
+                Timeout: Timeout),
             cancellationToken);
         return checkpointPath;
     }

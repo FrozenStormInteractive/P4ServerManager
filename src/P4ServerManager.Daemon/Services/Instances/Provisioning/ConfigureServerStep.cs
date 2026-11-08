@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
@@ -14,14 +15,14 @@ public sealed class ConfigureServerStep(
     IP4ServerBuildCache buildCache,
     IProcessRunner processRunner,
     DaemonPaths paths,
-    ILogger<ConfigureServerStep> logger) : IOperationStep<ProvisioningContext>
+    ILogger<ConfigureServerStep> logger) : IOperationStep<ISuperUserContext>
 {
     public string Key => "configure-server";
 
     public string Title => "Apply the recommended configuration";
 
     public async Task<string?> RunAsync(
-        ProvisioningContext context,
+        ISuperUserContext context,
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {

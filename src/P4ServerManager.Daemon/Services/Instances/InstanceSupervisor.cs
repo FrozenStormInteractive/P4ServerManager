@@ -28,6 +28,7 @@ public sealed class InstanceSupervisor(
     OperationTracker operationTracker,
     InstanceNotifier notifier,
     DaemonPaths paths,
+    TimeProvider timeProvider,
     IHostApplicationLifetime lifetime,
     ILogger<InstanceSupervisor> logger) : BackgroundService
 {
@@ -278,7 +279,11 @@ public sealed class InstanceSupervisor(
                 throw new InstanceConflictException($"Instance {instance.Name} already runs in Unicode mode.");
             }
 
-            UnicodeConversionContext context = new(db, instance, launcher.IsRunning(instance));
+            UnicodeConversionContext context = new(
+                db,
+                instance,
+                launcher.IsRunning(instance),
+                paths.GetUnicodeCheckpointPath(instance.Id, timeProvider.GetUtcNow()));
             runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.ConvertingToUnicode);
             await notifier.InstanceChangedAsync(instance);
 

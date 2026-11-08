@@ -1,5 +1,6 @@
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Instances.Import;
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
@@ -8,14 +9,14 @@ namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 /// Creates the directories of an imported instance, and checks that its root holds a database the daemon can open.
 /// The root itself is left as it is.
 /// </summary>
-public sealed class CheckRootStep(DaemonPaths paths) : IOperationStep<ProvisioningContext>
+public sealed class CheckRootStep(DaemonPaths paths) : IOperationStep<IInstanceOperationContext>
 {
     public string Key => "check-root";
 
     public string Title => "Check the root";
 
     public Task<string?> RunAsync(
-        ProvisioningContext context,
+        IInstanceOperationContext context,
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {

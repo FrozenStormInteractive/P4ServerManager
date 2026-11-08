@@ -1,4 +1,5 @@
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
@@ -8,7 +9,7 @@ namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 /// root and the folders next to it must be missing or empty. Only the account the daemon runs as can open the server
 /// directory.
 /// </summary>
-public sealed class PrepareDirectoriesStep(DaemonPaths paths) : IOperationStep<ProvisioningContext>
+public sealed class PrepareDirectoriesStep(DaemonPaths paths) : IOperationStep<IInstanceOperationContext>
 {
     private const UnixFileMode PrivateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
 
@@ -17,7 +18,7 @@ public sealed class PrepareDirectoriesStep(DaemonPaths paths) : IOperationStep<P
     public string Title => "Prepare the directories";
 
     public Task<string?> RunAsync(
-        ProvisioningContext context,
+        IInstanceOperationContext context,
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {

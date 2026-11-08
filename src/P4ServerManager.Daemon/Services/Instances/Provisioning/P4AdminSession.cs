@@ -1,4 +1,5 @@
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
 
@@ -59,12 +60,11 @@ public sealed class P4AdminSession
         IProcessRunner processRunner,
         DaemonPaths paths,
         ILogger logger,
-        ProvisioningContext context,
+        ISuperUserContext context,
         CancellationToken cancellationToken)
     {
         P4ServerInstance instance = context.Instance;
-        SuperUserCredentials superUser = context.SuperUser
-            ?? throw new InvalidOperationException("A created server needs a super user.");
+        SuperUserCredentials superUser = context.SuperUser;
         P4AdminSession session = new(
             processRunner,
             logger,

@@ -1,12 +1,14 @@
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 
 namespace P4ServerManager.Daemon.Services.Instances.Upgrade;
 
 /// <summary>
-/// State shared by the upgrade steps of one instance.
+/// State shared by the upgrade steps of one instance. The instance is pinned to the target build only right before the
+/// database is upgraded.
 /// </summary>
 /// <param name="db">Context that tracks <paramref name="instance"/>. Disposed once the upgrade ends.</param>
 /// <param name="instance">The instance, ready, with its <see cref="P4ServerInstance.Build"/> loaded.</param>
@@ -18,7 +20,7 @@ public sealed class UpgradeContext(
     P4ServerInstance instance,
     P4ServerRelease release,
     bool wasRunning,
-    Guid? requestedBuildId = null) : IOperationOutcome
+    Guid? requestedBuildId = null) : InstanceOperationContext(db, instance), IBuildResolutionContext, IOperationOutcome
 {
     /// <summary>
     /// Outcome of an upgrade that moved the instance to another build.
@@ -30,10 +32,6 @@ public sealed class UpgradeContext(
     /// </summary>
     public const string UpToDateOutcome = "up-to-date";
 
-    public DaemonDbContext Db { get; } = db;
-
-    public P4ServerInstance Instance { get; } = instance;
-
     public P4ServerRelease Release { get; } = release;
 
     public bool WasRunning { get; } = wasRunning;
@@ -43,6 +41,10 @@ public sealed class UpgradeContext(
     /// </summary>
     public Guid? RequestedBuildId { get; } = requestedBuildId;
 
+    public string ReleaseName => Release.Name;
+
+    public bool PinResolvedBuild => false;
+
     /// <summary>
     /// Build the instance ran before the upgrade.
     /// </summary>
@@ -50,25 +52,21 @@ public sealed class UpgradeContext(
         ?? throw new ArgumentException("The instance has no p4d build.", nameof(instance));
 
     /// <summary>
-    /// Build the instance moves to, once downloaded or extracted.
+    /// Whether the instance already runs the target build: there is nothing left to do.
     /// </summary>
-    public P4ServerBuild? TargetBuild { get; set; }
-
-    /// <summary>
-    /// Set when the instance already runs the target build: there is nothing left to do.
-    /// </summary>
-    public bool UpToDate { get; set; }
+    public bool UpToDate => Values.TryGet(ResolveBuildStep.ResolvedBuild, out P4ServerBuild? target)
+        && target.Id == PreviousBuild.Id;
 
     public string Outcome => UpToDate ? UpToDateOutcome : UpgradedOutcome;
 
     /// <summary>
-    /// Set once the instance is pinned to the target build, right before p4d upgrades the database. The previous
-    /// build may no longer open the database from then on.
+    /// Whether the instance was pinned to the target build for p4d to upgrade the database. The previous build may no
+    /// longer open the database from then on.
     /// </summary>
-    public bool DatabaseUpgradeStarted { get; set; }
+    public bool DatabaseUpgradeStarted => Values.TryGet(UpgradeDatabaseStep.Started, out _);
 
     /// <summary>
-    /// Set once p4d has upgraded the database.
+    /// Whether p4d has upgraded the database.
     /// </summary>
-    public bool DatabaseUpgraded { get; set; }
+    public bool DatabaseUpgraded => Values.TryGet(UpgradeDatabaseStep.Completed, out _);
 }

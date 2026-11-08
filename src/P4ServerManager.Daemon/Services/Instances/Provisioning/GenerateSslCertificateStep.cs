@@ -1,4 +1,5 @@
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Perforce.Parsing;
@@ -13,19 +14,14 @@ namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 public sealed class GenerateSslCertificateStep(
     IP4ServerBuildCache buildCache,
     IProcessRunner processRunner,
-    InstanceNotifier notifier) : IOperationStep<ProvisioningContext>
+    InstanceNotifier notifier) : IOperationStep<IInstanceOperationContext>
 {
     public string Key => "generate-ssl-certificate";
 
     public string Title => "Generate the SSL certificate";
 
-    public bool IsIncluded(ProvisioningContext context)
-    {
-        return context.Instance.Ssl;
-    }
-
     public async Task<string?> RunAsync(
-        ProvisioningContext context,
+        IInstanceOperationContext context,
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {

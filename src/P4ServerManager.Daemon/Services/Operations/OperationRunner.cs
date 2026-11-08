@@ -10,37 +10,51 @@ namespace P4ServerManager.Daemon.Services.Operations;
 public sealed class OperationRunner(OperationTracker tracker, InstanceNotifier notifier)
 {
     /// <summary>
-    /// Runs the steps that apply to <paramref name="context"/>, and stops at the first that throws. The steps not
-    /// included in this run are left out of the operation, and a step that no longer applies when its turn comes is
-    /// skipped. A context that implements <see cref="IOperationOutcome"/> gives the outcome of the operation once it
-    /// succeeded. The exception is
-    /// rethrown once the failure is reported, so that the caller can undo what it needs to.
+    /// Runs <paramref name="operation"/> with the plan it gives for <paramref name="context"/>. The operation is begun
+    /// before the first await.
+    /// </summary>
+    public Task RunAsync<TContext>(
+        Guid instanceId,
+        IOperationDefinition<TContext> operation,
+        TContext context,
+        CancellationToken cancellationToken)
+    {
+        return RunAsync(instanceId, operation.Kind, operation.Plan(context), context, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the steps of <paramref name="plan"/> that apply to <paramref name="context"/>, and stops at the first that
+    /// throws. The steps not included in this run are left out of the operation, and a step that no longer applies when
+    /// its turn comes is skipped. A context that implements <see cref="IOperationOutcome"/> gives the outcome of the
+    /// operation once it succeeded. The exception is rethrown once the failure is reported, so that the caller can undo
+    /// what it needs to.
     /// </summary>
     public async Task RunAsync<TContext>(
         Guid instanceId,
         string kind,
-        IReadOnlyList<IOperationStep<TContext>> steps,
+        OperationPlan<TContext> plan,
         TContext context,
         CancellationToken cancellationToken)
     {
-        List<IOperationStep<TContext>> includedSteps = steps.Where(step => step.IsIncluded(context)).ToList();
-        List<IOperationStep<TContext>> stepsToRun = includedSteps.Where(step => step.ShouldRun(context)).ToList();
+        List<PlannedStep<TContext>> includedSteps = plan.Steps.Where(s => s.Step.IsIncluded(context)).ToList();
+        List<PlannedStep<TContext>> stepsToRun = includedSteps.Where(s => Applies(s, context)).ToList();
         await notifier.OperationChangedAsync(tracker.Begin(
             instanceId,
             kind,
-            includedSteps.Select(step => new OperationStepState(
-                step.Key,
-                step.Title,
-                stepsToRun.Contains(step) ? OperationStepStatus.Pending : OperationStepStatus.Skipped,
+            includedSteps.Select(s => new OperationStepState(
+                s.Step.Key,
+                s.Step.Title,
+                stepsToRun.Contains(s) ? OperationStepStatus.Pending : OperationStepStatus.Skipped,
                 null))));
 
         InlineProgress<OperationStepProgress> progress = new(p =>
             _ = notifier.OperationChangedAsync(tracker.ReportProgress(instanceId, p.Message, p.Percent)));
         try
         {
-            foreach (IOperationStep<TContext> step in stepsToRun)
+            foreach (PlannedStep<TContext> planned in stepsToRun)
             {
-                if (!step.ShouldRun(context))
+                IOperationStep<TContext> step = planned.Step;
+                if (!Applies(planned, context))
                 {
                     await notifier.OperationChangedAsync(tracker.SkipStep(instanceId, step.Key));
                     continue;
@@ -60,5 +74,13 @@ public sealed class OperationRunner(OperationTracker tracker, InstanceNotifier n
 
         string? outcome = context is IOperationOutcome withOutcome ? withOutcome.Outcome : null;
         await notifier.OperationChangedAsync(tracker.Complete(instanceId, outcome));
+    }
+
+    /// <summary>
+    /// Whether neither the plan nor the step itself skips the step.
+    /// </summary>
+    private static bool Applies<TContext>(PlannedStep<TContext> planned, TContext context)
+    {
+        return planned.SkipWhen?.Invoke(context) != true && planned.Step.ShouldRun(context);
     }
 }
