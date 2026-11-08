@@ -77,7 +77,7 @@
         v-model="confirmDialog"
         :action="confirmAction"
         :names="[instance.name]"
-        @confirm="run(confirmAction === 'stop' ? instances.stop : instances.restart)"
+        @confirm="run(confirmedActions[confirmAction])"
       />
 
       <p v-if="instance.description" class="text-body-medium text-medium-emphasis mb-4">
@@ -132,6 +132,22 @@
                   />
                 </template>
               </v-list-item>
+
+              <v-list-item
+                :subtitle="instance.maintenanceMode ? t('instance.maintenanceModeOn') : t('instance.maintenanceModeOff')"
+                :title="t('instance.maintenanceMode')"
+              >
+                <template #append>
+                  <v-btn
+                    :disabled="!canAct"
+                    :prepend-icon="instance.maintenanceMode ? 'mdi-wrench-check' : 'mdi-wrench'"
+                    size="small"
+                    :text="t(`actions.${maintenanceAction}`)"
+                    variant="tonal"
+                    @click="switchMaintenance"
+                  />
+                </template>
+              </v-list-item>
             </v-list>
           </v-card>
 
@@ -179,6 +195,9 @@
     id: string
   }>()
 
+  // The actions that restart or stop a running server, and so are confirmed first.
+  type ConfirmableAction = 'stop' | 'restart' | 'enableMaintenance' | 'disableMaintenance'
+
   const { t, d } = useI18n()
   const router = useRouter()
   const instances = useInstancesStore()
@@ -192,7 +211,7 @@
   const upgradeDialog = ref(false)
   const convertDialog = ref(false)
   const confirmDialog = ref(false)
-  const confirmAction = ref<'stop' | 'restart'>('stop')
+  const confirmAction = ref<ConfirmableAction>('stop')
   const savingAutoStart = ref(false)
 
   const instance = computed(() => instances.getInstance(props.id))
@@ -206,6 +225,19 @@
     instance.value?.state !== 'Provisioning' && !sending.value && !!status.value
     && !isInstanceStatusInProgress(status.value),
   )
+  // What the maintenance mode button does: disable it, or enable it with a restart or a start.
+  const maintenanceAction = computed(() => {
+    if (instance.value?.maintenanceMode) {
+      return 'disableMaintenance'
+    }
+    return status.value === 'stopped' ? 'startInMaintenance' : 'enableMaintenance'
+  })
+  const confirmedActions: Record<ConfirmableAction, (id: string) => Promise<void>> = {
+    stop: instances.stop,
+    restart: instances.restart,
+    enableMaintenance: instances.enableMaintenance,
+    disableMaintenance: instances.disableMaintenance,
+  }
   const showOperation = computed(() =>
     instance.value?.state !== 'Ready' || snapshot.value?.status === 'Running',
   )
@@ -256,9 +288,20 @@
   }
 
   // A stop or a restart disconnects the users of the server: it is confirmed. A start is not.
-  function ask (action: 'stop' | 'restart') {
+  function ask (action: ConfirmableAction) {
     confirmAction.value = action
     confirmDialog.value = true
+  }
+
+  // When the maintenance mode is enabled or disabled, a running server restarts: it is confirmed. A stopped one is started in
+  // maintenance mode, or left stopped, without a confirmation.
+  function switchMaintenance () {
+    const action = instance.value?.maintenanceMode ? 'disableMaintenance' : 'enableMaintenance'
+    if (status.value === 'running') {
+      ask(action)
+    } else {
+      void run(confirmedActions[action])
+    }
   }
 
   async function run (action: (id: string) => Promise<void>) {

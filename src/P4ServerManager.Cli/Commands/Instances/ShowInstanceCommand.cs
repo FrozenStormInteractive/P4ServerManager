@@ -43,6 +43,7 @@ internal static class ShowInstanceCommand
                 ("Case sensitive", InstanceFormatting.FormatYesNo(instance.CaseSensitive)),
                 ("Unicode", InstanceFormatting.FormatYesNo(instance.Unicode)),
                 ("Auto-start", InstanceFormatting.FormatYesNo(instance.AutoStart)),
+                ("Maintenance mode", InstanceFormatting.FormatYesNo(instance.MaintenanceMode)),
                 ("Created", instance.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)),
                 ("Last error", instance.LastError),
             ];

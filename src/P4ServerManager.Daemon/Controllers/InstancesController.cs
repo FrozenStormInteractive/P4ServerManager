@@ -302,6 +302,71 @@ public sealed class InstancesController(
     }
 
     /// <summary>
+    /// Enables the maintenance mode of an instance, and waits until its p4d accepts connections in it (<c>p4d -n</c>). In
+    /// maintenance mode, p4d does not enforce the user and file limits of its license, but only allows the commands that
+    /// do not need a client workspace: users can no longer sync or submit. A running p4d is restarted, and the instance
+    /// is <c>Restarting</c> meanwhile; a stopped one is started, and the instance is <c>Starting</c> meanwhile. The mode
+    /// is kept: every later start of p4d, including the auto-start and the one after an upgrade, follows it until the
+    /// maintenance mode is disabled with <c>POST /api/instances/{id}/maintenance/disable</c>.
+    /// </summary>
+    /// <param name="id">Identifier of the instance.</param>
+    /// <param name="supervisor">Restarts or starts the process.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
+    /// </param>
+    /// <response code="202">p4d runs in maintenance mode.</response>
+    /// <response code="404">No instance has this identifier.</response>
+    /// <response code="409">
+    /// The instance is not ready, another operation is in progress, or p4d already runs in maintenance mode.
+    /// </response>
+    /// <response code="500">
+    /// p4d did not stop, or did not start in maintenance mode. The maintenance mode stays enabled.
+    /// </response>
+    [HttpPost("{id:guid}/maintenance/enable")]
+    [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    public Task<ActionResult<InstanceDto>> EnableMaintenanceMode(
+        Guid id,
+        [FromServices] InstanceSupervisor supervisor,
+        CancellationToken cancellationToken)
+    {
+        return RunOperationAsync(() => supervisor.EnableMaintenanceModeAsync(id, cancellationToken));
+    }
+
+    /// <summary>
+    /// Disables the maintenance mode of an instance. A running p4d is restarted in normal mode, and the instance is
+    /// <c>Restarting</c> meanwhile; the request waits until p4d accepts connections again. A stopped p4d stays stopped:
+    /// its next start is a normal one.
+    /// </summary>
+    /// <param name="id">Identifier of the instance.</param>
+    /// <param name="supervisor">Restarts the process.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
+    /// </param>
+    /// <response code="202">The maintenance mode is disabled, and p4d runs in normal mode if it ran.</response>
+    /// <response code="404">No instance has this identifier.</response>
+    /// <response code="409">
+    /// The instance is not ready, another operation is in progress, or its maintenance mode is not enabled.
+    /// </response>
+    /// <response code="500">
+    /// p4d did not stop, or did not start again. The maintenance mode stays disabled.
+    /// </response>
+    [HttpPost("{id:guid}/maintenance/disable")]
+    [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    public Task<ActionResult<InstanceDto>> DisableMaintenanceMode(
+        Guid id,
+        [FromServices] InstanceSupervisor supervisor,
+        CancellationToken cancellationToken)
+    {
+        return RunOperationAsync(() => supervisor.DisableMaintenanceModeAsync(id, cancellationToken));
+    }
+
+    /// <summary>
     /// Upgrades an instance to the latest build of a p4d release, or to an exact build of it from the archive: the
     /// release of the instance, for a newer patch, or a newer release. The upgrade runs in the background: it gets the build, stops p4d if it runs, upgrades the
     /// database, then starts p4d again if it ran. No backup of the database is taken. The instance is

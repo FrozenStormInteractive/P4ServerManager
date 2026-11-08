@@ -60,6 +60,21 @@ export function restartInstance (id: string): Promise<Instance> {
 }
 
 /**
+ * Enables the maintenance mode of the instance. The daemon answers once p4d runs in it: restarted if it ran, started if it
+ * was stopped.
+ */
+export function enableMaintenanceMode (id: string): Promise<Instance> {
+  return request('POST', `/api/instances/${encodeURIComponent(id)}/maintenance/enable`)
+}
+
+/**
+ * Disables the maintenance mode of the instance. A running p4d is restarted in normal mode; a stopped one stays stopped.
+ */
+export function disableMaintenanceMode (id: string): Promise<Instance> {
+  return request('POST', `/api/instances/${encodeURIComponent(id)}/maintenance/disable`)
+}
+
+/**
  * Begins the upgrade of the instance to the latest build of a release. The daemon answers once it has begun: the
  * instance is `Upgrading` until it ends, and its operation tells its progress.
  */

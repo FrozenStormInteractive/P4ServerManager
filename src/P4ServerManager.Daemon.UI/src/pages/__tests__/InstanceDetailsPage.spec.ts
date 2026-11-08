@@ -44,6 +44,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: false },
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
+      { text: 'Enable maintenance mode', loading: false, disabled: false },
     ])
   })
 
@@ -54,6 +55,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Enable maintenance mode', loading: false, disabled: true },
     ])
   })
 
@@ -64,6 +66,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Enable maintenance mode', loading: false, disabled: true },
     ])
   })
 
@@ -73,6 +76,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Enable maintenance mode', loading: false, disabled: true },
     ])
   })
 
@@ -82,6 +86,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: false },
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
+      { text: 'Start in maintenance mode', loading: false, disabled: false },
     ])
   })
 
@@ -91,6 +96,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: true, disabled: true },
+      { text: 'Enable maintenance mode', loading: false, disabled: true },
     ])
   })
 
@@ -100,6 +106,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: true, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Enable maintenance mode', loading: false, disabled: true },
     ])
   })
 
@@ -115,6 +122,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: false },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: false },
+      { text: 'Enable maintenance mode', loading: false, disabled: true },
     ])
   })
 
@@ -143,6 +151,96 @@ describe('InstanceDetailsPage', () => {
 
     expect(requests).toBe(1)
     expect(useInstancesStore(pinia).getInstance(instance.id)?.runtimeStatus).toBe('Stopped')
+  })
+
+  describe('maintenance mode', () => {
+    async function mountInMode (runtimeStatus: RuntimeStatus, maintenanceMode: boolean) {
+      const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, {
+        props: { id: instance.id },
+        attachTo: document.body,
+      })
+      useInstancesStore(pinia).upsertInstance({ ...instance, runtimeStatus, maintenanceMode })
+      await flushPromises()
+      return { wrapper, pinia }
+    }
+
+    function countRequests (operation: 'enable' | 'disable', answer: Partial<typeof instance>) {
+      const counter = { requests: 0 }
+      server.use(http.post(`/api/instances/${instance.id}/maintenance/${operation}`, () => {
+        counter.requests++
+        return HttpResponse.json({ ...instance, ...answer }, { status: 202 })
+      }))
+      return counter
+    }
+
+    it('asks before it restarts a running server in maintenance mode', async () => {
+      const counter = countRequests('enable', { runtimeStatus: 'Running', maintenanceMode: true })
+      const { wrapper, pinia } = await mountInMode('Running', false)
+
+      await wrapper.findAll('button').find(b => b.text() === 'Enable maintenance mode')!.trigger('click')
+      await flushPromises()
+
+      expect(document.body.textContent).toContain(`Restart ${instance.name} in maintenance mode?`)
+      expect(counter.requests).toBe(0)
+
+      const confirm = [...document.querySelectorAll('button')].findLast(b => b.textContent?.trim() === 'Enable maintenance mode')
+      confirm!.click()
+      await flushPromises()
+
+      expect(counter.requests).toBe(1)
+      expect(useInstancesStore(pinia).getInstance(instance.id)?.maintenanceMode).toBe(true)
+      expect(wrapper.text()).toContain('Running (maintenance)')
+      expect(wrapper.findAll('button').map(b => b.text())).toContain('Disable maintenance mode')
+    })
+
+    it('shows a server running in maintenance mode in another color', async () => {
+      const chip = async (maintenanceMode: boolean) => {
+        const { wrapper } = await mountInMode('Running', maintenanceMode)
+        return wrapper.find('.v-chip').classes()
+      }
+
+      expect(await chip(false)).toContain('text-success')
+      expect(await chip(true)).toContain('text-warning')
+    })
+
+    it('starts a stopped server in maintenance mode without asking', async () => {
+      const counter = countRequests('enable', { runtimeStatus: 'Running', maintenanceMode: true })
+      const { wrapper, pinia } = await mountInMode('Stopped', false)
+
+      await wrapper.findAll('button').find(b => b.text() === 'Start in maintenance mode')!.trigger('click')
+      await flushPromises()
+
+      expect(counter.requests).toBe(1)
+      expect(useInstancesStore(pinia).getInstance(instance.id)?.runtimeStatus).toBe('Running')
+    })
+
+    it('asks before it restarts a running server in normal mode', async () => {
+      const counter = countRequests('disable', { runtimeStatus: 'Running', maintenanceMode: false })
+      const { wrapper, pinia } = await mountInMode('Running', true)
+
+      await wrapper.findAll('button').find(b => b.text() === 'Disable maintenance mode')!.trigger('click')
+      await flushPromises()
+
+      expect(document.body.textContent).toContain(`Restart ${instance.name} in normal mode?`)
+      expect(counter.requests).toBe(0)
+
+      const confirm = [...document.querySelectorAll('button')].findLast(b => b.textContent?.trim() === 'Disable maintenance mode')
+      confirm!.click()
+      await flushPromises()
+
+      expect(counter.requests).toBe(1)
+      expect(useInstancesStore(pinia).getInstance(instance.id)?.maintenanceMode).toBe(false)
+    })
+
+    it('disables the maintenance mode of a stopped server without asking', async () => {
+      const counter = countRequests('disable', { runtimeStatus: 'Stopped', maintenanceMode: false })
+      const { wrapper } = await mountInMode('Stopped', true)
+
+      await wrapper.findAll('button').find(b => b.text() === 'Disable maintenance mode')!.trigger('click')
+      await flushPromises()
+
+      expect(counter.requests).toBe(1)
+    })
   })
 
   describe('conversion to Unicode mode', () => {
@@ -249,6 +347,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Enable maintenance mode', loading: false, disabled: true },
     ])
   })
 })

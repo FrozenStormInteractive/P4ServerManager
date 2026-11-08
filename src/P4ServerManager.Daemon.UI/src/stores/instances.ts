@@ -175,6 +175,14 @@ export const useInstancesStore = defineStore('instances', () => {
     upsertInstance(await api.restartInstance(id))
   }
 
+  async function enableMaintenance (id: string) {
+    upsertInstance(await api.enableMaintenanceMode(id))
+  }
+
+  async function disableMaintenance (id: string) {
+    upsertInstance(await api.disableMaintenanceMode(id))
+  }
+
   /**
    * Begins the upgrade of the instance to the latest build of `release`. The hub tells its progress.
    */
@@ -246,6 +254,8 @@ export const useInstancesStore = defineStore('instances', () => {
     start,
     stop,
     restart,
+    enableMaintenance,
+    disableMaintenance,
     upgrade,
     convertToUnicode,
     runAction,

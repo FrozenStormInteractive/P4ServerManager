@@ -61,6 +61,12 @@ public sealed class P4ServerInstance
     /// </summary>
     public bool AutoStart { get; set; }
 
+    /// <summary>
+    /// Whether p4d runs in maintenance mode (<c>p4d -n</c>): it only allows the commands that do not need a client
+    /// workspace. Every start of p4d follows it, until its maintenance mode is disabled.
+    /// </summary>
+    public bool MaintenanceMode { get; set; }
+
     public P4ServerInstanceState State { get; set; }
 
     public string? LastError { get; set; }

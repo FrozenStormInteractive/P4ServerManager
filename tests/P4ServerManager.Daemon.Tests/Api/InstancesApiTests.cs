@@ -537,6 +537,8 @@ public sealed class InstancesApiTests : IAsyncLifetime
     [Theory]
     [InlineData("start")]
     [InlineData("restart")]
+    [InlineData("maintenance/enable")]
+    [InlineData("maintenance/disable")]
     public async Task Operation_ConflictsWhileTheInstanceIsProvisioning(string operation)
     {
         HttpResponseMessage created = await _client.PostAsJsonAsync(
@@ -563,6 +565,57 @@ public sealed class InstancesApiTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Theory]
+    [InlineData("maintenance/enable")]
+    [InlineData("maintenance/disable")]
+    public async Task MaintenanceMode_ReturnsNotFoundForAnUnknownInstance(string operation)
+    {
+        HttpResponseMessage response = await _client.PostAsync(
+            $"/api/instances/{Guid.NewGuid()}/{operation}",
+            null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task DisableMaintenanceMode_ConflictsWhenTheInstanceIsNotInMaintenanceMode()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+
+        HttpResponseMessage response = await _client.PostAsync(
+            $"/api/instances/{id}/maintenance/disable",
+            null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task DisableMaintenanceMode_LeavesAStoppedInstanceStopped()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped, maintenanceMode: true);
+        JsonElement before = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+        before.GetProperty("maintenanceMode").GetBoolean().ShouldBeTrue();
+
+        HttpResponseMessage response = await _client.PostAsync(
+            $"/api/instances/{id}/maintenance/disable",
+            null,
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        instance.GetProperty("maintenanceMode").GetBoolean().ShouldBeFalse();
+        instance.GetProperty("runtimeStatus").GetString().ShouldBe("Stopped");
+        JsonElement after = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+        after.GetProperty("maintenanceMode").GetBoolean().ShouldBeFalse();
     }
 
     [Fact]
@@ -1171,7 +1224,10 @@ public sealed class InstancesApiTests : IAsyncLifetime
                 TestContext.Current.CancellationToken);
     }
 
-    private async Task<Guid> CreateReadyInstanceAsync(string name, InstanceRuntimeStatus runtimeStatus)
+    private async Task<Guid> CreateReadyInstanceAsync(
+        string name,
+        InstanceRuntimeStatus runtimeStatus,
+        bool maintenanceMode = false)
     {
         Guid id = await CreateFailedInstanceAsync(name);
         IDbContextFactory<DaemonDbContext> dbContextFactory =
@@ -1181,7 +1237,9 @@ public sealed class InstancesApiTests : IAsyncLifetime
         await db.Instances
             .Where(i => i.Id == id)
             .ExecuteUpdateAsync(
-                setters => setters.SetProperty(i => i.State, P4ServerInstanceState.Ready),
+                setters => setters
+                    .SetProperty(i => i.State, P4ServerInstanceState.Ready)
+                    .SetProperty(i => i.MaintenanceMode, maintenanceMode),
                 TestContext.Current.CancellationToken);
         _factory.Services.GetRequiredService<InstanceRuntimeRegistry>().Set(id, runtimeStatus);
         return id;

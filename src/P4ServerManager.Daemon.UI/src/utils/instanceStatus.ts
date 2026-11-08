@@ -76,8 +76,13 @@ const colors: Record<InstanceStatus, string> = {
   unknown: 'grey',
 }
 
-export function getInstanceStatusColor (status: InstanceStatus): string {
-  return colors[status]
+/**
+ * Color of the status of an instance. A server that runs in maintenance mode stands out from one that serves its users
+ * normally. While it is stopped or busy, it keeps the color of its status.
+ */
+export function getInstanceColor (instance: Instance): string {
+  const status = getInstanceStatus(instance)
+  return instance.maintenanceMode && status === 'running' ? 'warning' : colors[status]
 }
 
 const inProgressStatuses = new Set<InstanceStatus>([

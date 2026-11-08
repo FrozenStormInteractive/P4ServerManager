@@ -53,7 +53,8 @@ internal sealed class CliRunner
         P4ServerInstanceState state = P4ServerInstanceState.Ready,
         InstanceRuntimeStatus runtimeStatus = InstanceRuntimeStatus.Running,
         int port = 1666,
-        Guid? id = null)
+        Guid? id = null,
+        bool maintenanceMode = false)
     {
         return new InstanceDto(
             id ?? Guid.NewGuid(),
@@ -69,6 +70,7 @@ internal sealed class CliRunner
             CaseSensitive: true,
             Unicode: false,
             AutoStart: true,
+            maintenanceMode,
             state,
             runtimeStatus,
             LastError: null,

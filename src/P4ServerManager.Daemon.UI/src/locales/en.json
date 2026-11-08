@@ -21,6 +21,9 @@
     "restart": "Restart",
     "upgrade": "Upgrade",
     "convertToUnicode": "Convert to Unicode",
+    "enableMaintenance": "Enable maintenance mode",
+    "startInMaintenance": "Start in maintenance mode",
+    "disableMaintenance": "Disable maintenance mode",
     "delete": "Delete",
     "import": "Import",
     "dismiss": "Dismiss",
@@ -39,7 +42,8 @@
     "convertingToUnicode": "Converting to Unicode",
     "checkingHealth": "Checking health",
     "deleting": "Deleting",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "inMaintenance": "{status} (maintenance)"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -90,6 +94,14 @@
       "restart": {
         "title": "Restart {name}? | Restart {count} servers?",
         "text": "Its users are disconnected while it restarts. | Their users are disconnected while they restart."
+      },
+      "enableMaintenance": {
+        "title": "Restart {name} in maintenance mode? | Restart {count} servers in maintenance mode?",
+        "text": "Its users are disconnected while it restarts. Then it only allows the commands that do not need a client workspace: users can no longer sync or submit. | Their users are disconnected while they restart. Then they only allow the commands that do not need a client workspace: users can no longer sync or submit."
+      },
+      "disableMaintenance": {
+        "title": "Restart {name} in normal mode? | Restart {count} servers in normal mode?",
+        "text": "Its users are disconnected while it restarts. | Their users are disconnected while they restart."
       }
     },
     "actionFailed": {
@@ -127,6 +139,9 @@
     "autoStart": "Start with the manager",
     "autoStartHint": "Starts the server whenever the manager starts, unless it already runs.",
     "autoStartError": "The setting could not be saved: {message}",
+    "maintenanceMode": "Maintenance mode",
+    "maintenanceModeOn": "On: the server only allows the commands that do not need a client workspace. Users cannot sync or submit.",
+    "maintenanceModeOff": "Off. In maintenance mode, the server only allows the commands that do not need a client workspace.",
     "openSections": "Instance sections",
     "sections": {
       "overview": "Overview",

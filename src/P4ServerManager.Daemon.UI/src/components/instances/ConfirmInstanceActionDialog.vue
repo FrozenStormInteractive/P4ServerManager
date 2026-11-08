@@ -31,10 +31,11 @@
   import { useI18n } from 'vue-i18n'
 
   /**
-   * Confirms a stop or a restart: it disconnects the users of the servers. A start is never confirmed.
+   * Confirms a stop, a restart, or a restart into or out of maintenance mode: it disconnects the users of the servers.
+   * A start is never confirmed.
    */
   const props = defineProps<{
-    action: 'stop' | 'restart'
+    action: 'stop' | 'restart' | 'enableMaintenance' | 'disableMaintenance'
     /**
      * The servers the action applies to, or null for all of them.
      */

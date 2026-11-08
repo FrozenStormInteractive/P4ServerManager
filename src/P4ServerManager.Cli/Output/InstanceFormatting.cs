@@ -24,6 +24,15 @@ internal static class InstanceFormatting
         return instance.Ssl ? $"ssl:{port}" : port;
     }
 
+    /// <summary>
+    /// The runtime status, followed by <c>(maintenance)</c> when the instance is in maintenance mode.
+    /// </summary>
+    public static string FormatStatus(InstanceDto instance)
+    {
+        string status = instance.RuntimeStatus.ToString();
+        return instance.MaintenanceMode ? $"{status} (maintenance)" : status;
+    }
+
     public static string FormatYesNo(bool value)
     {
         return value ? "yes" : "no";

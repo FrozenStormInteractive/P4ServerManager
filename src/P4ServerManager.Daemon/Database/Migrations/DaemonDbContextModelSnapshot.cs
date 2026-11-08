@@ -214,6 +214,9 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.Property<string>("LastError")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("MaintenanceMode")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(32)

@@ -36,6 +36,11 @@ export interface Instance {
   caseSensitive: boolean
   unicode: boolean
   autoStart: boolean
+  /**
+   * True when p4d runs, or starts, in maintenance mode (`p4d -n`): it only allows the commands that do not need a
+   * client workspace. Every start of p4d follows it until its maintenance mode is disabled.
+   */
+  maintenanceMode: boolean
   state: InstanceState
   runtimeStatus: RuntimeStatus
   lastError: string | null

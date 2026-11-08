@@ -16,6 +16,7 @@ export function createInstance (overrides: Partial<Instance> = {}): Instance {
     caseSensitive: true,
     unicode: false,
     autoStart: true,
+    maintenanceMode: false,
     state: 'Ready',
     runtimeStatus: 'Running',
     lastError: null,

@@ -127,9 +127,17 @@ public sealed class P4ServerLauncher(
             "-p", GetListenAddress(instance),
             "-L", logPath,
         ];
+        if (instance.MaintenanceMode)
+        {
+            arguments.Add("-n");
+        }
         IReadOnlyDictionary<string, string>? environment = GetEnvironment(instance);
 
-        logger.LogInformation("Starting p4d for instance {Name} on port {Port}", instance.Name, instance.Port);
+        logger.LogInformation(
+            "Starting p4d for instance {Name} on port {Port}{Mode}",
+            instance.Name,
+            instance.Port,
+            instance.MaintenanceMode ? " in maintenance mode" : string.Empty);
         int pid = OperatingSystem.IsWindows()
             ? StartOnWindows(p4dPath, arguments, environment, pidFile)
             : await StartOnUnixAsync(

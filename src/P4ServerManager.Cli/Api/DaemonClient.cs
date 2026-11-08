@@ -67,6 +67,22 @@ internal sealed class DaemonClient(HttpClient httpClient, string socketPath) : I
     }
 
     /// <summary>
+    /// Enables the maintenance mode of an instance: its p4d is restarted, or started, with <c>-n</c>.
+    /// </summary>
+    public Task<InstanceDto> EnableMaintenanceModeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return SendAsync(HttpMethod.Post, $"api/instances/{id}/maintenance/enable", Json.InstanceDto, cancellationToken);
+    }
+
+    /// <summary>
+    /// Disables the maintenance mode of an instance: its p4d is restarted in normal mode if it runs.
+    /// </summary>
+    public Task<InstanceDto> DisableMaintenanceModeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return SendAsync(HttpMethod.Post, $"api/instances/{id}/maintenance/disable", Json.InstanceDto, cancellationToken);
+    }
+
+    /// <summary>
     /// Begins the upgrade of an instance to another p4d release. It goes on in the daemon: follow it with
     /// <see cref="GetOperationAsync"/>.
     /// </summary>

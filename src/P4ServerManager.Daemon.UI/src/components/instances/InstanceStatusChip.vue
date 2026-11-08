@@ -1,13 +1,17 @@
 <template>
   <v-chip
-    :color="getInstanceStatusColor(status)"
+    :color="getInstanceColor(instance)"
     label
     size="small"
-    :text="t(`status.${status}`)"
+    :text="text"
     variant="tonal"
   >
     <template #prepend>
       <InstanceStatusIndicator class="mr-2" :instance="instance" />
+    </template>
+
+    <template v-if="instance.maintenanceMode" #append>
+      <v-icon class="ml-1" icon="mdi-wrench" size="small" />
     </template>
   </v-chip>
 </template>
@@ -22,7 +26,7 @@
 
   // Components and utilities
   import InstanceStatusIndicator from '@/components/instances/InstanceStatusIndicator.vue'
-  import { getInstanceStatus, getInstanceStatusColor } from '@/utils/instanceStatus'
+  import { getInstanceColor, getInstanceStatus } from '@/utils/instanceStatus'
 
   const props = defineProps<{
     instance: Instance
@@ -30,4 +34,8 @@
 
   const { t } = useI18n()
   const status = computed(() => getInstanceStatus(props.instance))
+  const text = computed(() => {
+    const label = t(`status.${status.value}`)
+    return props.instance.maintenanceMode ? t('status.inMaintenance', { status: label }) : label
+  })
 </script>

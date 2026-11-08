@@ -2,7 +2,7 @@
   <v-progress-circular
     v-if="isInstanceStatusInProgress(status)"
     :aria-label="t(`status.${status}`)"
-    :color="getInstanceStatusColor(status)"
+    :color="getInstanceColor(instance)"
     indeterminate
     size="10"
     width="2"
@@ -11,7 +11,7 @@
   <v-icon
     v-else
     :aria-label="t(`status.${status}`)"
-    :color="getInstanceStatusColor(status)"
+    :color="getInstanceColor(instance)"
     icon="mdi-circle"
     role="img"
     size="10"
@@ -27,7 +27,7 @@
   import { useI18n } from 'vue-i18n'
 
   // Utilities
-  import { getInstanceStatus, getInstanceStatusColor, isInstanceStatusInProgress } from '@/utils/instanceStatus'
+  import { getInstanceColor, getInstanceStatus, isInstanceStatusInProgress } from '@/utils/instanceStatus'
 
   const props = defineProps<{
     instance: Instance

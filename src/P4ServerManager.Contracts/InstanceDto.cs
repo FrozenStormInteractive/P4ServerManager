@@ -20,6 +20,10 @@ namespace P4ServerManager.Contracts;
 /// <param name="CaseSensitive">False when p4d runs case-insensitive (<c>-C1</c>).</param>
 /// <param name="Unicode">True when the server runs in Unicode mode.</param>
 /// <param name="AutoStart">True when the daemon starts p4d when it starts.</param>
+/// <param name="MaintenanceMode">
+/// True when p4d runs, or starts, in maintenance mode (<c>p4d -n</c>): it only allows the commands that do not need a
+/// client workspace, such as administration commands.
+/// </param>
 /// <param name="State">Lifecycle state.</param>
 /// <param name="RuntimeStatus">
 /// Whether the p4d process runs, or is being started, stopped, restarted, upgraded or deleted.
@@ -40,6 +44,7 @@ public sealed record InstanceDto(
     bool CaseSensitive,
     bool Unicode,
     bool AutoStart,
+    bool MaintenanceMode,
     P4ServerInstanceState State,
     InstanceRuntimeStatus RuntimeStatus,
     string? LastError,

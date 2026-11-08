@@ -27,6 +27,7 @@ public static class ContractMappings
             instance.CaseSensitive,
             instance.Unicode,
             instance.AutoStart,
+            instance.MaintenanceMode,
             instance.State,
             runtimeStatus,
             instance.LastError,

@@ -36,7 +36,7 @@ internal static class ListInstancesCommand
                 table.AddRow(
                     instance.Name,
                     instance.State.ToString(),
-                    instance.RuntimeStatus.ToString(),
+                    InstanceFormatting.FormatStatus(instance),
                     InstanceFormatting.FormatPort(instance),
                     InstanceFormatting.FormatVersion(instance),
                     InstanceFormatting.FormatYesNo(instance.AutoStart));

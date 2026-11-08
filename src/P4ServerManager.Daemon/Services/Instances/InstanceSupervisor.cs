@@ -80,6 +80,76 @@ public sealed class InstanceSupervisor(
         });
     }
 
+    /// <summary>
+    /// Enables the maintenance mode of an instance and makes its p4d run in it (<c>p4d -n</c>): a running p4d is restarted, and
+    /// the instance is <see cref="InstanceRuntimeStatus.Restarting"/> meanwhile; a stopped one is started, and the
+    /// instance is <see cref="InstanceRuntimeStatus.Starting"/> meanwhile. The mode is kept: every later start of p4d
+    /// follows it, until <see cref="DisableMaintenanceModeAsync"/>.
+    /// </summary>
+    /// <exception cref="InstanceConflictException">
+    /// The instance is not ready, another operation is in progress, or p4d already runs in maintenance mode.
+    /// </exception>
+    public async Task<P4ServerInstance> EnableMaintenanceModeAsync(Guid instanceId, CancellationToken cancellationToken)
+    {
+        return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
+        {
+            EnsureReady(instance);
+            bool running = runtimeRegistry.Get(instance.Id) == InstanceRuntimeStatus.Running;
+            if (instance.MaintenanceMode && running)
+            {
+                throw new InstanceConflictException($"Instance {instance.Name} already runs in maintenance mode.");
+            }
+
+            instance.MaintenanceMode = true;
+            await TransitionAsync(
+                db,
+                instance,
+                running ? InstanceRuntimeStatus.Restarting : InstanceRuntimeStatus.Starting,
+                async stoppingToken =>
+                {
+                    await launcher.StopAsync(instance, stoppingToken);
+                    await launcher.StartAsync(instance, stoppingToken);
+                });
+            logger.LogInformation("Enabled the maintenance mode of instance {Name}", instance.Name);
+        });
+    }
+
+    /// <summary>
+    /// Disables the maintenance mode of an instance. A running p4d is restarted without <c>-n</c>, and the instance is
+    /// <see cref="InstanceRuntimeStatus.Restarting"/> meanwhile. A stopped one stays stopped: its next start is a normal
+    /// one.
+    /// </summary>
+    /// <exception cref="InstanceConflictException">
+    /// The instance is not ready, another operation is in progress, or its maintenance mode is not enabled.
+    /// </exception>
+    public async Task<P4ServerInstance> DisableMaintenanceModeAsync(Guid instanceId, CancellationToken cancellationToken)
+    {
+        return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
+        {
+            EnsureReady(instance);
+            if (!instance.MaintenanceMode)
+            {
+                throw new InstanceConflictException($"Instance {instance.Name} is not in maintenance mode.");
+            }
+
+            instance.MaintenanceMode = false;
+            if (runtimeRegistry.Get(instance.Id) == InstanceRuntimeStatus.Running)
+            {
+                await TransitionAsync(db, instance, InstanceRuntimeStatus.Restarting, async stoppingToken =>
+                {
+                    await launcher.StopAsync(instance, stoppingToken);
+                    await launcher.StartAsync(instance, stoppingToken);
+                });
+            }
+            else
+            {
+                await db.SaveChangesAsync(CancellationToken.None);
+                await notifier.InstanceChangedAsync(instance);
+            }
+            logger.LogInformation("Disabled the maintenance mode of instance {Name}", instance.Name);
+        });
+    }
+
     public async Task<P4ServerInstance> StopInstanceAsync(Guid instanceId, CancellationToken cancellationToken)
     {
         return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
