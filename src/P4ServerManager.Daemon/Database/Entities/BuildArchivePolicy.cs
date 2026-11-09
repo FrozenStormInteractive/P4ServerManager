@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
 using P4ServerManager.Contracts;
 
 namespace P4ServerManager.Daemon.Database.Entities;
@@ -10,6 +13,7 @@ public sealed class BuildArchivePolicy
 {
     public const int SingletonId = 1;
 
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public int Id { get; set; } = SingletonId;
 
     /// <summary>
@@ -22,6 +26,7 @@ public sealed class BuildArchivePolicy
     /// <summary>
     /// Releases whose new builds are archived.
     /// </summary>
+    [MaxLength(16)]
     public BuildArchiveScope Scope { get; set; } = BuildArchiveScope.SelectedReleases;
 
     /// <summary>

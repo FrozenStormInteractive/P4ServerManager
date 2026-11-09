@@ -18,6 +18,7 @@ public sealed class InstanceSuperUser
     /// </summary>
     public required string ProtectedPassword { get; set; }
 
+    [MaxLength(32)]
     public SuperUserStatus Status { get; set; }
 
     /// <summary>

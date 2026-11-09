@@ -50,6 +50,7 @@ public sealed class P4ServerInstance
     /// </summary>
     public Guid? BuildId { get; set; }
 
+    [DeleteBehavior(DeleteBehavior.Restrict)]
     public P4ServerBuild? Build { get; set; }
 
     public bool CaseSensitive { get; set; }
@@ -67,6 +68,7 @@ public sealed class P4ServerInstance
     /// </summary>
     public bool MaintenanceMode { get; set; }
 
+    [MaxLength(16)]
     public P4ServerInstanceState State { get; set; }
 
     public string? LastError { get; set; }

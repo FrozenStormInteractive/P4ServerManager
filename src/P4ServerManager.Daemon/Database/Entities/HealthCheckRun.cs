@@ -13,6 +13,9 @@ public sealed class HealthCheckRun
 
     public Guid InstanceId { get; set; }
 
+    public P4ServerInstance? Instance { get; set; }
+
+    [MaxLength(16)]
     public HealthCheckStatus Status { get; set; }
 
     public List<HealthCheckKind> Checks { get; set; } = [];
@@ -64,6 +67,9 @@ public sealed class HealthCheckFinding
 
     public Guid RunId { get; set; }
 
+    public HealthCheckRun? Run { get; set; }
+
+    [MaxLength(16)]
     public HealthCheckKind Check { get; set; }
 
     [MaxLength(128)]
