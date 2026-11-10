@@ -67,6 +67,55 @@ public class ParsingTests
     }
 
     [Fact]
+    public void ServerSpecParser_ReadsTheServerIdsOfP4ServersInTaggedForm()
+    {
+        const string output = "... ServerID main\r\n... Type server\r\n\r\n... ServerID edge-1\r\n... Type server\r\n";
+
+        ServerSpecParser.ParseServerIds(output).ShouldBe(["main", "edge-1"]);
+        ServerSpecParser.ParseServerIds(string.Empty).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ServerSpecParser_ReplacesOnlyTheServerIdField()
+    {
+        const string spec = "# A Perforce Server Specification.\n#  ServerID:    The server identifier.\n\n"
+            + "ServerID:\tmain\n\nType:\tserver\n\nDescription:\n\tServerID: main\n";
+
+        string renamed = ServerSpecParser.ReplaceServerId(spec, "edge");
+
+        renamed.ShouldBe(spec.Replace("ServerID:\tmain\n", "ServerID:\tedge\n"));
+        renamed.ShouldContain("\tServerID: main\n");
+        Should.Throw<FormatException>(() => ServerSpecParser.ReplaceServerId("Type:\tserver\n", "edge"));
+    }
+
+    [Theory]
+    [InlineData("Server ID: main\n", "main")]
+    [InlineData("ServerID: edge-1\r\n", "edge-1")]
+    [InlineData("Server ID is 'main'\n", "main")]
+    [InlineData("main\n", "main")]
+    [InlineData("Server does not yet have a server ID\n", null)]
+    [InlineData("Perforce server error:\n\tServer already has a server ID: Yoann\n", "Yoann")]
+    public void ServerIdOutputParser_ReadsTheServerIdThatP4dTells(string output, string? serverId)
+    {
+        ServerIdOutputParser.Parse(output).ShouldBe(serverId);
+    }
+
+    [Fact]
+    public void ServerIdOutputParser_KnowsTheMessagesThatP4dMayPrintAsErrors()
+    {
+        ServerIdOutputParser.IsServerIdMessage("Server does not yet have a server ID").ShouldBeTrue();
+        ServerIdOutputParser.IsServerIdMessage("Perforce server error:\n\tServer already has a server ID: main").ShouldBeTrue();
+        ServerIdOutputParser.IsServerIdMessage("Database is locked.").ShouldBeFalse();
+    }
+
+    [Fact]
+    public void ServerIdOutputParser_RefusesAnUnknownOutput()
+    {
+        Should.Throw<FormatException>(() => ServerIdOutputParser.Parse(string.Empty));
+        Should.Throw<FormatException>(() => ServerIdOutputParser.Parse("Database is locked."));
+    }
+
+    [Fact]
     public void P4dRelease_ComparesByYearThenNumber()
     {
         P4ServerRelease.TryParse("r24.2", out P4ServerRelease older).ShouldBeTrue();

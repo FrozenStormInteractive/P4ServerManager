@@ -7,6 +7,10 @@ namespace P4ServerManager.Contracts;
 /// <param name="Name">
 /// Unique name. A new server takes it as its p4d server ID, which stays the same if the instance is renamed.
 /// </param>
+/// <param name="ServerId">
+/// Server ID of p4d, read from the <c>server.id</c> file of its root each time, so a change made outside the daemon
+/// shows too. Change it with <c>PUT /api/instances/{id}/server-id</c>. Null when the root has none or cannot be read.
+/// </param>
 /// <param name="Description">Optional free text.</param>
 /// <param name="Port">TCP port p4d listens on.</param>
 /// <param name="Ssl">True when p4d listens with SSL, on <c>ssl:</c> followed by the port.</param>
@@ -37,6 +41,7 @@ namespace P4ServerManager.Contracts;
 public sealed record InstanceDto(
     Guid Id,
     string Name,
+    string? ServerId,
     string? Description,
     int Port,
     bool Ssl,

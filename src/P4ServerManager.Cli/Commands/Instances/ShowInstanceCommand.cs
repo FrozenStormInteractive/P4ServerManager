@@ -32,6 +32,7 @@ internal static class ShowInstanceCommand
             [
                 ("Name", instance.Name),
                 ("Id", instance.Id.ToString()),
+                ("Server ID", instance.ServerId ?? "unknown"),
                 ("Description", instance.Description),
                 ("State", instance.State.ToString()),
                 ("Status", instance.RuntimeStatus.ToString()),

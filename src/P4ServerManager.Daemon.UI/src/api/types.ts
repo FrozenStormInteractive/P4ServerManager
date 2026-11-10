@@ -15,10 +15,16 @@ export type RuntimeStatus
     | 'Upgrading'
     | 'ConvertingToUnicode'
     | 'CheckingHealth'
+    | 'ChangingServerId'
 
 export interface Instance {
   id: string
   name: string
+  /**
+   * Server ID of p4d. A new server takes the name of the instance; it changes with `PUT /api/instances/{id}/server-id`
+   * only. Null until it is known.
+   */
+  serverId: string | null
   description: string | null
   port: number
   /**
@@ -154,6 +160,13 @@ export interface UpgradeInstanceRequest {
    * missing.
    */
   build?: string
+}
+
+/**
+ * New server ID of the p4d of an instance: a letter, then up to 31 letters, digits, '-' or '_'.
+ */
+export interface ChangeServerIdRequest {
+  serverId: string
 }
 
 /**

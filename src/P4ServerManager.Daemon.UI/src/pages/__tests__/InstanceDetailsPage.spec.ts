@@ -44,6 +44,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: false },
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
+      { text: 'Change server ID', loading: false, disabled: false },
       { text: 'Enable maintenance mode', loading: false, disabled: false },
       { text: 'Check now', loading: false, disabled: false },
       { text: 'Change', loading: false, disabled: false },
@@ -57,6 +58,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Change server ID', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -70,6 +72,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Change server ID', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -82,6 +85,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Change server ID', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -94,6 +98,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: false },
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
+      { text: 'Change server ID', loading: false, disabled: false },
       { text: 'Start in maintenance mode', loading: false, disabled: false },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: false },
@@ -106,6 +111,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: true, disabled: true },
+      { text: 'Change server ID', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -118,6 +124,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: true, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Change server ID', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -136,6 +143,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: false },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: false },
+      { text: 'Change server ID', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -256,6 +264,65 @@ describe('InstanceDetailsPage', () => {
       await flushPromises()
 
       expect(counter.requests).toBe(1)
+    })
+  })
+
+  describe('change of the server ID', () => {
+    async function mountServerId (overrides: Partial<typeof instance> = {}) {
+      const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, {
+        props: { id: instance.id },
+        attachTo: document.body,
+      })
+      useInstancesStore(pinia).upsertInstance({ ...instance, runtimeStatus: 'Running', ...overrides })
+      await flushPromises()
+      return { wrapper, pinia, button: wrapper.findAll('button').find(b => b.text() === 'Change server ID') }
+    }
+
+    it('shows the server ID, or that it is not known', async () => {
+      const { wrapper } = await mountServerId({ serverId: 'edge' })
+      expect(wrapper.text()).toContain('Server ID')
+      expect(wrapper.text()).toContain('edge')
+
+      document.body.innerHTML = ''
+      const unknown = await mountServerId({ serverId: null })
+      expect(unknown.wrapper.text()).toContain('Unknown')
+    })
+
+    it('is shown in progress', async () => {
+      const { button } = await mountServerId({ runtimeStatus: 'ChangingServerId' })
+
+      expect(button!.classes()).toContain('v-btn--loading')
+      expect(button!.attributes('disabled')).toBeDefined()
+    })
+
+    it('needs a usable super user', async () => {
+      const { button } = await mountServerId({ superUser: null })
+
+      expect(button!.attributes('disabled')).toBeDefined()
+    })
+
+    it('opens the dialog and begins the change', async () => {
+      let body: unknown = null
+      server.use(http.put(`/api/instances/${instance.id}/server-id`, async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({ ...instance, runtimeStatus: 'ChangingServerId' }, { status: 202 })
+      }))
+      const { button, pinia } = await mountServerId()
+
+      await button!.trigger('click')
+      await flushPromises()
+      expect(document.body.textContent).toContain(`Change the server ID of ${instance.name}`)
+
+      const input = document.querySelector<HTMLInputElement>('[name="serverId"]')!
+      input.value = 'edge'
+      input.dispatchEvent(new Event('input'))
+      await flushPromises()
+      document.querySelector('#change-server-id-form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+      await flushPromises()
+
+      await vi.waitFor(() => expect(body).toEqual({ serverId: 'edge' }))
+      await flushPromises()
+      expect(useInstancesStore(pinia).getInstance(instance.id)?.runtimeStatus).toBe('ChangingServerId')
     })
   })
 
@@ -414,6 +481,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Edit', loading: false, disabled: true },
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
+      { text: 'Change server ID', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },

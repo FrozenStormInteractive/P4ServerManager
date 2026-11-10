@@ -44,12 +44,26 @@ public class RecommendedConfigurationTests
             Ssl = ssl,
         };
 
-        string spec = RecommendedConfiguration.GetServerSpec(instance);
+        string spec = RecommendedConfiguration.GetServerSpec(instance, "main");
 
         spec.ShouldStartWith("ServerID:\tmain\n");
         spec.ShouldContain("Type:\tserver\n");
         spec.ShouldContain("Services:\tcommit-server\n");
         spec.ShouldContain(address);
+    }
+
+    [Fact]
+    public void GetServerSpec_IsNamedAfterTheGivenServerId()
+    {
+        P4ServerInstance instance = new()
+        {
+            Name = Instance.Name,
+            Port = Instance.Port,
+            RootPath = Instance.RootPath,
+            Release = Instance.Release,
+        };
+
+        RecommendedConfiguration.GetServerSpec(instance, "edge").ShouldStartWith("ServerID:\tedge\n");
     }
 
     [Fact]

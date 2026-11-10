@@ -1,5 +1,6 @@
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Instances.Import;
 
 namespace P4ServerManager.Daemon.Contracts;
@@ -11,11 +12,29 @@ public static class ContractMappings
 {
     /// <param name="instance">The instance, with its <see cref="P4ServerInstance.Build"/> loaded.</param>
     /// <param name="runtimeStatus">Whether its p4d runs.</param>
-    public static InstanceDto ToDto(this P4ServerInstance instance, InstanceRuntimeStatus runtimeStatus)
+    /// <param name="cancellationToken">Aborts the read of the server ID.</param>
+    /// <remarks>
+    /// The server ID is read from the <c>server.id</c> file of the root each time, so that a change made outside the
+    /// daemon shows at once.
+    /// </remarks>
+    public static async Task<InstanceDto> ToDtoAsync(
+        this P4ServerInstance instance,
+        InstanceRuntimeStatus runtimeStatus,
+        CancellationToken cancellationToken)
+    {
+        string? serverId = await ServerLayout.TryReadServerIdAsync(instance.RootPath, cancellationToken);
+        return instance.ToDto(runtimeStatus, serverId);
+    }
+
+    /// <param name="instance">The instance, with its <see cref="P4ServerInstance.Build"/> loaded.</param>
+    /// <param name="runtimeStatus">Whether its p4d runs.</param>
+    /// <param name="serverId">Server ID of p4d, or null when unknown.</param>
+    public static InstanceDto ToDto(this P4ServerInstance instance, InstanceRuntimeStatus runtimeStatus, string? serverId)
     {
         return new InstanceDto(
             instance.Id,
             instance.Name,
+            serverId,
             instance.Description,
             instance.Port,
             instance.Ssl,

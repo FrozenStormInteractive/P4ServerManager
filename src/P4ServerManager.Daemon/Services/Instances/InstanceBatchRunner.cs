@@ -79,7 +79,10 @@ public sealed class InstanceBatchRunner(
         };
         if (skipped)
         {
-            return new InstanceActionResult(instance.ToDto(status), InstanceActionOutcome.Skipped, null);
+            return new InstanceActionResult(
+                await instance.ToDtoAsync(status, cancellationToken),
+                InstanceActionOutcome.Skipped,
+                null);
         }
 
         try
@@ -91,7 +94,7 @@ public sealed class InstanceBatchRunner(
                 _ => await supervisor.RestartInstanceAsync(instance.Id, cancellationToken),
             };
             return new InstanceActionResult(
-                result.ToDto(runtimeRegistry.Get(result.Id)),
+                await result.ToDtoAsync(runtimeRegistry.Get(result.Id), cancellationToken),
                 InstanceActionOutcome.Succeeded,
                 null);
         }
@@ -120,7 +123,7 @@ public sealed class InstanceBatchRunner(
             .FirstOrDefaultAsync(i => i.Id == instance.Id, cancellationToken)
             ?? instance;
         return new InstanceActionResult(
-            current.ToDto(runtimeRegistry.Get(current.Id)),
+            await current.ToDtoAsync(runtimeRegistry.Get(current.Id), cancellationToken),
             InstanceActionOutcome.Failed,
             error);
     }

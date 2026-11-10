@@ -98,6 +98,8 @@ public sealed class InstancesApiTests : IAsyncLifetime
         instance.GetProperty("runtimeStatus").GetString().ShouldBe("Unknown");
         instance.GetProperty("rootPath").GetString().ShouldStartWith(_dataDirectory);
         instance.GetProperty("ssl").GetBoolean().ShouldBeFalse();
+        // p4d has not set the server ID yet: the provisioning does not run in these tests.
+        instance.GetProperty("serverId").ValueKind.ShouldBe(JsonValueKind.Null);
         instance.GetRawText().ShouldNotContain("secret-password");
 
         JsonElement instances = await _client.GetFromJsonAsync<JsonElement>(
@@ -1148,6 +1150,189 @@ public sealed class InstancesApiTests : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task GetInstance_ReadsTheServerIdFromTheRoot()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await WriteServerIdAsync(id, "main");
+
+        JsonElement instance = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+        instance.GetProperty("serverId").GetString().ShouldBe("main");
+
+        // A change made outside the daemon shows at once.
+        await WriteServerIdAsync(id, "edge");
+        instance = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+        instance.GetProperty("serverId").GetString().ShouldBe("edge");
+    }
+
+    [Fact]
+    public async Task ChangeServerId_FailsWhenP4dDoesNotSetTheServerId()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        string serverIdPath = await WriteServerIdAsync(id, "main");
+        // p4d writes it read-only, which forbids its deletion on Windows.
+        File.SetAttributes(serverIdPath, FileAttributes.ReadOnly);
+        _processRunner.RunAsync(Arg.Is<ProcessCommand>(c => c.Arguments.Last() == "-xD"), Arg.Any<CancellationToken>())
+            .Returns(new ProcessResult(0, "Server ID: main\n", string.Empty));
+        // p4d refuses to replace a server ID: the file must be gone when it sets the new one.
+        bool? fileExistedWhenSet = null;
+        _processRunner.RunAsync(Arg.Is<ProcessCommand>(c => c.Arguments.Last() == "edge"), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                fileExistedWhenSet = File.Exists(serverIdPath);
+                return new ProcessResult(0, string.Empty, string.Empty);
+            });
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/server-id",
+            new { serverId = "edge" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await WaitWhileAsync(id, "ChangingServerId");
+        instance.GetProperty("serverId").GetString().ShouldBe("main");
+        instance.GetProperty("runtimeStatus").GetString().ShouldBe("Stopped");
+        instance.GetProperty("lastError").GetString()
+            .ShouldBe("p4d did not set the server ID to edge: it reports main.");
+
+        JsonElement operation = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}/operation",
+            TestContext.Current.CancellationToken);
+        operation.GetProperty("kind").GetString().ShouldBe("change-server-id");
+        operation.GetProperty("status").GetString().ShouldBe("Failed");
+        JsonElement[] steps = operation.GetProperty("steps").EnumerateArray().ToArray();
+        steps.Select(s => s.GetProperty("key").GetString()).ShouldBe(
+            ["set-server-id", "start-server", "rename-server-spec", "stop-server"]);
+        steps[0].GetProperty("status").GetString().ShouldBe("Failed");
+
+        // p4d tells the server ID before and after it sets it.
+        ProcessCommand[] commands = _processRunner.ReceivedCalls()
+            .Select(call => (ProcessCommand)call.GetArguments()[0]!)
+            .ToArray();
+        commands.ShouldAllBe(c => c.FileName == "/builds/2850123/p4d");
+        commands.Select(c => string.Join(' ', c.Arguments.SkipWhile(a => a != "-xD")))
+            .ShouldBe(["-xD", "-xD edge", "-xD"]);
+        fileExistedWhenSet.ShouldBe(false);
+
+        // The server ID the root had is written back, read-only as before.
+        (await File.ReadAllTextAsync(serverIdPath, TestContext.Current.CancellationToken)).ShouldBe("main\n");
+        File.GetAttributes(serverIdPath).HasFlag(FileAttributes.ReadOnly).ShouldBeTrue();
+        File.SetAttributes(serverIdPath, FileAttributes.Normal);
+    }
+
+    [Fact]
+    public async Task ChangeServerId_KeepsTheLastErrorWhenP4dFails()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        await WriteServerIdAsync(id, "main");
+        _processRunner.RunAsync(Arg.Is<ProcessCommand>(c => c.Arguments.Contains("-xD")), Arg.Any<CancellationToken>())
+            .Returns(new ProcessResult(1, string.Empty, "Database is locked."));
+
+        await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/server-id",
+            new { serverId = "edge" },
+            TestContext.Current.CancellationToken);
+
+        JsonElement instance = await WaitWhileAsync(id, "ChangingServerId");
+        instance.GetProperty("serverId").GetString().ShouldBe("main");
+        instance.GetProperty("state").GetString().ShouldBe("Ready");
+        instance.GetProperty("lastError").GetString().ShouldEndWith("failed: Database is locked.");
+    }
+
+    [Fact]
+    public async Task ChangeServerId_RejectsAnInvalidServerId()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/server-id",
+            new { serverId = "1-edge" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").GetProperty("serverId")[0].GetString()
+            .ShouldBe("The server ID starts with a letter and has up to 32 letters, digits, '-' or '_'.");
+    }
+
+    [Fact]
+    public async Task ChangeServerId_ConflictsWhenTheServerIdIsTheSame()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        await WriteServerIdAsync(id, "main");
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/server-id",
+            new { serverId = "main" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().ShouldBe("Instance main already has server ID main.");
+    }
+
+    [Fact]
+    public async Task ChangeServerId_ConflictsWithoutAUsableSuperUser()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        await using (DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(
+            TestContext.Current.CancellationToken))
+        {
+            P4ServerInstance stored = await db.Instances.SingleAsync(i => i.Id == id, TestContext.Current.CancellationToken);
+            stored.SuperUser!.Status = SuperUserStatus.InvalidCredentials;
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/server-id",
+            new { serverId = "edge" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().ShouldBe(
+            "The stored super user of this instance is not usable: change it first. "
+            + "The server spec is renamed as the super user.");
+        await _processRunner.DidNotReceive().RunAsync(Arg.Any<ProcessCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ChangeServerId_ConflictsWhenTheInstanceIsNotReady()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/server-id",
+            new { serverId = "edge" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task ChangeServerId_ReturnsNotFoundForAnUnknownInstance()
+    {
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{Guid.NewGuid()}/server-id",
+            new { serverId = "edge" },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     private const string UnicodeConfigDump = "@pv@ 1 @db.config@ @any@ @unicode@ @1@";
 
     private void StubConfigDump(string dump)
@@ -1243,6 +1428,22 @@ public sealed class InstancesApiTests : IAsyncLifetime
                 TestContext.Current.CancellationToken);
         _factory.Services.GetRequiredService<InstanceRuntimeRegistry>().Set(id, runtimeStatus);
         return id;
+    }
+
+    /// <summary>
+    /// Writes the <c>server.id</c> file of the root of an instance, as <c>p4d -xD</c> does.
+    /// </summary>
+    /// <returns>The path of the file.</returns>
+    private async Task<string> WriteServerIdAsync(Guid id, string serverId)
+    {
+        JsonElement instance = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+        string rootPath = instance.GetProperty("rootPath").GetString()!;
+        Directory.CreateDirectory(rootPath);
+        string path = Path.Combine(rootPath, "server.id");
+        await File.WriteAllTextAsync(path, serverId + "\n", TestContext.Current.CancellationToken);
+        return path;
     }
 
     private async Task<Guid> CreateFailedInstanceAsync(string name, string? serverDirectory = null, bool ssl = false)

@@ -47,6 +47,16 @@ public static partial class InstanceRuleExtensions
     }
 
     /// <summary>
+    /// A well-formed p4d server ID. It follows the rule of the names, which a new server takes as its server ID.
+    /// </summary>
+    public static IRuleBuilderOptions<T, string> MustBeServerId<T>(this IRuleBuilder<T, string> rule)
+    {
+        return rule
+            .Matches(NamePattern())
+            .WithMessage("The server ID starts with a letter and has up to 32 letters, digits, '-' or '_'.");
+    }
+
+    /// <summary>
     /// A well-formed P4 user name, such as the one of a super user.
     /// </summary>
     public static IRuleBuilderOptions<T, string> MustBeUserName<T>(this IRuleBuilder<T, string> rule)

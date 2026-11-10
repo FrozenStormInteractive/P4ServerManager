@@ -118,6 +118,22 @@ describe('instances store', () => {
     expect(store.getInstance('a')?.lastError).toBeNull()
   })
 
+  it('keeps what the hub pushed while the request was in flight over its older response', async () => {
+    const store = useInstancesStore()
+    store.connect()
+    store.upsertInstance(createInstance({ id: 'a', name: 'alpha', runtimeStatus: 'Stopped' }))
+    // The change fails at once: the hub tells it before the response that began it arrives.
+    server.use(http.put('/api/instances/a/server-id', () => {
+      handlers.onInstanceUpdated(createInstance({ id: 'a', name: 'alpha', runtimeStatus: 'Stopped', lastError: 'Failed.' }))
+      return HttpResponse.json(createInstance({ id: 'a', name: 'alpha', runtimeStatus: 'ChangingServerId' }), { status: 202 })
+    }))
+
+    await store.changeServerId('a', 'edge')
+
+    expect(store.getInstance('a')?.runtimeStatus).toBe('Stopped')
+    expect(store.getInstance('a')?.lastError).toBe('Failed.')
+  })
+
   it('restarts several instances and keeps the states returned by the daemon', async () => {
     let body: unknown
     server.use(http.post('/api/instances/restart', async ({ request }) => {

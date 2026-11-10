@@ -33,6 +33,9 @@ export const useInstancesStore = defineStore('instances', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   let hub: InstancesHub | null = null
+  // Number of updates the hub pushed for each instance. A response that arrives after a push is older than it: an
+  // operation may end, and the hub tell it, before the response that began it reaches the page.
+  const pushes: Record<string, number> = {}
 
   const sortedInstances = computed(() =>
     Object.values(instances.value).toSorted((a, b) => a.name.localeCompare(b.name)),
@@ -46,6 +49,22 @@ export const useInstancesStore = defineStore('instances', () => {
     instances.value[instance.id] = instance
   }
 
+  function applyPushedInstance (instance: Instance) {
+    pushes[instance.id] = (pushes[instance.id] ?? 0) + 1
+    upsertInstance(instance)
+  }
+
+  /**
+   * Sends a request about an instance, and keeps the instance it returns unless the hub pushed a newer one meanwhile.
+   */
+  async function applyResponse (id: string, request: () => Promise<Instance>) {
+    const before = pushes[id] ?? 0
+    const instance = await request()
+    if ((pushes[id] ?? 0) === before) {
+      upsertInstance(instance)
+    }
+  }
+
   function removeInstance (id: string) {
     delete instances.value[id]
     delete operations.value[id]
@@ -56,10 +75,19 @@ export const useInstancesStore = defineStore('instances', () => {
     const previous = operations.value[snapshot.instanceId]
     operations.value[snapshot.instanceId] = snapshot
     if (previous?.status === 'Running' && snapshot.status === 'Succeeded') {
-      if (snapshot.kind === 'upgrade') {
-        notifyUpgraded(snapshot)
-      } else if (snapshot.kind === 'convert-to-unicode') {
-        notifyConvertedToUnicode(snapshot)
+      switch (snapshot.kind) {
+        case 'upgrade': {
+          notifyUpgraded(snapshot)
+          break
+        }
+        case 'convert-to-unicode': {
+          notifyConvertedToUnicode(snapshot)
+          break
+        }
+        case 'change-server-id': {
+          notifyServerIdChanged(snapshot)
+          break
+        }
       }
     }
   }
@@ -72,6 +100,20 @@ export const useInstancesStore = defineStore('instances', () => {
     const instance = instances.value[snapshot.instanceId]
     if (instance) {
       useNotificationsStore().notify(i18n.global.t('convertToUnicode.converted', { name: instance.name }), 'success')
+    }
+  }
+
+  /**
+   * Tells every client that a change of the server ID ended well. The new server ID is already known: the daemon pushes
+   * the instance once it is set. A failure is kept as the last error of the instance instead.
+   */
+  function notifyServerIdChanged (snapshot: OperationSnapshot) {
+    const instance = instances.value[snapshot.instanceId]
+    if (instance) {
+      useNotificationsStore().notify(
+        i18n.global.t('changeServerId.changed', { name: instance.name, serverId: instance.serverId ?? '' }),
+        'success',
+      )
     }
   }
 
@@ -161,35 +203,35 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   async function update (id: string, request: UpdateInstanceRequest) {
-    upsertInstance(await api.updateInstance(id, request))
+    await applyResponse(id, () => api.updateInstance(id, request))
   }
 
   async function setSuperUser (id: string, request: SetSuperUserRequest) {
-    upsertInstance(await api.setSuperUser(id, request))
+    await applyResponse(id, () => api.setSuperUser(id, request))
   }
 
   async function checkSuperUser (id: string) {
-    upsertInstance(await api.checkSuperUser(id))
+    await applyResponse(id, () => api.checkSuperUser(id))
   }
 
   async function start (id: string) {
-    upsertInstance(await api.startInstance(id))
+    await applyResponse(id, () => api.startInstance(id))
   }
 
   async function stop (id: string) {
-    upsertInstance(await api.stopInstance(id))
+    await applyResponse(id, () => api.stopInstance(id))
   }
 
   async function restart (id: string) {
-    upsertInstance(await api.restartInstance(id))
+    await applyResponse(id, () => api.restartInstance(id))
   }
 
   async function enableMaintenance (id: string) {
-    upsertInstance(await api.enableMaintenanceMode(id))
+    await applyResponse(id, () => api.enableMaintenanceMode(id))
   }
 
   async function disableMaintenance (id: string) {
-    upsertInstance(await api.disableMaintenanceMode(id))
+    await applyResponse(id, () => api.disableMaintenanceMode(id))
   }
 
   /**
@@ -199,14 +241,21 @@ export const useInstancesStore = defineStore('instances', () => {
    * Upgrades an instance to the latest build of a release, or to an exact build of it from the archive.
    */
   async function upgrade (id: string, release: string, build?: string) {
-    upsertInstance(await api.upgradeInstance(id, build ? { release, build } : { release }))
+    await applyResponse(id, () => api.upgradeInstance(id, build ? { release, build } : { release }))
   }
 
   /**
    * Begins the conversion of the instance to Unicode mode. The hub tells its progress.
    */
   async function convertToUnicode (id: string) {
-    upsertInstance(await api.convertInstanceToUnicode(id))
+    await applyResponse(id, () => api.convertInstanceToUnicode(id))
+  }
+
+  /**
+   * Begins the change of the server ID of the instance. The hub tells its progress.
+   */
+  async function changeServerId (id: string, serverId: string) {
+    await applyResponse(id, () => api.changeInstanceServerId(id, { serverId }))
   }
 
   /**
@@ -227,7 +276,7 @@ export const useInstancesStore = defineStore('instances', () => {
 
   function connect () {
     hub ??= connectInstancesHub({
-      onInstanceUpdated: upsertInstance,
+      onInstanceUpdated: applyPushedInstance,
       onInstanceDeleted: removeInstance,
       onOperationProgress: setOperation,
       onHealthCheckUpdated: setHealthCheck,
@@ -269,6 +318,7 @@ export const useInstancesStore = defineStore('instances', () => {
     disableMaintenance,
     upgrade,
     convertToUnicode,
+    changeServerId,
     runAction,
     remove,
     connect,

@@ -17,12 +17,6 @@ using P4ServerManager.Daemon.Options;
 using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Builds;
 using P4ServerManager.Daemon.Services.Instances;
-using P4ServerManager.Daemon.Services.Instances.Admin;
-using P4ServerManager.Daemon.Services.Instances.HealthChecks;
-using P4ServerManager.Daemon.Services.Instances.Provisioning;
-using P4ServerManager.Daemon.Services.Instances.Steps;
-using P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
-using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
@@ -61,20 +55,9 @@ builder.Services.AddSingleton<BuildArchiveWorker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<BuildArchiveWorker>());
 builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
 
-builder.Services.AddSingleton<InstanceRuntimeRegistry>();
-builder.Services.AddSingleton<InstanceNotifier>();
-builder.Services.AddSingleton<P4ServerLauncher>();
-builder.Services.AddSingleton<InstanceSupervisor>();
-builder.Services.AddHostedService(services => services.GetRequiredService<InstanceSupervisor>());
-builder.Services.AddSingleton<InstanceBatchRunner>();
-builder.Services.AddSingleton<HealthCheckRunner>();
 builder.Services.AddSingleton<OperationTracker>();
 builder.Services.AddSingleton<OperationRunner>();
-builder.Services.AddSharedInstanceSteps();
-builder.Services.AddInstanceProvisioningServices();
-builder.Services.AddInstanceUpgradeServices();
-builder.Services.AddInstanceUnicodeConversionServices();
-builder.Services.AddInstanceAdminServices();
+builder.Services.AddInstanceServices();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 // Encrypts the stored passwords. The keys live in the data directory, readable by the daemon only.

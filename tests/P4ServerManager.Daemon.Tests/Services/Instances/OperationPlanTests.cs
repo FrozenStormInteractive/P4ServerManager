@@ -1,6 +1,7 @@
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
+using P4ServerManager.Daemon.Services.Instances.ServerIdAssignment;
 using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
 using P4ServerManager.Daemon.Services.Instances.Upgrade;
@@ -103,6 +104,29 @@ public sealed class OperationPlanTests
         plan.Steps.Select(s => s.Step.Key).ShouldBe(
             ["stop-server", "save-checkpoint", "switch-to-unicode", "start-server"]);
         plan.Steps.Select(s => s.SkipWhen?.Invoke(context) == true).ShouldBe(skipped);
+    }
+
+    [Theory]
+    [InlineData(true, new[] { "stop-server", "set-server-id", "start-server", "rename-server-spec" })]
+    [InlineData(false, new[] { "set-server-id", "start-server", "rename-server-spec", "stop-server" })]
+    public void ServerIdAssignment_StartsAStoppedServerOnlyToRenameItsSpec(bool wasRunning, string[] keys)
+    {
+        ServerIdAssignmentOperation operation = new(
+            _stopServer,
+            new SetServerIdStep(null!, null!, null!),
+            _startServer,
+            new RenameServerSpecStep(null!, null!, null!, null!));
+        ServerIdAssignmentContext context = new(
+            null!,
+            CreateInstance(ssl: false, Current),
+            wasRunning,
+            "edge",
+            new SuperUserCredentials("admin", "secret"));
+
+        OperationPlan<ServerIdAssignmentContext> plan = operation.Plan(context);
+
+        plan.Steps.Select(s => s.Step.Key).ShouldBe(keys);
+        plan.Steps.ShouldAllBe(s => s.SkipWhen == null);
     }
 
     private static P4ServerInstance CreateInstance(bool ssl, P4ServerBuild? build = null)

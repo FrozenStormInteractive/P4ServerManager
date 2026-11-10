@@ -15,7 +15,7 @@ internal static class SetInstanceCommand
         Option<string?> nameOption = new("--name")
         {
             Description = "New unique name: a letter, then up to 31 letters, digits, '-' or '_'. The p4d server keeps "
-                + "its server ID and the prefix of its journals.",
+                + "its server ID and the prefix of its journals: 'instance server-id' changes the server ID.",
         };
         Option<string?> descriptionOption = new("--description")
         {

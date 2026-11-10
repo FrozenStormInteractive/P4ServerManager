@@ -53,7 +53,7 @@ public sealed class SuperUserController(
                 instanceId,
                 new SuperUserCredentials(request.UserName, request.Password),
                 cancellationToken);
-            return ToDto(instance);
+            return await ToDtoAsync(instance);
         }
         catch (SuperUserRejectedException exception)
         {
@@ -90,7 +90,7 @@ public sealed class SuperUserController(
     {
         try
         {
-            return ToDto(await superUsers.CheckAsync(instanceId, cancellationToken));
+            return await ToDtoAsync(await superUsers.CheckAsync(instanceId, cancellationToken));
         }
         catch (KeyNotFoundException)
         {
@@ -106,8 +106,8 @@ public sealed class SuperUserController(
         }
     }
 
-    private InstanceDto ToDto(P4ServerInstance instance)
+    private Task<InstanceDto> ToDtoAsync(P4ServerInstance instance)
     {
-        return instance.ToDto(runtimeRegistry.Get(instance.Id));
+        return instance.ToDtoAsync(runtimeRegistry.Get(instance.Id), HttpContext.RequestAborted);
     }
 }

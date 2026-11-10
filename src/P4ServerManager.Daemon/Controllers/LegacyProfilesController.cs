@@ -142,7 +142,7 @@ public sealed class LegacyProfilesController(
             nameof(InstancesController.GetInstance),
             "Instances",
             new { id = instanceId },
-            instance.ToDto(runtimeRegistry.Get(instanceId)));
+            await instance.ToDtoAsync(runtimeRegistry.Get(instanceId), cancellationToken));
     }
 
     /// <summary>

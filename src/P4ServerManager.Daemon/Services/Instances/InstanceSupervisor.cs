@@ -5,24 +5,29 @@ using Microsoft.EntityFrameworkCore;
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.HealthChecks;
+using P4ServerManager.Daemon.Services.Instances.ServerIdAssignment;
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
 using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
-using P4ServerManager.Daemon.Services.Perforce;
 
 namespace P4ServerManager.Daemon.Services.Instances;
 
 /// <summary>
 /// Keeps track of the p4d processes. At startup it adopts the instances that still run, without restarting them, then
 /// starts the stopped ones marked for auto-start and checks them periodically. It also starts, stops, upgrades, converts
-/// to Unicode mode, checks the health of and deletes them on request.
+/// to Unicode mode, checks the health of, changes the server ID of and deletes them on request.
 /// </summary>
-public sealed class InstanceSupervisor(
+public sealed partial class InstanceSupervisor(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
     P4ServerLauncher launcher,
-    InstanceUpgrader upgrader,
-    InstanceUnicodeConverter unicodeConverter,
+    OperationRunner operationRunner,
+    UpgradeOperation upgradeOperation,
+    UnicodeConversionOperation unicodeConversionOperation,
+    ServerIdAssignmentOperation serverIdAssignmentOperation,
+    SuperUserService superUserService,
     HealthCheckRunner healthCheckRunner,
     InstanceRuntimeRegistry runtimeRegistry,
     OperationTracker operationTracker,
@@ -166,145 +171,6 @@ public sealed class InstanceSupervisor(
                 await launcher.StopAsync(instance, stoppingToken);
             });
         });
-    }
-
-    /// <summary>
-    /// Moves an instance to the latest build of <paramref name="release"/>, or to an exact build of it from the archive:
-    /// the same release for a newer patch, or a newer release. The upgrade runs in the background, once this returns: the instance stays
-    /// <see cref="InstanceRuntimeStatus.Upgrading"/> until it ends, and its operation tells its progress. Only the
-    /// shutdown of the daemon cancels it, and never while p4d upgrades the database.
-    /// </summary>
-    /// <param name="instanceId">Identifier of the instance.</param>
-    /// <param name="release">Release to move to.</param>
-    /// <param name="build">Build number of <paramref name="release"/> in the archive, or null for its latest build.</param>
-    /// <param name="cancellationToken">Aborts the wait for the instance to be free.</param>
-    /// <returns>The instance, once its upgrade has begun.</returns>
-    /// <exception cref="InstanceConflictException">
-    /// The instance is not ready, another operation is in progress, or the release or the build is older than the one
-    /// of the instance: p4d cannot downgrade a database.
-    /// </exception>
-    public async Task<P4ServerInstance> UpgradeInstanceAsync(
-        Guid instanceId,
-        P4ServerRelease release,
-        string? build,
-        CancellationToken cancellationToken)
-    {
-        SemaphoreSlim? instanceLock = await AcquireLockAsync(instanceId, cancellationToken);
-        DaemonDbContext? db = null;
-        try
-        {
-            db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-            P4ServerInstance instance = await FindAsync(db, instanceId, cancellationToken);
-            EnsureReady(instance);
-            if (instance.Build is null)
-            {
-                throw new InstanceConflictException($"Instance {instance.Name} has no p4d build yet.");
-            }
-            if (P4ServerRelease.TryParse(instance.Release, out P4ServerRelease current) && release < current)
-            {
-                throw new InstanceConflictException(
-                    $"Instance {instance.Name} runs {current}: its database cannot go back to {release}.");
-            }
-
-            Guid? requestedBuildId = null;
-            if (build is not null)
-            {
-                // Not tracked: the upgrade attaches the build it gets from the build cache.
-                P4ServerBuild target = await db.Builds.AsNoTracking().FirstOrDefaultAsync(
-                    b => b.Release == release.Name && b.BuildNumber == build,
-                    cancellationToken)
-                    ?? throw new InstanceConflictException($"Build {build} of {release} is not in the archive.");
-                if (P4ServerBuildNumber.Compare(target, instance.Build) < 0)
-                {
-                    throw new InstanceConflictException(
-                        $"Instance {instance.Name} runs p4d {instance.Build.Version}/{instance.Build.BuildNumber}: "
-                        + $"it cannot go back to {target.Version}/{target.BuildNumber}.");
-                }
-                requestedBuildId = target.Id;
-            }
-
-            UpgradeContext context = new(db, instance, release, launcher.IsRunning(instance), requestedBuildId);
-            runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.Upgrading);
-            await notifier.InstanceChangedAsync(instance);
-
-            // The upgrade outlives the request: it releases the instance and the context once it ends.
-            _ = RunInBackgroundAsync(
-                db,
-                instance,
-                instanceLock,
-                stoppingToken => upgrader.UpgradeAsync(context, stoppingToken));
-            instanceLock = null;
-            db = null;
-            return instance;
-        }
-        finally
-        {
-            if (db is not null)
-            {
-                await db.DisposeAsync();
-            }
-            instanceLock?.Release();
-        }
-    }
-
-    /// <summary>
-    /// Converts an instance to Unicode mode. It cannot be undone. The conversion runs in the background, once this
-    /// returns: the instance stays <see cref="InstanceRuntimeStatus.ConvertingToUnicode"/> until it ends, and its
-    /// operation tells its progress. Only the shutdown of the daemon cancels it, and never while p4d switches the
-    /// database.
-    /// </summary>
-    /// <param name="instanceId">Identifier of the instance.</param>
-    /// <param name="cancellationToken">Aborts the wait for the instance to be free.</param>
-    /// <returns>The instance, once its conversion has begun.</returns>
-    /// <exception cref="InstanceConflictException">
-    /// The instance is not ready, another operation is in progress, or it already runs in Unicode mode.
-    /// </exception>
-    public async Task<P4ServerInstance> ConvertInstanceToUnicodeAsync(
-        Guid instanceId,
-        CancellationToken cancellationToken)
-    {
-        SemaphoreSlim? instanceLock = await AcquireLockAsync(instanceId, cancellationToken);
-        DaemonDbContext? db = null;
-        try
-        {
-            db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-            P4ServerInstance instance = await FindAsync(db, instanceId, cancellationToken);
-            EnsureReady(instance);
-            if (instance.Build is null)
-            {
-                throw new InstanceConflictException($"Instance {instance.Name} has no p4d build yet.");
-            }
-            if (instance.Unicode)
-            {
-                throw new InstanceConflictException($"Instance {instance.Name} already runs in Unicode mode.");
-            }
-
-            UnicodeConversionContext context = new(
-                db,
-                instance,
-                launcher.IsRunning(instance),
-                paths.GetUnicodeCheckpointPath(instance.Id, timeProvider.GetUtcNow()));
-            runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.ConvertingToUnicode);
-            await notifier.InstanceChangedAsync(instance);
-
-            // The conversion outlives the request: it releases the instance and the context once it ends.
-            _ = RunInBackgroundAsync(
-                db,
-                instance,
-                instanceLock,
-                stoppingToken => unicodeConverter.ConvertAsync(context, stoppingToken));
-            instanceLock = null;
-            db = null;
-            return instance;
-        }
-        finally
-        {
-            if (db is not null)
-            {
-                await db.DisposeAsync();
-            }
-            instanceLock?.Release();
-        }
     }
 
     /// <summary>
@@ -548,6 +414,74 @@ public sealed class InstanceSupervisor(
         {
             await db.DisposeAsync();
             instanceLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Runs an operation on an instance that the caller holds. The operation is begun before the first await, so its
+    /// snapshot replaces the previous one as soon as this returns; <paramref name="onBegun"/> is then called, to log it.
+    /// The shutdown of the daemon is let through; any other failure is returned, for the caller to keep it as the last
+    /// error of the instance and to leave p4d as it should be.
+    /// </summary>
+    /// <returns>The failure of the operation, or null when it succeeded.</returns>
+    private async Task<Exception?> RunOperationAsync<TContext>(
+        IOperationDefinition<TContext> operation,
+        TContext context,
+        Action onBegun,
+        CancellationToken cancellationToken)
+        where TContext : InstanceOperationContext
+    {
+        try
+        {
+            Task run = operationRunner.RunAsync(context.Instance.Id, operation, context, cancellationToken);
+            onBegun();
+            await run;
+            return null;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+    }
+
+    /// <summary>
+    /// Starts or stops p4d after a failed operation, so that it runs as it did before. It is left alone when it already
+    /// does. A failure is added to the last error of the instance, which is not saved: the caller saves it.
+    /// </summary>
+    /// <param name="instance">The instance.</param>
+    /// <param name="running">Whether p4d should run.</param>
+    /// <param name="cancellationToken">The shutdown of the daemon.</param>
+    private async Task RestoreRunningStateAsync(
+        P4ServerInstance instance,
+        bool running,
+        CancellationToken cancellationToken)
+    {
+        if (launcher.IsRunning(instance) == running)
+        {
+            return;
+        }
+
+        string action = running ? "started" : "stopped";
+        try
+        {
+            if (running)
+            {
+                await launcher.StartAsync(instance, cancellationToken);
+            }
+            else
+            {
+                await launcher.StopAsync(instance, cancellationToken);
+            }
+            logger.LogInformation("Instance {Name} {Action} again", instance.Name, action);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "Could not leave instance {Name} {Action} again", instance.Name, action);
+            instance.LastError += $" It could not be {action} again: {exception.Message}";
         }
     }
 

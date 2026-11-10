@@ -8,8 +8,8 @@ using P4ServerManager.Daemon.Services.Processes;
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
 /// <summary>
-/// Reads from the database of an imported server whether it runs in Unicode mode. The case handling is not recorded
-/// in the database: it comes from the import request.
+/// Reads from the database of an imported server whether it runs in Unicode mode, and its server ID from its root. The
+/// case handling is not recorded in the database: it comes from the import request.
 /// </summary>
 public sealed class ReadServerSettingsStep(
     IP4ServerBuildCache buildCache,
@@ -34,8 +34,10 @@ public sealed class ReadServerSettingsStep(
             cancellationToken);
 
         instance.Unicode = ConfigDumpParser.IsUnicode(dump.StandardOutput);
+        string? serverId = await ServerLayout.ReadServerIdAsync(instance.RootPath, cancellationToken);
         await context.Db.SaveChangesAsync(cancellationToken);
         await notifier.InstanceChangedAsync(instance);
-        return instance.Unicode ? "Unicode mode" : "Not in Unicode mode";
+        string mode = instance.Unicode ? "Unicode mode" : "Not in Unicode mode";
+        return serverId is null ? $"{mode}, no server ID" : $"{mode}, server ID {serverId}";
     }
 }

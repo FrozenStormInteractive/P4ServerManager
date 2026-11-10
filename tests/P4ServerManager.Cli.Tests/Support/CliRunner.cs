@@ -60,6 +60,7 @@ internal sealed class CliRunner
         return new InstanceDto(
             id ?? Guid.NewGuid(),
             name,
+            ServerId: name,
             Description: null,
             port,
             Ssl: false,

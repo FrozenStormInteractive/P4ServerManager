@@ -40,7 +40,7 @@ public sealed class CreateSpecsStep(
 
             await session.RunAsync(
                 ["server", "-i"],
-                RecommendedConfiguration.GetServerSpec(context.Instance),
+                RecommendedConfiguration.GetServerSpec(context.Instance, context.Instance.Name),
                 cancellationToken);
             await session.RunAsync(["typemap", "-i"], RecommendedConfiguration.GetTypeMap(), cancellationToken);
             return "Depots spec and unload, commit server spec, typemap";

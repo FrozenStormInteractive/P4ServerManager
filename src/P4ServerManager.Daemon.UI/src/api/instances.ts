@@ -1,5 +1,6 @@
 // Types
 import type {
+  ChangeServerIdRequest,
   CreateInstanceRequest,
   Instance,
   InstanceAction,
@@ -104,6 +105,14 @@ export function upgradeInstance (id: string, body: UpgradeInstanceRequest): Prom
  */
 export function convertInstanceToUnicode (id: string): Promise<Instance> {
   return request('POST', `/api/instances/${encodeURIComponent(id)}/convert-to-unicode`)
+}
+
+/**
+ * Begins the change of the server ID of the instance. The daemon answers once it has begun: the instance is
+ * `ChangingServerId` until it ends, and its operation tells its progress.
+ */
+export function changeInstanceServerId (id: string, body: ChangeServerIdRequest): Promise<Instance> {
+  return request('PUT', `/api/instances/${encodeURIComponent(id)}/server-id`, body)
 }
 
 /**

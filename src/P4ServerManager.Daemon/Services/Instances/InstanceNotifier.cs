@@ -21,7 +21,7 @@ public sealed class InstanceNotifier(
     {
         try
         {
-            InstanceDto dto = instance.ToDto(runtimeRegistry.Get(instance.Id));
+            InstanceDto dto = await instance.ToDtoAsync(runtimeRegistry.Get(instance.Id), CancellationToken.None);
             await hubContext.Clients.All.InstanceUpdated(dto);
         }
         catch (Exception exception)

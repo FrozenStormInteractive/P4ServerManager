@@ -5,6 +5,7 @@ export function createInstance (overrides: Partial<Instance> = {}): Instance {
   return {
     id: '5f0079c4-12bf-4f3e-b7f5-3d8677fb10bc',
     name: 'main',
+    serverId: 'main',
     description: null,
     port: 1666,
     ssl: false,

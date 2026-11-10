@@ -73,6 +73,8 @@
 
       <ConvertToUnicodeDialog v-model="convertDialog" :instance="instance" />
 
+      <ChangeServerIdDialog v-model="serverIdDialog" :instance="instance" />
+
       <SuperUserDialog v-model="superUserDialog" :instance="instance" />
 
       <ConfirmInstanceActionDialog
@@ -116,6 +118,24 @@
                     variant="tonal"
                     @click="convertDialog = true"
                   />
+                </template>
+
+                <template v-else-if="detail.label === 'instance.serverId'" #append>
+                  <!-- A disabled button gets no pointer events: the tooltip hangs on the span around it. -->
+                  <v-tooltip :disabled="!superUserProblem" location="start" :text="t('changeServerId.superUserRequired')">
+                    <template #activator="{ props: tooltip }">
+                      <span v-bind="tooltip" data-change-server-id>
+                        <v-btn
+                          :disabled="!canAct || !!superUserProblem"
+                          :loading="status === 'changingServerId'"
+                          size="small"
+                          :text="t('actions.changeServerId')"
+                          variant="tonal"
+                          @click="serverIdDialog = true"
+                        />
+                      </span>
+                    </template>
+                  </v-tooltip>
                 </template>
               </v-list-item>
 
@@ -222,6 +242,7 @@
   import { useRouter } from 'vue-router'
 
   // Components, stores and utilities
+  import ChangeServerIdDialog from '@/components/instances/ChangeServerIdDialog.vue'
   import ConfirmInstanceActionDialog from '@/components/instances/ConfirmInstanceActionDialog.vue'
   import ConvertToUnicodeDialog from '@/components/instances/ConvertToUnicodeDialog.vue'
   import DeleteInstanceDialog from '@/components/instances/DeleteInstanceDialog.vue'
@@ -254,6 +275,7 @@
   const deleteDialog = ref(false)
   const upgradeDialog = ref(false)
   const convertDialog = ref(false)
+  const serverIdDialog = ref(false)
   const confirmDialog = ref(false)
   const confirmAction = ref<ConfirmableAction>('stop')
   const savingAutoStart = ref(false)
@@ -311,6 +333,7 @@
         label: 'instance.version',
         value: value.version ? `${value.version}/${value.build} (${value.release})` : t('instance.pendingVersion'),
       },
+      { label: 'instance.serverId', value: value.serverId ?? t('instance.unknownServerId') },
       { label: 'instance.port', value: formatPort(value) },
       ...(value.sslFingerprint ? [{ label: 'instance.sslFingerprint', value: value.sslFingerprint }] : []),
       { label: 'instance.root', value: value.rootPath },

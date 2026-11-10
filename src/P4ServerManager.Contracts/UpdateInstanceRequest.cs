@@ -7,7 +7,8 @@ public sealed record UpdateInstanceRequest
 {
     /// <summary>
     /// Unique name: a letter, then up to 31 letters, digits, '-' or '_'. Only the name in the daemon changes: the p4d
-    /// server keeps its server ID and the prefix of its journals.
+    /// server keeps its server ID and the prefix of its journals. The server ID changes with
+    /// <c>PUT /api/instances/{id}/server-id</c>.
     /// </summary>
     public string? Name { get; init; }
 

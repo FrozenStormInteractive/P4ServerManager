@@ -21,6 +21,7 @@
     "restart": "Restart",
     "upgrade": "Upgrade",
     "convertToUnicode": "Convert to Unicode",
+    "changeServerId": "Change server ID",
     "enableMaintenance": "Enable maintenance mode",
     "startInMaintenance": "Start in maintenance mode",
     "disableMaintenance": "Disable maintenance mode",
@@ -41,6 +42,7 @@
     "upgrading": "Upgrading",
     "convertingToUnicode": "Converting to Unicode",
     "checkingHealth": "Checking health",
+    "changingServerId": "Changing the server ID",
     "deleting": "Deleting",
     "unknown": "Unknown",
     "inMaintenance": "{status} (maintenance)"
@@ -128,6 +130,8 @@
     "port": "Port",
     "sslFingerprint": "SSL fingerprint",
     "root": "Root directory",
+    "serverId": "Server ID",
+    "unknownServerId": "Unknown",
     "caseHandling": "Case handling",
     "caseSensitive": "Case-sensitive",
     "caseInsensitive": "Case-insensitive",
@@ -238,7 +242,8 @@
       "provision": "Provisioning",
       "import": "Import",
       "upgrade": "Upgrade",
-      "convert-to-unicode": "Conversion to Unicode"
+      "convert-to-unicode": "Conversion to Unicode",
+      "change-server-id": "Change of the server ID"
     },
     "steps": {
       "resolve-build": "Get the p4d build",
@@ -255,14 +260,16 @@
       "read-settings": "Read the server settings",
       "upgrade-database": "Upgrade the database",
       "stop-server": "Stop the server",
-      "switch-to-unicode": "Switch to Unicode mode"
+      "switch-to-unicode": "Switch to Unicode mode",
+      "set-server-id": "Set the server ID",
+      "rename-server-spec": "Rename the server spec"
     },
     "skipped": "Skipped"
   },
   "createInstance": {
     "title": "New server",
     "name": "Name",
-    "nameHint": "Also used as the server ID, which stays the same if the server is renamed later.",
+    "nameHint": "Also used as the server ID, which stays the same if the server is renamed later. The server ID can be changed on its own.",
     "description": "Description",
     "version": "p4d version",
     "versionsError": "The p4d versions could not be loaded: {message}",
@@ -319,7 +326,7 @@
   },
   "editInstance": {
     "title": "Edit {name}",
-    "nameHint": "Only the name in the manager changes. The server keeps its server ID and the prefix of its journals.",
+    "nameHint": "Only the name in the manager changes. The server keeps its server ID and the prefix of its journals. Change the server ID from the details of the server.",
     "error": "The server could not be changed: {message}"
   },
   "superUser": {
@@ -374,6 +381,23 @@
     "warningStopped": "The server stays stopped.",
     "error": "The conversion could not begin: {message}",
     "converted": "{name} now runs in Unicode mode."
+  },
+  "changeServerId": {
+    "title": "Change the server ID of {name}",
+    "text": "p4d stores its server ID in its root, and its server spec is named after it. Both change; the name of the server in the manager and the prefix of its journals stay the same.",
+    "current": "Current server ID: {serverId}",
+    "serverId": "New server ID",
+    "superUserNote": "The server spec is renamed as the stored super user.",
+    "warningRunning": "The server is restarted: its users are disconnected until it starts again.",
+    "warningStopped": "The server is started to rename its server spec, then stopped again.",
+    "superUserRequired": "Store a usable super user first: the server spec is renamed as it.",
+    "error": "The server ID could not be changed: {message}",
+    "changed": "{name} now has server ID {serverId}.",
+    "rules": {
+      "required": "Enter a server ID.",
+      "format": "Start with a letter, then up to 31 letters, digits, '-' or '_'.",
+      "unchanged": "Enter a server ID other than the current one."
+    }
   },
   "deleteInstance": {
     "title": "Delete {name}?",

@@ -197,26 +197,20 @@ public sealed class SuperUserService(
                     ?? throw new KeyNotFoundException($"Instance {instanceId} does not exist.");
             }
 
-            if (instance.SuperUser is not { Status: SuperUserStatus.Valid or SuperUserStatus.Unchecked } stored)
-            {
-                throw new SuperUserUnavailableException(instance.SuperUser is null
-                    ? "No super user is stored for this instance."
-                    : "The stored super user of this instance is not usable: change it first.");
-            }
+            SuperUserCredentials superUser = GetStoredCredentials(instance);
             if (instance.State != P4ServerInstanceState.Ready
                 || runtimeRegistry.Get(instanceId) != InstanceRuntimeStatus.Running)
             {
                 throw new SuperUserUnavailableException("The server of this instance does not run.");
             }
 
-            string password = Unprotect(stored) ?? throw new SuperUserUnavailableException(UnreadablePasswordMessage);
             P4AdminSession session = await P4AdminSession.OpenAsync(
                 buildCache,
                 processRunner,
                 paths,
                 logger,
                 instance,
-                new SuperUserCredentials(stored.UserName, password),
+                superUser,
                 cancellationToken);
             return await session.RunLoggedInAsync(() => action(session, cancellationToken), cancellationToken);
         }
@@ -224,6 +218,25 @@ public sealed class SuperUserService(
         {
             sessionLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Reads the stored account of an instance, for an operation that runs p4 commands as it.
+    /// </summary>
+    /// <exception cref="SuperUserUnavailableException">
+    /// No account is stored, it was found invalid, or its password cannot be decrypted.
+    /// </exception>
+    public SuperUserCredentials GetStoredCredentials(P4ServerInstance instance)
+    {
+        if (instance.SuperUser is not { Status: SuperUserStatus.Valid or SuperUserStatus.Unchecked } stored)
+        {
+            throw new SuperUserUnavailableException(instance.SuperUser is null
+                ? "No super user is stored for this instance."
+                : "The stored super user of this instance is not usable: change it first.");
+        }
+
+        string password = Unprotect(stored) ?? throw new SuperUserUnavailableException(UnreadablePasswordMessage);
+        return new SuperUserCredentials(stored.UserName, password);
     }
 
     // Checks the account and saves what the server said of it. An unreachable server leaves it as it was.
@@ -261,6 +274,11 @@ public sealed class SuperUserService(
                     stored.UserName, instance.Name, status, stored.LastError);
             }
         }
+
+        // The check takes a while, and an operation may have saved the instance meanwhile, such as the last error of an
+        // operation that started p4d and so asked for this check. The rest of the instance is read again, so that this
+        // update does not hide it from the clients.
+        await db.Entry(instance).ReloadAsync(cancellationToken);
         await notifier.InstanceChangedAsync(instance);
         return result;
     }

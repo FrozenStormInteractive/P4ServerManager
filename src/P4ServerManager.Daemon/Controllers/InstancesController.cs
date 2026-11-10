@@ -9,6 +9,7 @@ using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
+using P4ServerManager.Daemon.Services.Instances.ServerIdAssignment;
 using P4ServerManager.Daemon.Services.Instances.Upgrade;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
@@ -42,7 +43,12 @@ public sealed class InstancesController(
             .Include(i => i.Build)
             .OrderBy(i => i.Name)
             .ToListAsync(cancellationToken);
-        return instances.Select(ToDto).ToList();
+        List<InstanceDto> dtos = new(instances.Count);
+        foreach (P4ServerInstance instance in instances)
+        {
+            dtos.Add(await instance.ToDtoAsync(runtimeRegistry.Get(instance.Id), cancellationToken));
+        }
+        return dtos;
     }
 
     /// <summary>
@@ -61,7 +67,9 @@ public sealed class InstancesController(
             .AsNoTracking()
             .Include(i => i.Build)
             .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
-        return instance is null ? Problem(statusCode: StatusCodes.Status404NotFound) : ToDto(instance);
+        return instance is null
+            ? Problem(statusCode: StatusCodes.Status404NotFound)
+            : await ToDtoAsync(instance);
     }
 
     /// <summary>
@@ -140,13 +148,14 @@ public sealed class InstancesController(
         await queue.EnqueueAsync(new ProvisioningRequest(id, ProvisioningKind.Create, superUser), cancellationToken);
         await notifier.InstanceChangedAsync(instance);
 
-        return AcceptedAtAction(nameof(GetInstance), new { id }, ToDto(instance));
+        return AcceptedAtAction(nameof(GetInstance), new { id }, await ToDtoAsync(instance));
     }
 
     /// <summary>
     /// Changes the settings of an instance that can change after its creation. The settings left out are kept. The
     /// change takes effect without a restart of p4d. A new name only changes the name in the daemon: the p4d server
-    /// keeps its server ID and the prefix of its journals.
+    /// keeps its server ID and the prefix of its journals. The server ID changes with
+    /// <c>PUT /api/instances/{id}/server-id</c>.
     /// </summary>
     /// <param name="id">Identifier of the instance.</param>
     /// <param name="request">Settings to change, checked by <see cref="UpdateInstanceRequestValidator"/>.</param>
@@ -219,7 +228,7 @@ public sealed class InstancesController(
         }
 
         await notifier.InstanceChangedAsync(instance);
-        return ToDto(instance);
+        return await ToDtoAsync(instance);
     }
 
     /// <summary>
@@ -452,6 +461,42 @@ public sealed class InstancesController(
     }
 
     /// <summary>
+    /// Gives the p4d of an instance another server ID, and renames its server spec to it. The name of the instance and
+    /// the prefix of its journals stay the same. The change runs in the background: it stops p4d if it runs, sets the
+    /// server ID with <c>p4d -xD</c>, starts p4d, renames the server spec as the stored super user, then stops p4d again
+    /// if it did not run. The instance is <c>ChangingServerId</c> meanwhile. Follow it with
+    /// <c>GET /api/instances/{id}/operation</c> or the <c>OperationProgress</c> event of the <c>/hubs/instances</c> hub.
+    /// A failure is kept as the last error of the instance, and p4d is left running or stopped as it was.
+    /// </summary>
+    /// <param name="id">Identifier of the instance.</param>
+    /// <param name="request">The new server ID, checked by <see cref="ChangeServerIdRequestValidator"/>.</param>
+    /// <param name="supervisor">Runs the change.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the change runs to its end: only the shutdown of the daemon cancels it, and never
+    /// while p4d sets the server ID.
+    /// </param>
+    /// <response code="202">The change has begun.</response>
+    /// <response code="400">The server ID is not valid. The errors are keyed by field.</response>
+    /// <response code="404">No instance has this identifier.</response>
+    /// <response code="409">
+    /// The instance is not ready, another operation is in progress, it already has this server ID, or no usable super
+    /// user is stored for it.
+    /// </response>
+    [HttpPut("{id:guid}/server-id")]
+    [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    public Task<ActionResult<InstanceDto>> ChangeServerId(
+        Guid id,
+        ChangeServerIdRequest request,
+        [FromServices] InstanceSupervisor supervisor,
+        CancellationToken cancellationToken)
+    {
+        return RunOperationAsync(() => supervisor.ChangeServerIdAsync(id, request.ServerId, cancellationToken));
+    }
+
+    /// <summary>
     /// Starts the p4d of several instances in parallel, and waits until each one accepts connections or fails. An
     /// instance that already runs is skipped.
     /// </summary>
@@ -585,7 +630,7 @@ public sealed class InstancesController(
 
     private async Task<ActionResult<InstanceDto>> RunOperationAsync(Func<Task<P4ServerInstance>> operation)
     {
-        return await HandleOperationErrorsAsync(async () => Accepted(ToDto(await operation())));
+        return await HandleOperationErrorsAsync(async () => Accepted(await ToDtoAsync(await operation())));
     }
 
     private async Task<ActionResult> HandleOperationErrorsAsync(Func<Task<ActionResult>> operation)
@@ -608,8 +653,8 @@ public sealed class InstancesController(
         }
     }
 
-    private InstanceDto ToDto(P4ServerInstance instance)
+    private Task<InstanceDto> ToDtoAsync(P4ServerInstance instance)
     {
-        return instance.ToDto(runtimeRegistry.Get(instance.Id));
+        return instance.ToDtoAsync(runtimeRegistry.Get(instance.Id), HttpContext.RequestAborted);
     }
 }

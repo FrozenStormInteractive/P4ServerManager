@@ -88,11 +88,13 @@ public static class RecommendedConfiguration
     }
 
     /// <summary>
-    /// Server spec of a new server, which makes it a commit server and gives its address.
+    /// Server spec of a server, which makes it a commit server and gives its address.
     /// </summary>
-    public static string GetServerSpec(P4ServerInstance instance)
+    /// <param name="instance">The instance.</param>
+    /// <param name="serverId">Server ID of p4d, which names the spec.</param>
+    public static string GetServerSpec(P4ServerInstance instance, string serverId)
     {
-        return $"ServerID:\t{instance.Name}\n\n"
+        return $"ServerID:\t{serverId}\n\n"
             + "Type:\tserver\n\n"
             + "Services:\tcommit-server\n\n"
             + $"Address:\t{P4ServerLauncher.GetListenAddress(instance)}\n\n"
