@@ -112,7 +112,7 @@ public sealed class ChangeServerIdCommandTests
             "change-server-id",
             status,
             [new OperationStepState("set-server-id", "Set the server ID", step, null)],
-            step == OperationStepStatus.Running ? "set-server-id" : null,
+            step == OperationStepStatus.Running ? 0 : null,
             null,
             null);
         return StubDaemon.Json(HttpStatusCode.OK, snapshot, CliJsonContext.Default.OperationSnapshot);

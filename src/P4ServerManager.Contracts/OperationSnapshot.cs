@@ -28,8 +28,13 @@ public sealed record OperationStepState(string Key, string Title, OperationStepS
 /// <param name="InstanceId">The instance.</param>
 /// <param name="Kind">What the operation does, such as <c>provision</c>.</param>
 /// <param name="Status">Whether it runs, succeeded or failed.</param>
-/// <param name="Steps">Every step, in order, including the ones that will be skipped.</param>
-/// <param name="CurrentStep">Key of the step running, or null between steps and once finished.</param>
+/// <param name="Steps">
+/// Every step, in order, including the ones that will be skipped. The same step, with the same key, can be there more
+/// than once.
+/// </param>
+/// <param name="CurrentStepIndex">
+/// Position in <paramref name="Steps"/> of the step running, or null between steps and once finished.
+/// </param>
 /// <param name="Percent">Progress of the current step, when it can be measured.</param>
 /// <param name="Error">Error that stopped the operation.</param>
 /// <param name="Outcome">
@@ -42,7 +47,7 @@ public sealed record OperationSnapshot(
     string Kind,
     OperationStatus Status,
     IReadOnlyList<OperationStepState> Steps,
-    string? CurrentStep,
+    int? CurrentStepIndex,
     int? Percent,
     string? Error,
     string? Outcome = null);

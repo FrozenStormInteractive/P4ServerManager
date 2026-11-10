@@ -38,9 +38,10 @@ internal static class InstanceOperationCommand
                 if (!invocation.Json)
                 {
                     await invocation.Output.WriteLineAsync($"{snapshot.Kind}: {snapshot.Status}");
-                    foreach (OperationStepState step in snapshot.Steps)
+                    for (int index = 0; index < snapshot.Steps.Count; index++)
                     {
-                        int? percent = step.Key == snapshot.CurrentStep ? snapshot.Percent : null;
+                        OperationStepState step = snapshot.Steps[index];
+                        int? percent = index == snapshot.CurrentStepIndex ? snapshot.Percent : null;
                         await invocation.Output.WriteLineAsync(OperationProgressWriter.FormatLine(step, percent));
                     }
                 }

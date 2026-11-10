@@ -35,13 +35,50 @@ public sealed class OperationProgressWriterTests
             + "[ .. ] Upgrade the database\n");
     }
 
+    [Fact]
+    public void Report_WritesEachOccurrenceOfAStepThatRunsMoreThanOnce()
+    {
+        OperationProgressWriter progress = new(_writer, rewriteInPlace: true);
+
+        progress.Report(StopStartStop(OperationStepStatus.Running, OperationStepStatus.Pending, OperationStepStatus.Pending));
+        progress.Report(StopStartStop(OperationStepStatus.Succeeded, OperationStepStatus.Succeeded, OperationStepStatus.Running));
+        progress.Report(StopStartStop(OperationStepStatus.Succeeded, OperationStepStatus.Succeeded, OperationStepStatus.Succeeded));
+        progress.Complete();
+
+        _writer.ToString().ShouldBe(
+            "[ .. ] Stop the server\r[ ok ] Stop the server\n"
+            + "[ ok ] Start the server\n"
+            + "[ .. ] Stop the server\r[ ok ] Stop the server\n");
+    }
+
+    private static OperationSnapshot StopStartStop(
+        OperationStepStatus stop,
+        OperationStepStatus start,
+        OperationStepStatus stopAgain)
+    {
+        OperationStepStatus[] statuses = [stop, start, stopAgain];
+        int current = Array.IndexOf(statuses, OperationStepStatus.Running);
+        return new OperationSnapshot(
+            Guid.Empty,
+            "change-server-id",
+            OperationStatus.Running,
+            [
+                new OperationStepState("stop-server", "Stop the server", stop, null),
+                new OperationStepState("start-server", "Start the server", start, null),
+                new OperationStepState("stop-server", "Stop the server", stopAgain, null),
+            ],
+            current >= 0 ? current : null,
+            null,
+            null);
+    }
+
     private static OperationSnapshot Snapshot(
         OperationStepStatus download,
         OperationStepStatus upgrade,
         int? percent = null)
     {
-        string? current = download == OperationStepStatus.Running ? "download"
-            : upgrade == OperationStepStatus.Running ? "upgrade"
+        int? current = download == OperationStepStatus.Running ? 0
+            : upgrade == OperationStepStatus.Running ? 1
             : null;
         return new OperationSnapshot(
             Guid.Empty,

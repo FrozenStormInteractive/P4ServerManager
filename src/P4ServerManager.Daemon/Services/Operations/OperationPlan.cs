@@ -21,17 +21,13 @@ public sealed class OperationPlan<TContext>
     public IReadOnlyList<PlannedStep<TContext>> Steps => steps;
 
     /// <summary>
-    /// Adds a step after the others.
+    /// Adds a step after the others. The same step can be added more than once, such as to stop p4d, start it, then
+    /// stop it again.
     /// </summary>
     /// <param name="step">The step. Any step typed on what <typeparamref name="TContext"/> implements fits.</param>
     /// <param name="skipWhen">Whether the operation skips the step: it is then shown as skipped.</param>
-    /// <exception cref="InvalidOperationException">The plan already has a step with the same key.</exception>
     public OperationPlan<TContext> Then(IOperationStep<TContext> step, Func<TContext, bool>? skipWhen = null)
     {
-        if (steps.Any(s => s.Step.Key == step.Key))
-        {
-            throw new InvalidOperationException($"The plan already has a step '{step.Key}'.");
-        }
         steps.Add(new PlannedStep<TContext>(step, skipWhen));
         return this;
     }

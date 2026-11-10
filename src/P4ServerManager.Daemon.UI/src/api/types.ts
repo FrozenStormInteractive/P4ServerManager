@@ -343,8 +343,15 @@ export interface OperationSnapshot {
    */
   kind: string
   status: OperationStatus
+  /**
+   * Every step, in order, including the ones that will be skipped. The same step, with the same key, can be there more
+   * than once.
+   */
   steps: OperationStepState[]
-  currentStep: string | null
+  /**
+   * Position in `steps` of the step running, or null between steps and once finished.
+   */
+  currentStepIndex: number | null
   percent: number | null
   error: string | null
   /**

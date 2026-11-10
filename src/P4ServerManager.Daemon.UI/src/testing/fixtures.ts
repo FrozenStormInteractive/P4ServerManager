@@ -39,7 +39,7 @@ export function createSnapshot (instanceId: string, overrides: Partial<Operation
       { key: 'start-server', title: 'Start the server', status: 'Pending', message: null },
       { key: 'create-super-user', title: 'Create the super user', status: 'Skipped', message: null },
     ],
-    currentStep: 'resolve-build',
+    currentStepIndex: 0,
     percent: 42,
     error: null,
     outcome: null,

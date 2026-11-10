@@ -129,7 +129,7 @@ public sealed class ConvertInstanceToUnicodeCommandTests
             "convert-to-unicode",
             status,
             [new OperationStepState("switch-to-unicode", "Switch to Unicode mode", step, error)],
-            step == OperationStepStatus.Running ? "switch-to-unicode" : null,
+            step == OperationStepStatus.Running ? 0 : null,
             null,
             error);
         return StubDaemon.Json(HttpStatusCode.OK, snapshot, CliJsonContext.Default.OperationSnapshot);

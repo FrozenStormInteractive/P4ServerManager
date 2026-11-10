@@ -26,11 +26,28 @@ describe('OperationProgress', () => {
     const snapshot = createSnapshot(instance.id, {
       kind: 'Upgrade',
       steps: [{ key: 'swap-binaries', title: 'Swap the binaries', status: 'Pending', message: null }],
-      currentStep: null,
+      currentStepIndex: null,
     })
     const { wrapper } = await mountWithPlugins(OperationProgress, { props: { instance, snapshot } })
 
     expect(wrapper.text()).toContain('Upgrade')
     expect(wrapper.get('[data-step="swap-binaries"]').text()).toContain('Swap the binaries')
+  })
+
+  it('shows each occurrence of a step that runs more than once', async () => {
+    const instance = createInstance()
+    const snapshot = createSnapshot(instance.id, {
+      kind: 'change-server-id',
+      steps: [
+        { key: 'stop-server', title: 'Stop the server', status: 'Succeeded', message: null },
+        { key: 'start-server', title: 'Start the server', status: 'Succeeded', message: null },
+        { key: 'stop-server', title: 'Stop the server', status: 'Running', message: null },
+      ],
+      currentStepIndex: 2,
+      percent: null,
+    })
+    const { wrapper } = await mountWithPlugins(OperationProgress, { props: { instance, snapshot } })
+
+    expect(wrapper.findAll('[data-step="stop-server"]')).toHaveLength(2)
   })
 })

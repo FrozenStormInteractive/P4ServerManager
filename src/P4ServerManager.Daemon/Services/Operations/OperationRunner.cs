@@ -36,33 +36,39 @@ public sealed class OperationRunner(OperationTracker tracker, InstanceNotifier n
         TContext context,
         CancellationToken cancellationToken)
     {
+        // A step is known by its position: the same step can be in a plan more than once.
         List<PlannedStep<TContext>> includedSteps = plan.Steps.Where(s => s.Step.IsIncluded(context)).ToList();
-        List<PlannedStep<TContext>> stepsToRun = includedSteps.Where(s => Applies(s, context)).ToList();
+        bool[] appliedAtStart = includedSteps.Select(s => Applies(s, context)).ToArray();
         await notifier.OperationChangedAsync(tracker.Begin(
             instanceId,
             kind,
-            includedSteps.Select(s => new OperationStepState(
+            includedSteps.Select((s, index) => new OperationStepState(
                 s.Step.Key,
                 s.Step.Title,
-                stepsToRun.Contains(s) ? OperationStepStatus.Pending : OperationStepStatus.Skipped,
+                appliedAtStart[index] ? OperationStepStatus.Pending : OperationStepStatus.Skipped,
                 null))));
 
         InlineProgress<OperationStepProgress> progress = new(p =>
             _ = notifier.OperationChangedAsync(tracker.ReportProgress(instanceId, p.Message, p.Percent)));
         try
         {
-            foreach (PlannedStep<TContext> planned in stepsToRun)
+            for (int index = 0; index < includedSteps.Count; index++)
             {
-                IOperationStep<TContext> step = planned.Step;
-                if (!Applies(planned, context))
+                if (!appliedAtStart[index])
                 {
-                    await notifier.OperationChangedAsync(tracker.SkipStep(instanceId, step.Key));
                     continue;
                 }
 
-                await notifier.OperationChangedAsync(tracker.StartStep(instanceId, step.Key));
-                string? message = await step.RunAsync(context, progress, cancellationToken);
-                await notifier.OperationChangedAsync(tracker.CompleteStep(instanceId, step.Key, message));
+                PlannedStep<TContext> planned = includedSteps[index];
+                if (!Applies(planned, context))
+                {
+                    await notifier.OperationChangedAsync(tracker.SkipStep(instanceId, index));
+                    continue;
+                }
+
+                await notifier.OperationChangedAsync(tracker.StartStep(instanceId, index));
+                string? message = await planned.Step.RunAsync(context, progress, cancellationToken);
+                await notifier.OperationChangedAsync(tracker.CompleteStep(instanceId, index, message));
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException

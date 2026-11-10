@@ -159,7 +159,7 @@ public sealed class UpgradeInstanceCommandTests
             "upgrade",
             status,
             [new OperationStepState("upgrade-database", "Upgrade the database", step, error)],
-            step == OperationStepStatus.Running ? "upgrade-database" : null,
+            step == OperationStepStatus.Running ? 0 : null,
             null,
             error,
             outcome ?? (status == OperationStatus.Succeeded ? "upgraded" : null));

@@ -235,7 +235,7 @@ public sealed class CreateInstanceCommandTests
                 new OperationStepState("resolve-build", "Get the p4d build", first, null),
                 new OperationStepState("start-server", "Start the server", second, error),
             ],
-            second == OperationStepStatus.Running ? "start-server" : null,
+            second == OperationStepStatus.Running ? 1 : null,
             null,
             error);
         return StubDaemon.Json(HttpStatusCode.OK, snapshot, CliJsonContext.Default.OperationSnapshot);

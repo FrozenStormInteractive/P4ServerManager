@@ -2,8 +2,8 @@
   <v-card :title="title">
     <v-list v-if="snapshot" density="compact">
       <v-list-item
-        v-for="step in snapshot.steps"
-        :key="step.key"
+        v-for="(step, index) in snapshot.steps"
+        :key="index"
         :class="{ 'text-disabled': step.status === 'Pending' || step.status === 'Skipped' }"
         :data-step="step.key"
         :subtitle="step.status === 'Skipped' ? t('operations.skipped') : step.message ?? undefined"

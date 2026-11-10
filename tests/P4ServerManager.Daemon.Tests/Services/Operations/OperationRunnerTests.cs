@@ -77,7 +77,7 @@ public sealed class OperationRunnerTests
 
         await _runner.RunAsync(InstanceId, "test", Plan(step), new object(), TestContext.Current.CancellationToken);
 
-        _pushed.ShouldContain(s => s.CurrentStep == "download"
+        _pushed.ShouldContain(s => s.CurrentStepIndex == 0
             && s.Percent == 50
             && s.Steps[0].Message == "Downloading (50%)");
     }
@@ -196,12 +196,60 @@ public sealed class OperationRunnerTests
     }
 
     [Fact]
-    public void Then_RefusesASecondStepWithTheSameKey()
+    public async Task RunAsync_RunsAStepThatThePlanHasMoreThanOnce()
     {
-        OperationPlan<object> plan = new OperationPlan<object>().Then(new FakeStep("step", []));
+        List<string> ran = [];
+        FakeStep stop = new("stop", ran);
+        FakeStep start = new("start", ran);
 
-        Should.Throw<InvalidOperationException>(() => plan.Then(new FakeStep("step", [])))
-            .Message.ShouldContain("'step'");
+        await _runner.RunAsync(InstanceId, "test", Plan(stop, start, stop), new object(), TestContext.Current.CancellationToken);
+
+        ran.ShouldBe(["stop", "start", "stop"]);
+        _pushed.Where(s => s.CurrentStepIndex is not null)
+            .Select(s => $"{s.CurrentStepIndex}: {string.Join(", ", s.Steps.Select(step => step.Status))}")
+            .ShouldBe(
+            [
+                "0: Running, Pending, Pending",
+                "1: Succeeded, Running, Pending",
+                "2: Succeeded, Succeeded, Running",
+            ]);
+        _tracker.Get(InstanceId)!.Steps.Select(s => (s.Key, s.Status)).ShouldBe(
+        [
+            ("stop", OperationStepStatus.Succeeded),
+            ("start", OperationStepStatus.Succeeded),
+            ("stop", OperationStepStatus.Succeeded),
+        ]);
+    }
+
+    [Fact]
+    public async Task RunAsync_FailsOnlyTheOccurrenceOfTheStepThatThrew()
+    {
+        List<string> ran = [];
+        FakeStep stop = new("stop", ran);
+        FakeStep failing = new("failing", ran) { Error = new InvalidOperationException("Boom") };
+
+        await Should.ThrowAsync<InvalidOperationException>(() =>
+            _runner.RunAsync(InstanceId, "test", Plan(stop, failing, stop), new object(), TestContext.Current.CancellationToken));
+
+        _tracker.Get(InstanceId)!.Steps.Select(s => s.Status).ShouldBe(
+            [OperationStepStatus.Succeeded, OperationStepStatus.Failed, OperationStepStatus.Pending]);
+    }
+
+    [Fact]
+    public async Task RunAsync_SkipsOneOccurrenceOfAStepWithoutTheOthers()
+    {
+        List<string> ran = [];
+        FakeStep stop = new("stop", ran);
+        OperationPlan<object> plan = new OperationPlan<object>()
+            .Then(stop, skipWhen: _ => true)
+            .Then(new FakeStep("start", ran))
+            .Then(stop);
+
+        await _runner.RunAsync(InstanceId, "test", plan, new object(), TestContext.Current.CancellationToken);
+
+        ran.ShouldBe(["start", "stop"]);
+        _tracker.Get(InstanceId)!.Steps.Select(s => s.Status).ShouldBe(
+            [OperationStepStatus.Skipped, OperationStepStatus.Succeeded, OperationStepStatus.Succeeded]);
     }
 
     private static OperationPlan<object> Plan(params IOperationStep<object>[] steps)

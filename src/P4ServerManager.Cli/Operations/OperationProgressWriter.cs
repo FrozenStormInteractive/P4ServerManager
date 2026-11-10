@@ -13,28 +13,30 @@ namespace P4ServerManager.Cli.Operations;
 /// </param>
 internal sealed class OperationProgressWriter(TextWriter writer, bool rewriteInPlace)
 {
-    private readonly Dictionary<string, (OperationStepStatus Status, int? Percent)> reported = [];
+    // By position of the step: the same step can be in an operation more than once.
+    private readonly Dictionary<int, (OperationStepStatus Status, int? Percent)> reported = [];
 
-    // Step whose line is written without its line break yet, to be rewritten in place.
-    private string? openStepKey;
+    // Position of the step whose line is written without its line break yet, to be rewritten in place.
+    private int? openStepIndex;
     private int openLineLength;
 
     public void Report(OperationSnapshot snapshot)
     {
-        foreach (OperationStepState step in snapshot.Steps)
+        for (int index = 0; index < snapshot.Steps.Count; index++)
         {
+            OperationStepState step = snapshot.Steps[index];
             if (step.Status == OperationStepStatus.Pending)
             {
                 continue;
             }
 
-            int? percent = rewriteInPlace && step.Key == snapshot.CurrentStep ? snapshot.Percent : null;
-            if (this.reported.TryGetValue(step.Key, out var reported) && reported == (step.Status, percent))
+            int? percent = rewriteInPlace && index == snapshot.CurrentStepIndex ? snapshot.Percent : null;
+            if (this.reported.TryGetValue(index, out var reported) && reported == (step.Status, percent))
             {
                 continue;
             }
-            this.reported[step.Key] = (step.Status, percent);
-            Write(step, percent);
+            this.reported[index] = (step.Status, percent);
+            Write(index, step, percent);
         }
     }
 
@@ -43,10 +45,10 @@ internal sealed class OperationProgressWriter(TextWriter writer, bool rewriteInP
     /// </summary>
     public void Complete()
     {
-        if (openStepKey is not null)
+        if (openStepIndex is not null)
         {
             writer.WriteLine();
-            openStepKey = null;
+            openStepIndex = null;
         }
     }
 
@@ -67,7 +69,7 @@ internal sealed class OperationProgressWriter(TextWriter writer, bool rewriteInP
         };
     }
 
-    private void Write(OperationStepState step, int? percent)
+    private void Write(int index, OperationStepState step, int? percent)
     {
         string line = FormatLine(step, percent);
         if (!rewriteInPlace)
@@ -76,7 +78,7 @@ internal sealed class OperationProgressWriter(TextWriter writer, bool rewriteInP
             return;
         }
 
-        if (openStepKey == step.Key)
+        if (openStepIndex == index)
         {
             writer.Write('\r');
             writer.Write(line.PadRight(openLineLength));
@@ -89,13 +91,13 @@ internal sealed class OperationProgressWriter(TextWriter writer, bool rewriteInP
 
         if (step.Status == OperationStepStatus.Running)
         {
-            openStepKey = step.Key;
+            openStepIndex = index;
             openLineLength = line.Length;
         }
         else
         {
             writer.WriteLine();
-            openStepKey = null;
+            openStepIndex = null;
         }
     }
 }

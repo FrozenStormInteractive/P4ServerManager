@@ -36,42 +36,49 @@ public sealed class OperationTracker
         return snapshot;
     }
 
-    public OperationSnapshot StartStep(Guid instanceId, string key)
+    /// <param name="instanceId">The instance.</param>
+    /// <param name="index">Position of the step in the steps given to <see cref="Begin"/>.</param>
+    public OperationSnapshot StartStep(Guid instanceId, int index)
     {
         return Update(instanceId, snapshot => snapshot with
         {
-            Steps = WithStep(snapshot.Steps, key, OperationStepStatus.Running, null),
-            CurrentStep = key,
+            Steps = WithStep(snapshot.Steps, index, OperationStepStatus.Running, null),
+            CurrentStepIndex = index,
             Percent = null,
         });
     }
 
     public OperationSnapshot ReportProgress(Guid instanceId, string? message, int? percent)
     {
-        return Update(instanceId, snapshot => snapshot.CurrentStep is not { } key
+        return Update(instanceId, snapshot => snapshot.CurrentStepIndex is not { } index
             ? snapshot
             : snapshot with
             {
-                Steps = WithStep(snapshot.Steps, key, OperationStepStatus.Running, message),
+                Steps = WithStep(snapshot.Steps, index, OperationStepStatus.Running, message),
                 Percent = percent,
             });
     }
 
-    public OperationSnapshot CompleteStep(Guid instanceId, string key, string? message)
+    /// <param name="instanceId">The instance.</param>
+    /// <param name="index">Position of the step in the steps given to <see cref="Begin"/>.</param>
+    /// <param name="message">Summary of what the step did.</param>
+    public OperationSnapshot CompleteStep(Guid instanceId, int index, string? message)
     {
         return Update(instanceId, snapshot => snapshot with
         {
-            Steps = WithStep(snapshot.Steps, key, OperationStepStatus.Succeeded, message),
-            CurrentStep = null,
+            Steps = WithStep(snapshot.Steps, index, OperationStepStatus.Succeeded, message),
+            CurrentStepIndex = null,
             Percent = null,
         });
     }
 
-    public OperationSnapshot SkipStep(Guid instanceId, string key)
+    /// <param name="instanceId">The instance.</param>
+    /// <param name="index">Position of the step in the steps given to <see cref="Begin"/>.</param>
+    public OperationSnapshot SkipStep(Guid instanceId, int index)
     {
         return Update(instanceId, snapshot => snapshot with
         {
-            Steps = WithStep(snapshot.Steps, key, OperationStepStatus.Skipped, null),
+            Steps = WithStep(snapshot.Steps, index, OperationStepStatus.Skipped, null),
         });
     }
 
@@ -85,10 +92,10 @@ public sealed class OperationTracker
         return Update(instanceId, snapshot => snapshot with
         {
             Status = OperationStatus.Failed,
-            Steps = snapshot.CurrentStep is { } key
-                ? WithStep(snapshot.Steps, key, OperationStepStatus.Failed, error)
+            Steps = snapshot.CurrentStepIndex is { } index
+                ? WithStep(snapshot.Steps, index, OperationStepStatus.Failed, error)
                 : snapshot.Steps,
-            CurrentStep = null,
+            CurrentStepIndex = null,
             Percent = null,
             Error = error,
         });
@@ -104,10 +111,10 @@ public sealed class OperationTracker
 
     private static List<OperationStepState> WithStep(
         IReadOnlyList<OperationStepState> steps,
-        string key,
+        int index,
         OperationStepStatus status,
         string? message)
     {
-        return steps.Select(s => s.Key == key ? s with { Status = status, Message = message } : s).ToList();
+        return steps.Select((s, i) => i == index ? s with { Status = status, Message = message } : s).ToList();
     }
 }
