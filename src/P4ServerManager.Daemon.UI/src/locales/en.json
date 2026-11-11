@@ -22,6 +22,7 @@
     "upgrade": "Upgrade",
     "convertToUnicode": "Convert to Unicode",
     "changeServerId": "Change server ID",
+    "changePort": "Change port",
     "enableMaintenance": "Enable maintenance mode",
     "startInMaintenance": "Start in maintenance mode",
     "disableMaintenance": "Disable maintenance mode",
@@ -43,6 +44,7 @@
     "convertingToUnicode": "Converting to Unicode",
     "checkingHealth": "Checking health",
     "changingServerId": "Changing the server ID",
+    "changingPort": "Changing the port",
     "deleting": "Deleting",
     "unknown": "Unknown",
     "inMaintenance": "{status} (maintenance)"
@@ -243,7 +245,8 @@
       "import": "Import",
       "upgrade": "Upgrade",
       "convert-to-unicode": "Conversion to Unicode",
-      "change-server-id": "Change of the server ID"
+      "change-server-id": "Change of the server ID",
+      "change-port": "Change of the port"
     },
     "steps": {
       "resolve-build": "Get the p4d build",
@@ -262,7 +265,9 @@
       "stop-server": "Stop the server",
       "switch-to-unicode": "Switch to Unicode mode",
       "set-server-id": "Set the server ID",
-      "rename-server-spec": "Rename the server spec"
+      "rename-server-spec": "Rename the server spec",
+      "set-port": "Change the port",
+      "update-server-address": "Update the address of the server spec"
     },
     "skipped": "Skipped"
   },
@@ -397,6 +402,23 @@
       "required": "Enter a server ID.",
       "format": "Start with a letter, then up to 31 letters, digits, '-' or '_'.",
       "unchanged": "Enter a server ID other than the current one."
+    }
+  },
+  "changePort": {
+    "title": "Change the port of {name}",
+    "text": "p4d listens on the new port once it starts again. Clients must then connect to the new port: update their P4PORT.",
+    "current": "Current port: {port}",
+    "port": "New port",
+    "superUserNote": "The address of the server spec is updated as the stored super user.",
+    "noSuperUserNote": "No usable super user is stored: the address of the server spec is left as it is.",
+    "warningRunning": "The server is restarted: its users are disconnected until it starts again on the new port.",
+    "warningStopped": "The server is started on the new port to update its server spec, then stopped again.",
+    "error": "The port could not be changed: {message}",
+    "changed": "{name} now listens on port {port}.",
+    "rules": {
+      "required": "Enter a port.",
+      "range": "Enter a port between 1024 and 65535.",
+      "unchanged": "Enter a port other than the current one."
     }
   },
   "deleteInstance": {

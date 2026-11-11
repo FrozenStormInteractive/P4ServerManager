@@ -67,25 +67,54 @@ public class ParsingTests
     }
 
     [Fact]
-    public void ServerSpecParser_ReadsTheServerIdsOfP4ServersInTaggedForm()
+    public void TaggedOutputParser_ReadsOneRecordPerLineAndKeepsMultiLineValuesWhole()
     {
-        const string output = "... ServerID main\r\n... Type server\r\n\r\n... ServerID edge-1\r\n... Type server\r\n";
+        // As 'p4 -Mj -ztag servers' prints it: the description holds a line that looks like a field.
+        const string output = "{\"Address\":\"ssl:1666\",\"Description\":\"Our server.\\nAddress: 1666\\n\","
+            + "\"ServerID\":\"main\",\"Type\":\"server\"}\r\n"
+            + "{\"ServerID\":\"edge-1\",\"Type\":\"server\",\"Update\":1730000000}\n\n";
 
-        ServerSpecParser.ParseServerIds(output).ShouldBe(["main", "edge-1"]);
-        ServerSpecParser.ParseServerIds(string.Empty).ShouldBeEmpty();
+        IReadOnlyList<IReadOnlyDictionary<string, string>> records = TaggedOutputParser.ParseRecords(output);
+
+        records.Select(r => r["ServerID"]).ShouldBe(["main", "edge-1"]);
+        records[0]["Address"].ShouldBe("ssl:1666");
+        records[0]["Description"].ShouldBe("Our server.\nAddress: 1666\n");
+        records[1]["Update"].ShouldBe("1730000000");
+        TaggedOutputParser.ParseRecords(string.Empty).ShouldBeEmpty();
     }
 
     [Fact]
-    public void ServerSpecParser_ReplacesOnlyTheServerIdField()
+    public void TaggedOutputParser_TellsTheMessagesApartFromTheRecords()
     {
-        const string spec = "# A Perforce Server Specification.\n#  ServerID:    The server identifier.\n\n"
-            + "ServerID:\tmain\n\nType:\tserver\n\nDescription:\n\tServerID: main\n";
+        // As p4 prints an error with -Mj, on the standard output.
+        const string output = "{\"code0\":822150148,\"data\":\"Usage: servers [ -J ]\\nInvalid option: -Z.\\n\","
+            + "\"generic\":1,\"severity\":3,\"severityformat\":\"error\"}\n";
 
-        string renamed = ServerSpecParser.ReplaceServerId(spec, "edge");
+        TaggedOutputParser.ParseRecords(output).ShouldBeEmpty();
+        TaggedOutputParser.ReadMessages(output).ShouldBe("Usage: servers [ -J ]\nInvalid option: -Z.");
+        TaggedOutputParser.ReadMessages("{\"ServerID\":\"main\"}\n").ShouldBeNull();
+        TaggedOutputParser.ReadMessages("Perforce client error:\n").ShouldBeNull();
+    }
 
-        renamed.ShouldBe(spec.Replace("ServerID:\tmain\n", "ServerID:\tedge\n"));
-        renamed.ShouldContain("\tServerID: main\n");
-        Should.Throw<FormatException>(() => ServerSpecParser.ReplaceServerId("Type:\tserver\n", "edge"));
+    [Theory]
+    [InlineData("... ServerID main\n")]
+    [InlineData("[\"main\"]\n")]
+    public void TaggedOutputParser_RefusesAnOutputThatIsNotJsonObjects(string output)
+    {
+        Should.Throw<FormatException>(() => TaggedOutputParser.ParseRecords(output));
+    }
+
+    [Theory]
+    [InlineData("1666", "1777")]
+    [InlineData("ssl:1666", "ssl:1777")]
+    [InlineData(" tcp:p4.example.com:1666 ", "tcp:p4.example.com:1777")]
+    [InlineData("ssl:[::1]:1666", "ssl:[::1]:1777")]
+    [InlineData("p4.example.com:1667", null)]
+    [InlineData("p4.example.com:", null)]
+    [InlineData("rsh:p4d -i", null)]
+    public void ServerAddressParser_MovesAnAddressToAnotherPort(string address, string? expected)
+    {
+        ServerAddressParser.ChangePort(address, 1666, 1777).ShouldBe(expected);
     }
 
     [Theory]

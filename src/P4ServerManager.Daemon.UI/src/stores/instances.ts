@@ -22,6 +22,7 @@ import * as api from '@/api/instances'
 import i18n from '@/plugins/i18n'
 import { useHealthChecksStore } from '@/stores/healthChecks'
 import { useNotificationsStore } from '@/stores/notifications'
+import { formatPort } from '@/utils/instancePort'
 
 /**
  * The instances of the daemon, kept up to date by the `/hubs/instances` hub.
@@ -88,6 +89,10 @@ export const useInstancesStore = defineStore('instances', () => {
           notifyServerIdChanged(snapshot)
           break
         }
+        case 'change-port': {
+          notifyPortChanged(snapshot)
+          break
+        }
       }
     }
   }
@@ -112,6 +117,20 @@ export const useInstancesStore = defineStore('instances', () => {
     if (instance) {
       useNotificationsStore().notify(
         i18n.global.t('changeServerId.changed', { name: instance.name, serverId: instance.serverId ?? '' }),
+        'success',
+      )
+    }
+  }
+
+  /**
+   * Tells every client that a change of the port ended well. The new port is already known: the daemon pushes the
+   * instance once it is saved. A failure is kept as the last error of the instance instead.
+   */
+  function notifyPortChanged (snapshot: OperationSnapshot) {
+    const instance = instances.value[snapshot.instanceId]
+    if (instance) {
+      useNotificationsStore().notify(
+        i18n.global.t('changePort.changed', { name: instance.name, port: formatPort(instance) }),
         'success',
       )
     }
@@ -259,6 +278,13 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   /**
+   * Begins the change of the port of the instance. The hub tells its progress.
+   */
+  async function changePort (id: string, port: number) {
+    await applyResponse(id, () => api.changeInstancePort(id, { port }))
+  }
+
+  /**
    * Starts, stops or restarts several instances, or all of them, and keeps the states returned by the daemon.
    */
   async function runAction (action: InstanceAction, selection: InstanceSelection): Promise<InstanceActionResult[]> {
@@ -319,6 +345,7 @@ export const useInstancesStore = defineStore('instances', () => {
     upgrade,
     convertToUnicode,
     changeServerId,
+    changePort,
     runAction,
     remove,
     connect,

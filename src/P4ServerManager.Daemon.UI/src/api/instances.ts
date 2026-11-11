@@ -1,5 +1,6 @@
 // Types
 import type {
+  ChangePortRequest,
   ChangeServerIdRequest,
   CreateInstanceRequest,
   Instance,
@@ -113,6 +114,14 @@ export function convertInstanceToUnicode (id: string): Promise<Instance> {
  */
 export function changeInstanceServerId (id: string, body: ChangeServerIdRequest): Promise<Instance> {
   return request('PUT', `/api/instances/${encodeURIComponent(id)}/server-id`, body)
+}
+
+/**
+ * Begins the change of the port of the instance. The daemon answers once it has begun: the instance is `ChangingPort`
+ * until it ends, and its operation tells its progress.
+ */
+export function changeInstancePort (id: string, body: ChangePortRequest): Promise<Instance> {
+  return request('PUT', `/api/instances/${encodeURIComponent(id)}/port`, body)
 }
 
 /**

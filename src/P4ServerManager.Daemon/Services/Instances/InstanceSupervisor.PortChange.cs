@@ -1,0 +1,120 @@
+using P4ServerManager.Contracts;
+using P4ServerManager.Daemon.Database;
+using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Instances.Admin;
+using P4ServerManager.Daemon.Services.Instances.PortChange;
+
+namespace P4ServerManager.Daemon.Services.Instances;
+
+// Change of the port of the instances.
+public sealed partial class InstanceSupervisor
+{
+    /// <summary>
+    /// Moves an instance to another port, and updates the address of its server spec as its stored super user. The
+    /// change runs in the background, once this returns: the instance stays
+    /// <see cref="InstanceRuntimeStatus.ChangingPort"/> until it ends, and its operation tells its progress. p4d is
+    /// stopped if it runs, then started on the new port. With a usable super user, a p4d that did not run is started to
+    /// update the spec, then stopped again; without one, the spec is left as it is. Only the shutdown of the daemon
+    /// cancels it.
+    /// </summary>
+    /// <param name="instanceId">Identifier of the instance.</param>
+    /// <param name="port">New port, in range. Whether another instance or program uses it is checked by the caller.</param>
+    /// <param name="cancellationToken">Aborts the wait for the instance to be free.</param>
+    /// <returns>The instance, once the change has begun.</returns>
+    /// <exception cref="InstanceConflictException">
+    /// The instance is not ready, has no p4d build yet, another operation is in progress, or it already listens on this
+    /// port.
+    /// </exception>
+    public async Task<P4ServerInstance> ChangePortAsync(
+        Guid instanceId,
+        int port,
+        CancellationToken cancellationToken)
+    {
+        SemaphoreSlim? instanceLock = await AcquireLockAsync(instanceId, cancellationToken);
+        DaemonDbContext? db = null;
+        try
+        {
+            db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            P4ServerInstance instance = await FindAsync(db, instanceId, cancellationToken);
+            EnsureReady(instance);
+            if (instance.Build is null)
+            {
+                throw new InstanceConflictException($"Instance {instance.Name} has no p4d build yet.");
+            }
+            if (instance.Port == port)
+            {
+                throw new InstanceConflictException($"Instance {instance.Name} already listens on port {port}.");
+            }
+
+            SuperUserCredentials? superUser = null;
+            try
+            {
+                superUser = superUserService.GetStoredCredentials(instance);
+            }
+            catch (SuperUserUnavailableException exception)
+            {
+                logger.LogInformation(
+                    "The server spec of instance {Name} keeps its address: {Reason}",
+                    instance.Name,
+                    exception.Message);
+            }
+
+            PortChangeContext context = new(db, instance, launcher.IsRunning(instance), port, superUser);
+            runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.ChangingPort);
+            await notifier.InstanceChangedAsync(instance);
+
+            // The change outlives the request: it releases the instance and the context once it ends.
+            _ = RunInBackgroundAsync(
+                db,
+                instance,
+                instanceLock,
+                stoppingToken => RunPortChangeAsync(context, stoppingToken));
+            instanceLock = null;
+            db = null;
+            return instance;
+        }
+        finally
+        {
+            if (db is not null)
+            {
+                await db.DisposeAsync();
+            }
+            instanceLock?.Release();
+        }
+    }
+
+    /// <summary>
+    /// Runs the change. A failure is kept as the last error of the instance, which is not saved: the caller saves it. A
+    /// p4d that does not run on the new port gets its old port back; one that does, because only the update of the
+    /// spec failed, keeps the new one. p4d is then left as it was before the change: started again if it ran, stopped
+    /// again if it did not.
+    /// </summary>
+    private async Task RunPortChangeAsync(PortChangeContext context, CancellationToken cancellationToken)
+    {
+        P4ServerInstance instance = context.Instance;
+        Exception? failure = await RunOperationAsync(
+            portChangeOperation,
+            context,
+            () => logger.LogInformation(
+                "Changing the port of instance {Name} from {OldPort} to {NewPort}",
+                instance.Name,
+                context.OldPort,
+                context.NewPort),
+            cancellationToken);
+        if (failure is null)
+        {
+            instance.LastError = null;
+            logger.LogInformation("Instance {Name} now listens on port {Port}", instance.Name, context.NewPort);
+            return;
+        }
+
+        logger.LogError(failure, "Change of the port of instance {Name} failed", instance.Name);
+        instance.LastError = failure.Message;
+        if (instance.Port != context.OldPort && !launcher.IsRunning(instance))
+        {
+            instance.Port = context.OldPort;
+            instance.LastError += $" The instance keeps port {context.OldPort}.";
+        }
+        await RestoreRunningStateAsync(instance, context.WasRunning, cancellationToken);
+    }
+}

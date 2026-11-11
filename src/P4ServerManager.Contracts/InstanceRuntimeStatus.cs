@@ -2,7 +2,7 @@ namespace P4ServerManager.Contracts;
 
 /// <summary>
 /// Whether the p4d process of an instance runs, or is being started, stopped, restarted, upgraded, converted to Unicode
-/// mode, checked, given another server ID or deleted by the daemon.
+/// mode, checked, given another server ID or port, or deleted by the daemon.
 /// </summary>
 public enum InstanceRuntimeStatus
 {
@@ -45,13 +45,19 @@ public enum InstanceRuntimeStatus
     /// again if it did not run.
     /// </summary>
     ChangingServerId,
+
+    /// <summary>
+    /// Moved to another port: stopped if it ran, its port changed, started on it to update the address of its server
+    /// spec when a super user is stored, then stopped again if it did not run.
+    /// </summary>
+    ChangingPort,
 }
 
 public static class InstanceRuntimeStatusExtensions
 {
     /// <summary>
     /// Whether a start, a stop, a restart, an upgrade, a conversion to Unicode mode, a health check, a change of the
-    /// server ID or a deletion is in progress.
+    /// server ID or of the port, or a deletion is in progress.
     /// </summary>
     public static bool IsTransitional(this InstanceRuntimeStatus status)
     {
@@ -62,6 +68,7 @@ public static class InstanceRuntimeStatusExtensions
             or InstanceRuntimeStatus.Upgrading
             or InstanceRuntimeStatus.ConvertingToUnicode
             or InstanceRuntimeStatus.CheckingHealth
-            or InstanceRuntimeStatus.ChangingServerId;
+            or InstanceRuntimeStatus.ChangingServerId
+            or InstanceRuntimeStatus.ChangingPort;
     }
 }

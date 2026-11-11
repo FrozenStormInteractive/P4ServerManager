@@ -16,6 +16,7 @@ export type RuntimeStatus
     | 'ConvertingToUnicode'
     | 'CheckingHealth'
     | 'ChangingServerId'
+    | 'ChangingPort'
 
 export interface Instance {
   id: string
@@ -167,6 +168,14 @@ export interface UpgradeInstanceRequest {
  */
 export interface ChangeServerIdRequest {
   serverId: string
+}
+
+/**
+ * New TCP port of the p4d of an instance, between 1024 and 65535, that no other instance uses and that is free on the
+ * machine.
+ */
+export interface ChangePortRequest {
+  port: number
 }
 
 /**

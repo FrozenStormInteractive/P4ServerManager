@@ -95,6 +95,17 @@ describe('instances store', () => {
     expect(useNotificationsStore().queue).toEqual([{ text: 'main now runs in Unicode mode.', color: 'success' }])
   })
 
+  it('tells the new port at the end of its change', () => {
+    const store = useInstancesStore()
+    store.connect()
+    handlers.onInstanceUpdated(createInstance({ id: 'a', name: 'main', port: 1777, ssl: true }))
+    handlers.onOperationProgress(createSnapshot('a', { kind: 'change-port', status: 'Running' }))
+
+    handlers.onOperationProgress(createSnapshot('a', { kind: 'change-port', status: 'Succeeded' }))
+
+    expect(useNotificationsStore().queue).toEqual([{ text: 'main now listens on port ssl:1777.', color: 'success' }])
+  })
+
   it('reloads the instances once connected, as events may have been missed', async () => {
     server.use(http.get('/api/instances', () => HttpResponse.json([createInstance({ id: 'c', name: 'reloaded' })])))
     const store = useInstancesStore()

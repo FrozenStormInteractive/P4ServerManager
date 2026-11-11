@@ -19,6 +19,10 @@ public sealed class RenameServerSpecStepTests
     private const string OldSpec = "# A Perforce Server Specification.\n\nServerID:\tmain\n\nType:\tserver\n\n"
         + "Services:\tcommit-server\n\nAddress:\t1666\n\nDescription:\n\tOur server.\n";
 
+    // What p4 prints with --field ServerID=edge: it changes the field itself.
+    private const string NewSpec = "# A Perforce Server Specification.\n\nServerID:\tedge\n\nType:\tserver\n\n"
+        + "Services:\tcommit-server\n\nAddress:\t1666\n\nDescription:\n\tOur server.\n";
+
     private readonly IProcessRunner _processRunner = Substitute.For<IProcessRunner>();
     private readonly RenameServerSpecStep _step;
 
@@ -31,7 +35,10 @@ public sealed class RenameServerSpecStepTests
         _processRunner.RunAsync(
                 Arg.Is<ProcessCommand>(c => c.Arguments.Contains("-o")),
                 Arg.Any<CancellationToken>())
-            .Returns(new ProcessResult(0, OldSpec, string.Empty));
+            .Returns(call => new ProcessResult(
+                0,
+                call.Arg<ProcessCommand>().Arguments.Contains("--field") ? NewSpec : OldSpec,
+                string.Empty));
         _step = new RenameServerSpecStep(
             buildCache,
             _processRunner,
@@ -50,14 +57,14 @@ public sealed class RenameServerSpecStepTests
         summary.ShouldBe("Spec main renamed to edge");
         GetSpecCommands().ShouldBe(
         [
-            "-ztag servers",
+            "-Mj -ztag servers",
             "server -o main",
+            "--field ServerID=edge server -o main",
             "server -d main",
             "server -i",
         ]);
-        string spec = GetCommand("server -i").StandardInput!;
-        spec.ShouldContain("ServerID:\tedge\n");
-        spec.ShouldContain("\tOur server.\n");
+        // The daemon saves what p4 printed: it never edits the spec itself.
+        GetCommand("server -i").StandardInput.ShouldBe(NewSpec);
     }
 
     [Fact]
@@ -73,8 +80,9 @@ public sealed class RenameServerSpecStepTests
 
         GetSpecCommands().ShouldBe(
         [
-            "-ztag servers",
+            "-Mj -ztag servers",
             "server -o main",
+            "--field ServerID=edge server -o main",
             "server -d main",
             "server -i",
             "server -i",
@@ -90,7 +98,7 @@ public sealed class RenameServerSpecStepTests
         string? summary = await RunAsync("main", "edge");
 
         summary.ShouldBe("Spec edge created");
-        GetSpecCommands().ShouldBe(["-ztag servers", "server -i"]);
+        GetSpecCommands().ShouldBe(["-Mj -ztag servers", "server -i"]);
         string spec = GetCommand("server -i").StandardInput!;
         spec.ShouldStartWith("ServerID:\tedge\n");
         spec.ShouldContain("Services:\tcommit-server\n");
@@ -104,7 +112,7 @@ public sealed class RenameServerSpecStepTests
         string? summary = await RunAsync("main", "edge");
 
         summary.ShouldBe("Spec edge kept, spec main deleted");
-        GetSpecCommands().ShouldBe(["-ztag servers", "server -d main"]);
+        GetSpecCommands().ShouldBe(["-Mj -ztag servers", "server -d main"]);
     }
 
     [Fact]
@@ -116,12 +124,13 @@ public sealed class RenameServerSpecStepTests
 
         // Deleting "main" would delete the spec just saved as "Main".
         summary.ShouldBe("Spec main renamed to Main");
-        GetSpecCommands().ShouldBe(["-ztag servers", "server -o main", "server -i"]);
+        GetSpecCommands().ShouldBe(
+            ["-Mj -ztag servers", "server -o main", "--field ServerID=Main server -o main", "server -i"]);
     }
 
     private void StubServers(params string[] serverIds)
     {
-        string output = string.Concat(serverIds.Select(id => $"... ServerID {id}\n... Type server\n\n"));
+        string output = string.Concat(serverIds.Select(id => $"{{\"ServerID\":\"{id}\",\"Type\":\"server\"}}\n"));
         _processRunner.RunAsync(
                 Arg.Is<ProcessCommand>(c => c.Arguments.Contains("servers")),
                 Arg.Any<CancellationToken>())

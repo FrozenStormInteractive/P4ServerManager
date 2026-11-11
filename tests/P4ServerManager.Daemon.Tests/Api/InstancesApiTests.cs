@@ -1333,6 +1333,201 @@ public sealed class InstancesApiTests : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task ChangePort_MovesAStoppedInstanceWithoutASuperUser()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        await SetSuperUserStatusAsync(id, SuperUserStatus.InvalidCredentials);
+        int port = GetFreePort();
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/port",
+            new { port },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await WaitWhileAsync(id, "ChangingPort");
+        instance.GetProperty("port").GetInt32().ShouldBe(port);
+        instance.GetProperty("runtimeStatus").GetString().ShouldBe("Stopped");
+        instance.GetProperty("lastError").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // Without a super user, the stopped server is not started to update its spec.
+        JsonElement operation = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}/operation",
+            TestContext.Current.CancellationToken);
+        operation.GetProperty("kind").GetString().ShouldBe("change-port");
+        operation.GetProperty("status").GetString().ShouldBe("Succeeded");
+        operation.GetProperty("steps").EnumerateArray().Select(s => s.GetProperty("key").GetString())
+            .ShouldBe(["set-port"]);
+        await _processRunner.DidNotReceive().RunAsync(Arg.Any<ProcessCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ChangePort_KeepsTheOldPortWhenP4dDoesNotStartOnTheNewOne()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        JsonElement before = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+        int oldPort = before.GetProperty("port").GetInt32();
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/port",
+            new { port = GetFreePort() },
+            TestContext.Current.CancellationToken);
+
+        // The p4d of the build does not exist in these tests: it cannot start.
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await WaitWhileAsync(id, "ChangingPort");
+        instance.GetProperty("port").GetInt32().ShouldBe(oldPort);
+        instance.GetProperty("runtimeStatus").GetString().ShouldBe("Stopped");
+        instance.GetProperty("lastError").GetString().ShouldEndWith($"The instance keeps port {oldPort}.");
+
+        JsonElement operation = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}/operation",
+            TestContext.Current.CancellationToken);
+        operation.GetProperty("status").GetString().ShouldBe("Failed");
+        JsonElement[] steps = operation.GetProperty("steps").EnumerateArray().ToArray();
+        steps.Select(s => s.GetProperty("key").GetString()).ShouldBe(
+            ["set-port", "start-server", "update-server-address", "stop-server"]);
+        steps[0].GetProperty("status").GetString().ShouldBe("Succeeded");
+        steps[1].GetProperty("status").GetString().ShouldBe("Failed");
+
+        // The old port is saved again.
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(
+            TestContext.Current.CancellationToken);
+        (await db.Instances.Where(i => i.Id == id).Select(i => i.Port).SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBe(oldPort);
+    }
+
+    [Theory]
+    [InlineData(80)]
+    [InlineData(70000)]
+    public async Task ChangePort_RejectsAPortOutOfRange(int port)
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/port",
+            new { port },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").GetProperty("port")[0].GetString()
+            .ShouldBe("The port is between 1024 and 65535.");
+    }
+
+    [Fact]
+    public async Task ChangePort_RejectsThePortOfAnotherInstance()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        Guid otherId = await CreateReadyInstanceAsync("other", InstanceRuntimeStatus.Stopped);
+        JsonElement other = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{otherId}",
+            TestContext.Current.CancellationToken);
+        int otherPort = other.GetProperty("port").GetInt32();
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/port",
+            new { port = otherPort },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").GetProperty("port")[0].GetString()
+            .ShouldBe($"Another instance uses port {otherPort}.");
+    }
+
+    [Fact]
+    public async Task ChangePort_RejectsAPortInUseOnTheMachine()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        TcpListener listener = new(IPAddress.Any, 0);
+        listener.Start();
+        try
+        {
+            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+            HttpResponseMessage response = await _client.PutAsJsonAsync(
+                $"/api/instances/{id}/port",
+                new { port },
+                TestContext.Current.CancellationToken);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+                TestContext.Current.CancellationToken);
+            problem.GetProperty("errors").GetProperty("port")[0].GetString()
+                .ShouldBe($"Port {port} is already in use on this machine.");
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task ChangePort_ConflictsWhenThePortIsTheSame()
+    {
+        Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
+        await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
+        JsonElement instance = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+        int port = instance.GetProperty("port").GetInt32();
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/port",
+            new { port },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().ShouldBe($"Instance main already listens on port {port}.");
+    }
+
+    [Fact]
+    public async Task ChangePort_ConflictsWhenTheInstanceIsNotReady()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{id}/port",
+            new { port = GetFreePort() },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task ChangePort_ReturnsNotFoundForAnUnknownInstance()
+    {
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            $"/api/instances/{Guid.NewGuid()}/port",
+            new { port = GetFreePort() },
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private async Task SetSuperUserStatusAsync(Guid id, SuperUserStatus status)
+    {
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(
+            TestContext.Current.CancellationToken);
+        P4ServerInstance stored = await db.Instances.SingleAsync(i => i.Id == id, TestContext.Current.CancellationToken);
+        stored.SuperUser!.Status = status;
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
     private const string UnicodeConfigDump = "@pv@ 1 @db.config@ @any@ @unicode@ @1@";
 
     private void StubConfigDump(string dump)

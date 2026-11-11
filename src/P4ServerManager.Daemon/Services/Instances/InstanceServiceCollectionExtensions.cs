@@ -1,6 +1,7 @@
 using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.HealthChecks;
 using P4ServerManager.Daemon.Services.Instances.Import;
+using P4ServerManager.Daemon.Services.Instances.PortChange;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Instances.ServerIdAssignment;
 using P4ServerManager.Daemon.Services.Instances.Steps;
@@ -24,6 +25,7 @@ public static class InstanceServiceCollectionExtensions
         AddUpgrade(services);
         AddUnicodeConversion(services);
         AddServerIdAssignment(services);
+        AddPortChange(services);
         AddSuperUserManagement(services);
         return services;
     }
@@ -104,6 +106,17 @@ public static class InstanceServiceCollectionExtensions
         services.AddSingleton<RenameServerSpecStep>();
 
         services.AddSingleton<ServerIdAssignmentOperation>();
+    }
+
+    /// <summary>
+    /// Registers the change of the port of the instances and its own steps.
+    /// </summary>
+    private static void AddPortChange(IServiceCollection services)
+    {
+        services.AddSingleton<SetPortStep>();
+        services.AddSingleton<UpdateServerAddressStep>();
+
+        services.AddSingleton<PortChangeOperation>();
     }
 
     /// <summary>

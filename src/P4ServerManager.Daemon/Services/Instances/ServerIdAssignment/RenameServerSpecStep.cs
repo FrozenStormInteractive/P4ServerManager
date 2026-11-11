@@ -3,14 +3,14 @@ using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
-using P4ServerManager.Daemon.Services.Perforce.Parsing;
 using P4ServerManager.Daemon.Services.Processes;
 
 namespace P4ServerManager.Daemon.Services.Instances.ServerIdAssignment;
 
 /// <summary>
 /// Gives the server spec the new server ID, as the super user of the running p4d. The spec of the old server ID is
-/// saved under the new one, then deleted, so its type, services, address and description are kept. A server without a
+/// saved under the new one, then deleted, so its type, services, address and description are kept: p4 itself gives it
+/// the new server ID, with <c>--field</c>, so the daemon never edits the text of the spec. A server without a
 /// spec of its old server ID gets the recommended one. A spec of the new server ID that exists already is kept.
 /// </summary>
 public sealed class RenameServerSpecStep(
@@ -46,8 +46,10 @@ public sealed class RenameServerSpecStep(
 
         return await session.RunLoggedInAsync<string?>(async () =>
         {
-            ProcessResult list = await session.RunAsync(["-ztag", "servers"], cancellationToken: cancellationToken);
-            IReadOnlyList<string> serverIds = ServerSpecParser.ParseServerIds(list.StandardOutput);
+            IReadOnlyList<string> serverIds = (await session.RunTaggedAsync(["servers"], cancellationToken))
+                .Select(record => record.GetValueOrDefault("ServerID"))
+                .OfType<string>()
+                .ToList();
             bool oldExists = oldId is not null && serverIds.Contains(oldId, comparer);
             bool newExists = !sameSpec && serverIds.Contains(newId, comparer);
 
@@ -60,9 +62,13 @@ public sealed class RenameServerSpecStep(
             }
             else if (oldExists)
             {
+                // The old spec as it is, to save it again if p4d refuses the new one.
                 string oldSpec = (await session.RunAsync(["server", "-o", oldId!], cancellationToken: cancellationToken))
                     .StandardOutput;
-                string newSpec = ServerSpecParser.ReplaceServerId(oldSpec, newId);
+                string newSpec = (await session.RunAsync(
+                        ["--field", $"ServerID={newId}", "server", "-o", oldId!],
+                        cancellationToken: cancellationToken))
+                    .StandardOutput;
                 if (sameSpec)
                 {
                     await session.RunAsync(["server", "-i"], newSpec, cancellationToken);

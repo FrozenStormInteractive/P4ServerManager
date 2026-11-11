@@ -2,6 +2,7 @@ using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Perforce;
+using P4ServerManager.Daemon.Services.Perforce.Parsing;
 using P4ServerManager.Daemon.Services.Processes;
 
 namespace P4ServerManager.Daemon.Services.Instances.Admin;
@@ -162,6 +163,34 @@ public sealed class P4AdminSession
     }
 
     /// <summary>
+    /// Runs a p4 command with <c>-Mj -ztag</c>, and reads its tagged records. It throws an
+    /// <see cref="InstanceOperationException"/> with the messages of p4 when the command fails, and when the output
+    /// cannot be read.
+    /// </summary>
+    public async Task<IReadOnlyList<IReadOnlyDictionary<string, string>>> RunTaggedAsync(
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken = default)
+    {
+        ProcessCommand command = CreateCommand(["-Mj", "-ztag", .. arguments], standardInput: null);
+        ProcessResult result = await processRunner.RunAsync(command, cancellationToken);
+        if (!result.Succeeded)
+        {
+            // With -Mj, p4 prints its errors as JSON records on the standard output.
+            string error = TaggedOutputParser.ReadMessages(result.StandardOutput) ?? result.ErrorText;
+            throw new InstanceOperationException($"{Describe(command)} failed: {error}");
+        }
+
+        try
+        {
+            return TaggedOutputParser.ParseRecords(result.StandardOutput);
+        }
+        catch (FormatException exception)
+        {
+            throw new InstanceOperationException($"{Describe(command)} printed an unexpected output. {exception.Message}");
+        }
+    }
+
+    /// <summary>
     /// Runs a p4 command, and lets the caller handle its failure.
     /// </summary>
     public Task<ProcessResult> TryRunAsync(
@@ -170,6 +199,12 @@ public sealed class P4AdminSession
         CancellationToken cancellationToken = default)
     {
         return processRunner.RunAsync(CreateCommand(arguments, standardInput), cancellationToken);
+    }
+
+    // As RunCheckedAsync tells a failed command. The arguments never hold the password.
+    private static string Describe(ProcessCommand command)
+    {
+        return $"'{Path.GetFileName(command.FileName)} {string.Join(' ', command.Arguments)}'";
     }
 
     private ProcessCommand CreateCommand(IReadOnlyList<string> arguments, string? standardInput)

@@ -150,6 +150,23 @@ internal sealed class DaemonClient(HttpClient httpClient, string socketPath) : I
     }
 
     /// <summary>
+    /// Begins the change of the port of an instance. It goes on in the daemon: follow it with
+    /// <see cref="GetOperationAsync"/>.
+    /// </summary>
+    public Task<InstanceDto> ChangePortAsync(
+        Guid id,
+        ChangePortRequest request,
+        CancellationToken cancellationToken)
+    {
+        return SendAsync(
+            HttpMethod.Put,
+            $"api/instances/{id}/port",
+            Json.InstanceDto,
+            cancellationToken,
+            JsonContent.Create(request, Json.ChangePortRequest));
+    }
+
+    /// <summary>
     /// Starts, stops or restarts several instances at once.
     /// </summary>
     /// <param name="action">The action: <c>start</c>, <c>stop</c> or <c>restart</c>.</param>

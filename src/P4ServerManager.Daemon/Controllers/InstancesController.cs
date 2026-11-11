@@ -8,6 +8,7 @@ using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Instances.Admin;
+using P4ServerManager.Daemon.Services.Instances.PortChange;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Instances.ServerIdAssignment;
 using P4ServerManager.Daemon.Services.Instances.Upgrade;
@@ -155,7 +156,7 @@ public sealed class InstancesController(
     /// Changes the settings of an instance that can change after its creation. The settings left out are kept. The
     /// change takes effect without a restart of p4d. A new name only changes the name in the daemon: the p4d server
     /// keeps its server ID and the prefix of its journals. The server ID changes with
-    /// <c>PUT /api/instances/{id}/server-id</c>.
+    /// <c>PUT /api/instances/{id}/server-id</c>, and the port with <c>PUT /api/instances/{id}/port</c>.
     /// </summary>
     /// <param name="id">Identifier of the instance.</param>
     /// <param name="request">Settings to change, checked by <see cref="UpdateInstanceRequestValidator"/>.</param>
@@ -494,6 +495,69 @@ public sealed class InstancesController(
         CancellationToken cancellationToken)
     {
         return RunOperationAsync(() => supervisor.ChangeServerIdAsync(id, request.ServerId, cancellationToken));
+    }
+
+    /// <summary>
+    /// Moves the p4d of an instance to another port, and updates the address of its server spec. The change runs in the
+    /// background: it stops p4d if it runs, saves the new port, then starts p4d on it again. With a usable stored super
+    /// user, p4d is started on the new port even if it did not run, the port in the address of the server spec is
+    /// changed as the super user, then p4d is stopped again if it did not run; the protocol and the host of the address
+    /// are kept. Without one, the spec is left as it is. The instance is <c>ChangingPort</c> meanwhile. Follow it with
+    /// <c>GET /api/instances/{id}/operation</c> or the <c>OperationProgress</c> event of the <c>/hubs/instances</c> hub.
+    /// A failure is kept as the last error of the instance. A p4d that could not start on the new port gets its old
+    /// port back; p4d is left running or stopped as it was.
+    /// </summary>
+    /// <param name="id">Identifier of the instance.</param>
+    /// <param name="request">The new port, checked by <see cref="ChangePortRequestValidator"/>.</param>
+    /// <param name="supervisor">Runs the change.</param>
+    /// <param name="cancellationToken">
+    /// Aborts the request. Once begun, the change runs to its end: only the shutdown of the daemon cancels it.
+    /// </param>
+    /// <response code="202">The change has begun.</response>
+    /// <response code="400">
+    /// The port is out of range, another instance uses it, or it is already in use on this machine. The errors are keyed
+    /// by field.
+    /// </response>
+    /// <response code="404">No instance has this identifier.</response>
+    /// <response code="409">
+    /// The instance is not ready, another operation is in progress, or it already listens on this port.
+    /// </response>
+    [HttpPut("{id:guid}/port")]
+    [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<ActionResult<InstanceDto>> ChangePort(
+        Guid id,
+        ChangePortRequest request,
+        [FromServices] InstanceSupervisor supervisor,
+        CancellationToken cancellationToken)
+    {
+        int? currentPort = await db.Instances
+            .Where(i => i.Id == id)
+            .Select(i => (int?)i.Port)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (currentPort is null)
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound);
+        }
+
+        // The same port is a conflict, that the supervisor reports.
+        if (currentPort != request.Port)
+        {
+            if (await db.Instances.AnyAsync(i => i.Id != id && i.Port == request.Port, cancellationToken))
+            {
+                ModelState.AddModelError("port", $"Another instance uses port {request.Port}.");
+                return ValidationProblem(ModelState);
+            }
+            if (!InstanceRuleExtensions.IsPortFreeOnHost(request.Port))
+            {
+                ModelState.AddModelError("port", $"Port {request.Port} is already in use on this machine.");
+                return ValidationProblem(ModelState);
+            }
+        }
+
+        return await RunOperationAsync(() => supervisor.ChangePortAsync(id, request.Port, cancellationToken));
     }
 
     /// <summary>

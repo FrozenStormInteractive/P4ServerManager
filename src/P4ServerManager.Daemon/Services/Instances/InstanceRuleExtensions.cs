@@ -74,16 +74,25 @@ public static partial class InstanceRuleExtensions
     }
 
     /// <summary>
+    /// A port in range.
+    /// </summary>
+    public static IRuleBuilderOptions<T, int> MustBeInstancePort<T>(this IRuleBuilder<T, int> rule)
+    {
+        return rule
+            .InclusiveBetween(MinPort, MaxPort)
+            .WithMessage("The port is between {From} and {To}.");
+    }
+
+    /// <summary>
     /// A port in range, that no other instance uses and that is free on the machine.
     /// </summary>
     public static IRuleBuilderOptions<T, int> MustBeFreeInstancePort<T>(this IRuleBuilder<T, int> rule, DaemonDbContext db)
     {
         return rule
-            .InclusiveBetween(MinPort, MaxPort)
-            .WithMessage("The port is between {From} and {To}.")
+            .MustBeInstancePort()
             .MustAsync((port, cancellationToken) => db.Instances.AllAsync(i => i.Port != port, cancellationToken))
             .WithMessage((_, port) => $"Another instance uses port {port}.")
-            .Must(BeFreeOnHost)
+            .Must(IsPortFreeOnHost)
             .WithMessage((_, port) => $"Port {port} is already in use on this machine.");
     }
 
@@ -121,7 +130,10 @@ public static partial class InstanceRuleExtensions
             .WithMessage((request, build) => $"Build {build} of {getRelease(request)} is not in the archive.");
     }
 
-    private static bool BeFreeOnHost(int port)
+    /// <summary>
+    /// Whether a program of the machine could listen on the port: nothing listens on it yet.
+    /// </summary>
+    public static bool IsPortFreeOnHost(int port)
     {
         try
         {

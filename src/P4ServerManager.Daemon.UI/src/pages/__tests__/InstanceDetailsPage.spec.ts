@@ -45,6 +45,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
       { text: 'Change server ID', loading: false, disabled: false },
+      { text: 'Change port', loading: false, disabled: false },
       { text: 'Enable maintenance mode', loading: false, disabled: false },
       { text: 'Check now', loading: false, disabled: false },
       { text: 'Change', loading: false, disabled: false },
@@ -59,6 +60,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Change server ID', loading: false, disabled: true },
+      { text: 'Change port', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -73,6 +75,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Change server ID', loading: false, disabled: true },
+      { text: 'Change port', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -86,6 +89,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Change server ID', loading: false, disabled: true },
+      { text: 'Change port', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -99,6 +103,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: false },
       { text: 'Delete', loading: false, disabled: false },
       { text: 'Change server ID', loading: false, disabled: false },
+      { text: 'Change port', loading: false, disabled: false },
       { text: 'Start in maintenance mode', loading: false, disabled: false },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: false },
@@ -112,6 +117,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: true, disabled: true },
       { text: 'Change server ID', loading: false, disabled: true },
+      { text: 'Change port', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -125,6 +131,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: true, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Change server ID', loading: false, disabled: true },
+      { text: 'Change port', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -144,6 +151,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: false },
       { text: 'Change server ID', loading: false, disabled: true },
+      { text: 'Change port', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },
@@ -326,6 +334,55 @@ describe('InstanceDetailsPage', () => {
     })
   })
 
+  describe('change of the port', () => {
+    async function mountPort (overrides: Partial<typeof instance> = {}) {
+      const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, {
+        props: { id: instance.id },
+        attachTo: document.body,
+      })
+      useInstancesStore(pinia).upsertInstance({ ...instance, runtimeStatus: 'Running', ...overrides })
+      await flushPromises()
+      return { wrapper, pinia, button: wrapper.findAll('button').find(b => b.text() === 'Change port') }
+    }
+
+    it('is shown in progress', async () => {
+      const { button } = await mountPort({ runtimeStatus: 'ChangingPort' })
+
+      expect(button!.classes()).toContain('v-btn--loading')
+      expect(button!.attributes('disabled')).toBeDefined()
+    })
+
+    it('does not need a super user', async () => {
+      const { button } = await mountPort({ superUser: null })
+
+      expect(button!.attributes('disabled')).toBeUndefined()
+    })
+
+    it('opens the dialog and begins the change', async () => {
+      let body: unknown = null
+      server.use(http.put(`/api/instances/${instance.id}/port`, async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({ ...instance, runtimeStatus: 'ChangingPort' }, { status: 202 })
+      }))
+      const { button, pinia } = await mountPort()
+
+      await button!.trigger('click')
+      await flushPromises()
+      expect(document.body.textContent).toContain(`Change the port of ${instance.name}`)
+
+      const input = document.querySelector<HTMLInputElement>('[name="port"]')!
+      input.value = '1777'
+      input.dispatchEvent(new Event('input'))
+      await flushPromises()
+      document.querySelector('#change-port-form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+      await flushPromises()
+
+      await vi.waitFor(() => expect(body).toEqual({ port: 1777 }))
+      await flushPromises()
+      expect(useInstancesStore(pinia).getInstance(instance.id)?.runtimeStatus).toBe('ChangingPort')
+    })
+  })
+
   describe('conversion to Unicode mode', () => {
     async function mountNotUnicode (runtimeStatus: RuntimeStatus, state: InstanceState = 'Ready') {
       const { wrapper, pinia } = await mountWithPlugins(InstanceDetailsPage, {
@@ -482,6 +539,7 @@ describe('InstanceDetailsPage', () => {
       { text: 'Upgrade', loading: false, disabled: true },
       { text: 'Delete', loading: false, disabled: true },
       { text: 'Change server ID', loading: false, disabled: true },
+      { text: 'Change port', loading: false, disabled: true },
       { text: 'Enable maintenance mode', loading: false, disabled: true },
       { text: 'Check now', loading: false, disabled: true },
       { text: 'Change', loading: false, disabled: true },

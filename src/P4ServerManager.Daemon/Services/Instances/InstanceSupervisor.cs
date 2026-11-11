@@ -7,6 +7,7 @@ using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.HealthChecks;
+using P4ServerManager.Daemon.Services.Instances.PortChange;
 using P4ServerManager.Daemon.Services.Instances.ServerIdAssignment;
 using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
@@ -18,7 +19,7 @@ namespace P4ServerManager.Daemon.Services.Instances;
 /// <summary>
 /// Keeps track of the p4d processes. At startup it adopts the instances that still run, without restarting them, then
 /// starts the stopped ones marked for auto-start and checks them periodically. It also starts, stops, upgrades, converts
-/// to Unicode mode, checks the health of, changes the server ID of and deletes them on request.
+/// to Unicode mode, checks the health of, changes the server ID or the port of and deletes them on request.
 /// </summary>
 public sealed partial class InstanceSupervisor(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
@@ -27,6 +28,7 @@ public sealed partial class InstanceSupervisor(
     UpgradeOperation upgradeOperation,
     UnicodeConversionOperation unicodeConversionOperation,
     ServerIdAssignmentOperation serverIdAssignmentOperation,
+    PortChangeOperation portChangeOperation,
     SuperUserService superUserService,
     HealthCheckRunner healthCheckRunner,
     InstanceRuntimeRegistry runtimeRegistry,

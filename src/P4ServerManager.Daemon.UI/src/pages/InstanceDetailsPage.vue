@@ -75,6 +75,8 @@
 
       <ChangeServerIdDialog v-model="serverIdDialog" :instance="instance" />
 
+      <ChangePortDialog v-model="portDialog" :instance="instance" />
+
       <SuperUserDialog v-model="superUserDialog" :instance="instance" />
 
       <ConfirmInstanceActionDialog
@@ -136,6 +138,17 @@
                       </span>
                     </template>
                   </v-tooltip>
+                </template>
+
+                <template v-else-if="detail.label === 'instance.port'" #append>
+                  <v-btn
+                    :disabled="!canAct"
+                    :loading="status === 'changingPort'"
+                    size="small"
+                    :text="t('actions.changePort')"
+                    variant="tonal"
+                    @click="portDialog = true"
+                  />
                 </template>
               </v-list-item>
 
@@ -242,6 +255,7 @@
   import { useRouter } from 'vue-router'
 
   // Components, stores and utilities
+  import ChangePortDialog from '@/components/instances/ChangePortDialog.vue'
   import ChangeServerIdDialog from '@/components/instances/ChangeServerIdDialog.vue'
   import ConfirmInstanceActionDialog from '@/components/instances/ConfirmInstanceActionDialog.vue'
   import ConvertToUnicodeDialog from '@/components/instances/ConvertToUnicodeDialog.vue'
@@ -276,6 +290,7 @@
   const upgradeDialog = ref(false)
   const convertDialog = ref(false)
   const serverIdDialog = ref(false)
+  const portDialog = ref(false)
   const confirmDialog = ref(false)
   const confirmAction = ref<ConfirmableAction>('stop')
   const savingAutoStart = ref(false)
