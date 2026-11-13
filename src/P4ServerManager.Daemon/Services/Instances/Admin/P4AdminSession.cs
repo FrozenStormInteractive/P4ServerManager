@@ -201,6 +201,24 @@ public sealed class P4AdminSession
         return processRunner.RunAsync(CreateCommand(arguments, standardInput), cancellationToken);
     }
 
+    /// <summary>
+    /// Runs a p4 command that may last for hours, such as <c>p4 verify</c>, and hands each line it prints to
+    /// <paramref name="onLine"/> as it comes. The caller handles its failure.
+    /// </summary>
+    public Task<ProcessResult> RunLongAsync(
+        IReadOnlyList<string> arguments,
+        Func<string, Task> onLine,
+        CancellationToken cancellationToken)
+    {
+        ProcessCommand command = CreateCommand(arguments, standardInput: null) with
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+            OnOutputLine = onLine,
+            OnErrorLine = onLine,
+        };
+        return processRunner.RunAsync(command, cancellationToken);
+    }
+
     // As RunCheckedAsync tells a failed command. The arguments never hold the password.
     private static string Describe(ProcessCommand command)
     {

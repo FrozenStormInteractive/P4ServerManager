@@ -45,7 +45,55 @@ internal static class BackupDestinationCommand
         command.Subcommands.Add(CreateAdd(services));
         command.Subcommands.Add(CreateSet(services));
         command.Subcommands.Add(CreateTest(services));
+        command.Subcommands.Add(CreatePoints(services));
         command.Subcommands.Add(CreateRemove(services));
+        return command;
+    }
+
+    private static Command CreatePoints(CliServices services)
+    {
+        Argument<string> destinationArgument = CreateDestinationArgument();
+        Option<string?> instanceOption = new("--instance")
+        {
+            Description = "Only the points of this instance: the name it had when it was backed up, or its identifier.",
+            HelpName = "name",
+        };
+        Command command = new(
+            "points",
+            "List the backup points stored at a destination, newest first. They are read from the destination itself: "
+            + "the points of instances this daemon never knew are listed too.")
+        {
+            destinationArgument,
+            instanceOption,
+        };
+        services.SetAction(command, async (invocation, cancellationToken) =>
+        {
+            using DaemonClient client = invocation.CreateClient();
+            BackupDestinationDto destination = await client.ResolveBackupDestinationAsync(
+                invocation.GetValue(destinationArgument),
+                cancellationToken);
+            IReadOnlyList<BackupPointDto> points = await client.GetBackupPointsAsync(destination.Id, null, cancellationToken);
+            if (invocation.GetValue(instanceOption) is { } source)
+            {
+                points = points
+                    .Where(p => string.Equals(p.SourceName, source, StringComparison.OrdinalIgnoreCase)
+                        || p.SourceId.ToString().Equals(source, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            if (invocation.Json)
+            {
+                invocation.WriteJson(points, CliJsonContext.Default.IReadOnlyListBackupPointDto);
+                return 0;
+            }
+            if (points.Count == 0)
+            {
+                await invocation.Output.WriteLineAsync($"{destination.Name} holds no backup point.");
+                return 0;
+            }
+            BackupPointFormatting.WriteTable(invocation.Output, points);
+            return 0;
+        });
         return command;
     }
 

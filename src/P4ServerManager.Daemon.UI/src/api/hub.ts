@@ -1,5 +1,5 @@
 // Types
-import type { BackupRun, Build, BuildArchiveStatus, HealthCheckRun, Instance, OperationSnapshot } from './types'
+import type { BackupRun, Build, BuildArchiveStatus, HealthCheckRun, Instance, OperationSnapshot, RestoreRun } from './types'
 import type { HubConnection } from '@microsoft/signalr'
 
 // Utilities
@@ -12,6 +12,7 @@ export interface InstancesHubHandlers {
   onHealthCheckUpdated: (run: HealthCheckRun) => void
   onHealthCheckDeleted: (instanceId: string, runId: string) => void
   onBackupUpdated: (run: BackupRun) => void
+  onRestoreUpdated: (run: RestoreRun) => void
   /**
    * Called on the first connection and after each reconnection: events may have been missed until then.
    */
@@ -47,6 +48,7 @@ export function connectInstancesHub (handlers: InstancesHubHandlers): InstancesH
     connection.on('HealthCheckUpdated', handlers.onHealthCheckUpdated)
     connection.on('HealthCheckDeleted', handlers.onHealthCheckDeleted)
     connection.on('BackupUpdated', handlers.onBackupUpdated)
+    connection.on('RestoreUpdated', handlers.onRestoreUpdated)
   })
 }
 

@@ -10,65 +10,6 @@ using P4ServerManager.Daemon.Services.Operations;
 namespace P4ServerManager.Daemon.Services.Backups;
 
 /// <summary>
-/// Labels of the manifests the daemon writes.
-/// </summary>
-public static class BackupLabels
-{
-    public const string CheckpointNumber = "checkpoint";
-
-    /// <summary>
-    /// The last journal of the point, absent from a full backup.
-    /// </summary>
-    public const string JournalNumber = "journal";
-
-    public const string ServerId = "serverId";
-
-    public const string P4dVersion = "p4dVersion";
-
-    public const string Unicode = "unicode";
-
-    public const string CaseSensitive = "caseSensitive";
-
-    /// <summary>
-    /// Start of the label of each depot whose archives an object store keeps, and this backup lacks, followed by its
-    /// name. Its value is the configuration of the store, from <c>db.depot</c>, to find the archives on restore.
-    /// </summary>
-    public const string ObjectStoreDepotPrefix = "objectStoreDepot:";
-}
-
-/// <summary>
-/// Where a backup is at one of its destinations.
-/// </summary>
-/// <param name="destination">The destination.</param>
-/// <param name="record">What the run keeps of it.</param>
-public sealed class BackupDestinationState(BackupDestination destination, BackupRunDestination record)
-{
-    public BackupDestination Destination { get; } = destination;
-
-    public BackupRunDestination Record { get; } = record;
-
-    public OpenedBackupDestination? Opened { get; set; }
-
-    /// <summary>
-    /// The latest point of the instance at the destination: the base of an incremental backup.
-    /// </summary>
-    public BackupManifest? Base { get; set; }
-
-    /// <summary>
-    /// Objects the destination has for sure: the ones of <see cref="Base"/>.
-    /// </summary>
-    public HashSet<string> KnownObjects { get; } = new(StringComparer.Ordinal);
-
-    public bool Failed => Record.Status == BackupDestinationStatus.Failed;
-
-    public void Fail(string error)
-    {
-        Record.Status = BackupDestinationStatus.Failed;
-        Record.Error = error;
-    }
-}
-
-/// <summary>
 /// State shared by the steps of a backup of an instance. p4d keeps running.
 /// </summary>
 /// <param name="db">Context that tracks <paramref name="instance"/> and <paramref name="run"/>.</param>
@@ -132,5 +73,69 @@ public sealed class BackupContext(
                 destination.Opened = null;
             }
         }
+    }
+}
+
+/// <summary>
+/// Labels of the manifests the daemon writes.
+/// </summary>
+public static class BackupLabels
+{
+    public const string CheckpointNumber = "checkpoint";
+
+    /// <summary>
+    /// The last journal of the point, absent from a full backup.
+    /// </summary>
+    public const string JournalNumber = "journal";
+
+    public const string ServerId = "serverId";
+
+    public const string P4dVersion = "p4dVersion";
+
+    public const string Unicode = "unicode";
+
+    public const string CaseSensitive = "caseSensitive";
+
+    /// <summary>
+    /// The port of the instance, which the address of its server spec names.
+    /// </summary>
+    public const string Port = "port";
+
+    /// <summary>
+    /// Start of the label of each depot whose archives an object store keeps, and this backup lacks, followed by its
+    /// name. Its value is the configuration of the store, from <c>db.depot</c>, to find the archives on restore.
+    /// </summary>
+    public const string ObjectStoreDepotPrefix = "objectStoreDepot:";
+}
+
+/// <summary>
+/// Where a backup is at one of its destinations.
+/// </summary>
+/// <param name="destination">The destination.</param>
+/// <param name="record">What the run keeps of it.</param>
+public sealed class BackupDestinationState(BackupDestination destination, BackupRunDestination record)
+{
+    public BackupDestination Destination { get; } = destination;
+
+    public BackupRunDestination Record { get; } = record;
+
+    public OpenedBackupDestination? Opened { get; set; }
+
+    /// <summary>
+    /// The latest point of the instance at the destination: the base of an incremental backup.
+    /// </summary>
+    public BackupManifest? Base { get; set; }
+
+    /// <summary>
+    /// Objects the destination has for sure: the ones of <see cref="Base"/>.
+    /// </summary>
+    public HashSet<string> KnownObjects { get; } = new(StringComparer.Ordinal);
+
+    public bool Failed => Record.Status == BackupDestinationStatus.Failed;
+
+    public void Fail(string error)
+    {
+        Record.Status = BackupDestinationStatus.Failed;
+        Record.Error = error;
     }
 }

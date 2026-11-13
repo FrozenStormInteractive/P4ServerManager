@@ -47,7 +47,7 @@ public sealed class ServerIdAssignmentContext(
     P4ServerInstance instance,
     bool wasRunning,
     string newServerId,
-    SuperUserCredentials superUser) : InstanceOperationContext(db, instance), ISuperUserContext
+    SuperUserCredentials superUser) : InstanceOperationContext(db, instance), IServerSpecRenameContext
 {
     public bool WasRunning { get; } = wasRunning;
 

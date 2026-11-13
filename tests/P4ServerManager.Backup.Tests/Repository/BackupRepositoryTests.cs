@@ -263,12 +263,97 @@ public sealed class BackupRepositoryTests : IDisposable
             [manifest.Entries[0].Path, manifest.Entries[1].Path]);
     }
 
-    private async Task<BackupManifest> StoreManifestAsync(BackupRepository repository, int files)
+    [Fact]
+    public async Task ReadManifestHeader_ReadsTheHeaderOfALargeManifest()
+    {
+        using BackupRepository repository = await BackupRepository.InitializeAsync(_target, Passphrase, _options, Token);
+        BackupManifestHeader header = CreateHeader(Guid.NewGuid(), DateTimeOffset.UtcNow);
+        header.Labels["journal"] = "7";
+        BackupManifestEntry[] entries = Enumerable.Range(0, 20_000)
+            .Select(i => new BackupManifestEntry(
+                "archive",
+                $"archives/depot/file{i}.txt,v",
+                i,
+                DateTimeOffset.UnixEpoch,
+                Convert.ToHexStringLower(SHA256.HashData(BitConverter.GetBytes(i))),
+                $"object{i}"))
+            .ToArray();
+        BackupSnapshotInfo snapshot = await repository.WriteManifestAsync(header, entries, Token);
+
+        BackupManifestHeader read = await repository.ReadManifestHeaderAsync(snapshot.Key, Token);
+
+        read.Id.ShouldBe(header.Id);
+        read.SourceName.ShouldBe("main");
+        read.Labels["journal"].ShouldBe("7");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(5000)]
+    [InlineData((2 * ObjectFormat.FrameSize) + 3)]
+    public async Task RestoreFile_WritesTheContentAndItsLastWriteTime(int size)
+    {
+        using BackupRepository repository = await BackupRepository.InitializeAsync(_target, Passphrase, _options, Token);
+        BackupManifest manifest = await StoreManifestAsync(repository, 1, size);
+        BackupManifestEntry entry = manifest.Entries[0] with
+        {
+            ModifiedAt = new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero),
+        };
+        string path = Path.Combine(_directory, "restored", "file");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        await repository.RestoreFileAsync(entry, path, Token);
+
+        Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path, Token))).ShouldBe(entry.Sha256);
+        File.GetLastWriteTimeUtc(path).ShouldBe(entry.ModifiedAt.UtcDateTime);
+        File.Exists(path + BackupRepository.RestoreSuffix).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task RestoreFile_RefusesAContentThatIsNotTheOneOfTheManifest_AndKeepsTheFileInPlace()
+    {
+        using BackupRepository repository = await BackupRepository.InitializeAsync(_target, Passphrase, _options, Token);
+        BackupManifest manifest = await StoreManifestAsync(repository, 2);
+        BackupManifestEntry wrongHash = manifest.Entries[0] with { Sha256 = new string('0', 64) };
+        BackupManifestEntry wrongSize = manifest.Entries[1] with { Size = manifest.Entries[1].Size + 1 };
+        string path = Path.Combine(_directory, "restored", "file");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, "previous", Token);
+
+        await Should.ThrowAsync<BackupIntegrityException>(() => repository.RestoreFileAsync(wrongHash, path, Token));
+        await Should.ThrowAsync<BackupIntegrityException>(() => repository.RestoreFileAsync(wrongSize, path, Token));
+
+        (await File.ReadAllTextAsync(path, Token)).ShouldBe("previous");
+        File.Exists(path + BackupRepository.RestoreSuffix).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task RestoreFile_RefusesADamagedObject_AndAMissingOne()
+    {
+        using BackupRepository repository = await BackupRepository.InitializeAsync(_target, Passphrase, _options, Token);
+        BackupManifest manifest = await StoreManifestAsync(repository, 2);
+        string damaged = GetStoredPath(manifest.Entries[0].Object);
+        byte[] bytes = await File.ReadAllBytesAsync(damaged, Token);
+        await File.WriteAllBytesAsync(damaged, bytes[..^20], Token);
+        File.Delete(GetStoredPath(manifest.Entries[1].Object));
+        string path = Path.Combine(_directory, "restored", "file");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        await Should.ThrowAsync<BackupIntegrityException>(
+            () => repository.RestoreFileAsync(manifest.Entries[0], path, Token));
+        await Should.ThrowAsync<BackupObjectNotFoundException>(
+            () => repository.RestoreFileAsync(manifest.Entries[1], path, Token));
+
+        File.Exists(path).ShouldBeFalse();
+        File.Exists(path + BackupRepository.RestoreSuffix).ShouldBeFalse();
+    }
+
+    private async Task<BackupManifest> StoreManifestAsync(BackupRepository repository, int files, int size = 1000)
     {
         List<BackupManifestEntry> entries = [];
         for (int i = 0; i < files; i++)
         {
-            string file = await WriteFileAsync(CreateContent(1000 + i));
+            string file = await WriteFileAsync(CreateContent(size + i));
             StoredObject stored = await repository.PutFileAsync(file, compress: true, Token);
             entries.Add(new BackupManifestEntry(
                 "archive",

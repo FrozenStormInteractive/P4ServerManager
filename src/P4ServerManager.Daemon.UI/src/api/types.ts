@@ -19,6 +19,7 @@ export type RuntimeStatus
     | 'ChangingPort'
     | 'BackingUp'
     | 'VerifyingBackup'
+    | 'Restoring'
 
 export interface Instance {
   id: string
@@ -600,4 +601,74 @@ export interface BackupRun {
    */
   warnings: string[]
   destinations: BackupRunDestination[]
+}
+
+/**
+ * A backup point stored at a destination, read from the destination itself: it lists the points of instances this
+ * daemon never knew, such as after a reinstallation.
+ */
+export interface BackupPoint {
+  /**
+   * Key of the manifest of the point: what a restore asks for.
+   */
+  key: string
+  id: string
+  sourceId: string
+  sourceName: string
+  kind: BackupKind
+  createdAt: string
+  checkpointNumber: number | null
+  journalNumber: number | null
+  p4dVersion: string | null
+  unicode: boolean
+  caseSensitive: boolean
+  serverId: string | null
+}
+
+export type RestoreTarget = 'ExistingInstance' | 'NewInstance'
+
+export type RestoreRunStatus = 'Running' | 'Succeeded' | 'SucceededWithProblems' | 'Failed' | 'Canceled' | 'Interrupted'
+
+/**
+ * A restore of a backup point, running or ended.
+ */
+export interface RestoreRun {
+  id: string
+  instanceId: string
+  instanceName: string
+  target: RestoreTarget
+  destinationId: string
+  destinationName: string
+  snapshotKey: string
+  pointId: string
+  pointCreatedAt: string | null
+  sourceName: string | null
+  status: RestoreRunStatus
+  startedAt: string
+  finishedAt: string | null
+  fileCount: number
+  totalBytes: number
+  downloadedBytes: number
+  /**
+   * Files the instance already had, unchanged, put back rather than downloaded.
+   */
+  reusedFiles: number
+  verifyProblemCount: number
+  verifyProblems: string[]
+  warnings: string[]
+  error: string | null
+}
+
+export interface RestoreInstanceRequest {
+  name: string
+  description: string | null
+  port: number
+  release: string | null
+  build: string | null
+  serverDirectory: string | null
+  ssl: boolean
+  autoStart: boolean
+  includeLicense: boolean
+  superUser: { name: string, password: string }
+  source: { destinationId: string, snapshotKey: string }
 }

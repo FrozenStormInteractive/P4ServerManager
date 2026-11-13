@@ -9,6 +9,7 @@ import type {
   InstanceActionResult,
   InstanceSelection,
   OperationSnapshot,
+  RestoreRun,
   SetSuperUserRequest,
   UpdateInstanceRequest,
 } from '@/api/types'
@@ -165,6 +166,31 @@ export const useInstancesStore = defineStore('instances', () => {
     if (wasRunning && run.status !== 'Running') {
       notifyBackupEnded(run)
     }
+  }
+
+  function setRestore (run: RestoreRun) {
+    const backups = useBackupsStore()
+    const wasRunning = backups.getRestores(run.instanceId).some(r => r.id === run.id && r.status === 'Running')
+    backups.setRestore(run)
+    if (wasRunning && run.status !== 'Running') {
+      notifyRestoreEnded(run)
+    }
+  }
+
+  /**
+   * Tells every client how a restore ended: it may run for hours, with no one looking at its page.
+   */
+  function notifyRestoreEnded (run: RestoreRun) {
+    const { t } = i18n.global
+    const params = { name: run.instanceName }
+    const colors: Partial<Record<RestoreRun['status'], 'success' | 'warning' | 'error' | 'info'>> = {
+      Succeeded: 'success',
+      SucceededWithProblems: 'warning',
+      Failed: 'error',
+      Canceled: 'info',
+      Interrupted: 'warning',
+    }
+    useNotificationsStore().notify(t(`restores.notifications.${run.status}`, params), colors[run.status] ?? 'info')
   }
 
   /**
@@ -336,6 +362,7 @@ export const useInstancesStore = defineStore('instances', () => {
       onHealthCheckUpdated: setHealthCheck,
       onHealthCheckDeleted: (instanceId, runId) => useHealthChecksStore().removeRun(instanceId, runId),
       onBackupUpdated: setBackup,
+      onRestoreUpdated: setRestore,
       onConnected: () => {
         void fetchAll()
         void useHealthChecksStore().refresh()

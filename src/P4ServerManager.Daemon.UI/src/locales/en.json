@@ -47,6 +47,7 @@
     "changingPort": "Changing the port",
     "backingUp": "Backing up",
     "verifyingBackup": "Verifying a backup",
+    "restoring": "Restoring",
     "deleting": "Deleting",
     "unknown": "Unknown",
     "inMaintenance": "{status} (maintenance)"
@@ -251,7 +252,9 @@
       "change-server-id": "Change of the server ID",
       "change-port": "Change of the port",
       "backup": "Backup",
-      "verify-backup": "Verification of a backup"
+      "verify-backup": "Verification of a backup",
+      "restore": "Restore",
+      "restore-instance": "Restore into a new server"
     },
     "steps": {
       "resolve-build": "Get the p4d build",
@@ -277,7 +280,21 @@
       "save-backup-metadata": "Save the database",
       "scan-server-files": "List the files of the server",
       "finish-backup": "Finish the backup",
-      "verify-backup": "Verify the backup"
+      "verify-backup": "Verify the backup",
+      "open-restore-source": "Open the backup point",
+      "check-free-space": "Check the free space",
+      "set-aside-server-files": "Set the current data aside",
+      "restore-metadata": "Download the checkpoint and the journals",
+      "replay-checkpoint": "Replay the checkpoint and the journals",
+      "configure-restored-server": "Configure the restored server",
+      "locate-restored-files": "Place the files of the point",
+      "restore-files": "Restore the files",
+      "check-database": "Check the restored database",
+      "restore-ssl": "Set up SSL",
+      "relocate-depots": "Relocate the depots",
+      "start-server-maintenance": "Start the server in maintenance mode",
+      "verify-archives": "Verify the archives",
+      "finish-restore": "Finish the restore"
     },
     "skipped": "Skipped"
   },
@@ -703,6 +720,66 @@
       "Failed": "Backup of {name} failed.",
       "Canceled": "Backup of {name} canceled.",
       "Interrupted": "Backup of {name} interrupted."
+    }
+  },
+  "restores": {
+    "restore": "Restore…",
+    "cancel": "Stop the restore",
+    "statuses": {
+      "Running": "Running",
+      "Succeeded": "Succeeded",
+      "SucceededWithProblems": "Succeeded with problems",
+      "Failed": "Failed",
+      "Canceled": "Canceled",
+      "Interrupted": "Interrupted"
+    },
+    "history": {
+      "title": "Restores",
+      "started": "Started",
+      "point": "Backup point",
+      "destination": "From",
+      "status": "Status",
+      "pointValue": "{name}, {date}",
+      "files": "{count} files ({size}), {downloaded} downloaded, {reused} unchanged files kept.",
+      "problems": "p4 verify found {count} problem: | p4 verify found {count} problems:"
+    },
+    "dialog": {
+      "title": "Restore a backup",
+      "source": "{kind} of {name}, made {date}, at {destination}.",
+      "replace": "Replace the data of {name}",
+      "new": "Restore into a new server",
+      "replaceWarning": "The server of {name} stops, and its database and archives are replaced by the ones of the backup. Everything submitted since is lost. The current data is kept aside until the restore succeeds, and put back if it fails.",
+      "confirm": "Type {name} to confirm",
+      "confirmMismatch": "Type the name of the server.",
+      "newHint": "The new server gets the database, the archives and the users of the backup, with its case handling and Unicode mode. Its server ID is its name.",
+      "sslHint": "With the certificate of the backup when it has one.",
+      "license": "Restore the license",
+      "licenseHint": "A license is bound to the address of the machine it was issued for.",
+      "superUserHint": "A super user of the backed-up server, with its password at the time of the backup. The manager stores it.",
+      "passwordRequired": "The password is required.",
+      "submit": "Restore",
+      "started": "Restore of {name} started."
+    },
+    "points": {
+      "browse": "Browse the backups",
+      "title": "Backups at {name}",
+      "text": "Read from the destination itself: the backups of servers this manager never knew are listed too. Each one can become a new server.",
+      "loadError": "The backups could not be listed: {message}",
+      "empty": "No backup is stored here.",
+      "instance": "Server",
+      "created": "Made",
+      "kind": "Kind",
+      "checkpoint": "Checkpoint",
+      "journal": "Journal",
+      "p4d": "p4d",
+      "restore": "Restore"
+    },
+    "notifications": {
+      "Succeeded": "Restore of {name} done.",
+      "SucceededWithProblems": "Restore of {name} done, with problems to look at.",
+      "Failed": "Restore of {name} failed.",
+      "Canceled": "Restore of {name} canceled.",
+      "Interrupted": "Restore of {name} interrupted."
     }
   }
 }

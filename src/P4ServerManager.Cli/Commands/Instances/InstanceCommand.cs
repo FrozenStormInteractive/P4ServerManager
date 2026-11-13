@@ -16,6 +16,7 @@ internal static class InstanceCommand
         command.Subcommands.Add(ListInstancesCommand.Create(services));
         command.Subcommands.Add(ShowInstanceCommand.Create(services));
         command.Subcommands.Add(CreateInstanceCommand.Create(services));
+        command.Subcommands.Add(CreateFromBackupCommand.Create(services));
         foreach (Command lifecycleCommand in LifecycleCommands.Create(services))
         {
             command.Subcommands.Add(lifecycleCommand);
@@ -29,6 +30,7 @@ internal static class InstanceCommand
         command.Subcommands.Add(ChangePortCommand.Create(services));
         command.Subcommands.Add(InstanceHealthCommand.Create(services));
         command.Subcommands.Add(InstanceBackupCommand.Create(services));
+        command.Subcommands.Add(InstanceRestoreCommand.Create(services));
         command.Subcommands.Add(DeleteInstanceCommand.Create(services));
         command.Subcommands.Add(InstanceOperationCommand.Create(services));
         return command;

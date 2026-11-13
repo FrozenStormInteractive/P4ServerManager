@@ -55,6 +55,14 @@
       <template #item.actions="{ item }">
         <div class="d-flex justify-end">
           <v-btn
+            :aria-label="t('restores.points.browse')"
+            icon="mdi-archive-search-outline"
+            size="small"
+            variant="text"
+            @click="browse(item)"
+          />
+
+          <v-btn
             :aria-label="t('backupDestinations.test')"
             icon="mdi-connection"
             :loading="testing === item.id"
@@ -84,6 +92,8 @@
     </v-data-table>
 
     <BackupDestinationDialog v-model="dialogOpen" :destination="selected" />
+
+    <BackupPointsDialog v-model="pointsOpen" :destination="selected" />
 
     <v-dialog v-model="removeOpen" max-width="480">
       <v-card :title="t('backupDestinations.removeTitle', { name: selected?.name ?? '' })">
@@ -116,6 +126,7 @@
 
   // Components and stores
   import BackupDestinationDialog from '@/components/backups/BackupDestinationDialog.vue'
+  import BackupPointsDialog from '@/components/backups/BackupPointsDialog.vue'
   import { useBackupsStore } from '@/stores/backups'
   import { useNotificationsStore } from '@/stores/notifications'
 
@@ -128,6 +139,7 @@
 
   const dialogOpen = ref(false)
   const removeOpen = ref(false)
+  const pointsOpen = ref(false)
   const selected = ref<BackupDestination | null>(null)
   const testing = ref<string | null>(null)
   const removing = ref(false)
@@ -144,6 +156,11 @@
   function openDialog (destination: BackupDestination | null) {
     selected.value = destination
     dialogOpen.value = true
+  }
+
+  function browse (destination: BackupDestination) {
+    selected.value = destination
+    pointsOpen.value = true
   }
 
   function askRemove (destination: BackupDestination) {

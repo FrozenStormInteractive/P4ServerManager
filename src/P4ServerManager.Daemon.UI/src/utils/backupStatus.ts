@@ -1,5 +1,5 @@
 // Types
-import type { BackupDestinationStatus, BackupRunStatus } from '@/api/types'
+import type { BackupDestinationStatus, BackupRunStatus, RestoreRunStatus } from '@/api/types'
 
 export interface StatusLook {
   color: string
@@ -20,6 +20,22 @@ const destinationLooks: Record<BackupDestinationStatus, StatusLook> = {
   Uploading: { color: 'info', icon: 'mdi-progress-upload' },
   Succeeded: { color: 'success', icon: 'mdi-check' },
   Failed: { color: 'error', icon: 'mdi-alert-circle' },
+}
+
+const restoreLooks: Record<RestoreRunStatus, StatusLook> = {
+  Running: { color: 'info', icon: 'mdi-progress-download' },
+  Succeeded: { color: 'success', icon: 'mdi-check-circle' },
+  SucceededWithProblems: { color: 'warning', icon: 'mdi-alert' },
+  Failed: { color: 'error', icon: 'mdi-alert-circle' },
+  Canceled: { color: 'grey', icon: 'mdi-cancel' },
+  Interrupted: { color: 'warning', icon: 'mdi-power-plug-off' },
+}
+
+/**
+ * Color and icon of the status of a restore.
+ */
+export function getRestoreStatusLook (status: RestoreRunStatus): StatusLook {
+  return restoreLooks[status]
 }
 
 /**

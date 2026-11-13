@@ -6,7 +6,16 @@
         <v-spacer />
 
         <v-btn
-          v-if="running"
+          v-if="runningRestore"
+          :loading="canceling"
+          prepend-icon="mdi-stop"
+          :text="t('restores.cancel')"
+          variant="tonal"
+          @click="cancelRestore"
+        />
+
+        <v-btn
+          v-else-if="running"
           :loading="canceling"
           prepend-icon="mdi-stop"
           :text="t('backups.cancel')"
@@ -44,7 +53,12 @@
         </v-menu>
       </div>
 
-      <BackupRunDialog v-model="runDialog" :can-verify="canStart" :run="selectedRun" />
+      <BackupRunDialog
+        v-model="runDialog"
+        :can-verify="canStart"
+        :instance="instance"
+        :run="selectedRun"
+      />
 
       <v-alert
         v-if="loadError"
@@ -195,6 +209,64 @@
           </template>
         </v-data-table>
       </v-card>
+
+      <v-card v-if="restores.length > 0" class="mt-6" data-testid="restores" :title="t('restores.history.title')">
+        <v-data-table
+          :headers="restoreHeaders"
+          hide-default-footer
+          item-value="id"
+          :items="restores"
+          :items-per-page="-1"
+          show-expand
+        >
+          <template #item.startedAt="{ item }">
+            {{ d(new Date(item.startedAt), 'long') }}
+          </template>
+
+          <template #item.point="{ item }">
+            {{ t('restores.history.pointValue', {
+              name: item.sourceName ?? '?',
+              date: item.pointCreatedAt ? d(new Date(item.pointCreatedAt), 'long') : '?',
+            }) }}
+          </template>
+
+          <template #item.status="{ item }">
+            <v-chip
+              :color="getRestoreStatusLook(item.status).color"
+              label
+              :prepend-icon="getRestoreStatusLook(item.status).icon"
+              size="small"
+              :text="t(`restores.statuses.${item.status}`)"
+            />
+          </template>
+
+          <template #expanded-row="{ columns, item }">
+            <tr>
+              <td class="py-3" :colspan="columns.length">
+                <p class="mb-1">
+                  {{ t('restores.history.files', {
+                    count: item.fileCount,
+                    size: formatBytes(item.totalBytes, locale),
+                    downloaded: formatBytes(item.downloadedBytes, locale),
+                    reused: item.reusedFiles,
+                  }) }}
+                </p>
+
+                <p v-if="item.error" class="text-error mb-1">{{ item.error }}</p>
+                <p v-for="warning in item.warnings" :key="warning" class="text-warning mb-1">{{ warning }}</p>
+
+                <template v-if="item.verifyProblemCount > 0">
+                  <p class="mb-1">{{ t('restores.history.problems', { count: item.verifyProblemCount }) }}</p>
+
+                  <ul class="text-body-small ml-4">
+                    <li v-for="problem in item.verifyProblems" :key="problem">{{ problem }}</li>
+                  </ul>
+                </template>
+              </td>
+            </tr>
+          </template>
+        </v-data-table>
+      </v-card>
     </template>
 
     <v-empty-state
@@ -219,7 +291,7 @@
   import { useBackupsStore } from '@/stores/backups'
   import { useInstancesStore } from '@/stores/instances'
   import { useNotificationsStore } from '@/stores/notifications'
-  import { getBackupDestinationStatusLook, getBackupStatusLook } from '@/utils/backupStatus'
+  import { getBackupDestinationStatusLook, getBackupStatusLook, getRestoreStatusLook } from '@/utils/backupStatus'
   import { formatBytes } from '@/utils/bytes'
   import { getInstanceStatus, isInstanceStatusInProgress } from '@/utils/instanceStatus'
 
@@ -247,6 +319,8 @@
   const instance = computed(() => instances.getInstance(props.id))
   const runs = computed(() => backups.getRuns(props.id))
   const running = computed(() => backups.getRunningRun(props.id))
+  const restores = computed(() => backups.getRestores(props.id))
+  const runningRestore = computed(() => backups.getRunningRestore(props.id))
   const selectedRun = computed(() => runs.value.find(run => run.id === selectedId.value) ?? null)
   const loaded = computed(() => backups.runsLoaded[props.id] ?? false)
   const loadError = computed(() => backups.runsErrors[props.id] ?? null)
@@ -255,7 +329,7 @@
   const snapshot = computed(() => instances.operations[props.id] ?? null)
   const showOperation = computed(() =>
     snapshot.value?.status === 'Running'
-    && (snapshot.value.kind === 'backup' || snapshot.value.kind === 'verify-backup'),
+    && ['backup', 'verify-backup', 'restore'].includes(snapshot.value.kind),
   )
 
   const destinationItems = computed(() => backups.destinations.map(destination => ({
@@ -285,6 +359,14 @@
     { title: t('backups.history.files'), key: 'files', sortable: false },
     { title: t('backups.history.destinations'), key: 'destinations', sortable: false },
     { title: '', key: 'actions', sortable: false, align: 'end' as const },
+  ])
+
+  const restoreHeaders = computed(() => [
+    { title: t('restores.history.started'), key: 'startedAt', sortable: false },
+    { title: t('restores.history.point'), key: 'point', sortable: false },
+    { title: t('restores.history.destination'), key: 'destinationName', sortable: false },
+    { title: t('restores.history.status'), key: 'status', sortable: false },
+    { title: '', key: 'data-table-expand', sortable: false, align: 'end' as const },
   ])
 
   watch(savedDestinations, value => {
@@ -321,6 +403,22 @@
     actionError.value = null
     try {
       await backups.cancel(props.id, running.value.id)
+    } catch (error) {
+      actionError.value = error instanceof Error ? error.message : String(error)
+    } finally {
+      canceling.value = false
+    }
+  }
+
+  async function cancelRestore () {
+    if (!runningRestore.value) {
+      return
+    }
+
+    canceling.value = true
+    actionError.value = null
+    try {
+      await backups.cancelRestore(props.id, runningRestore.value.id)
     } catch (error) {
       actionError.value = error instanceof Error ? error.message : String(error)
     } finally {

@@ -127,6 +127,18 @@
               variant="text"
               @click="verify(destination, true)"
             />
+
+            <v-spacer />
+
+            <v-btn
+              v-if="instance"
+              color="error"
+              :disabled="!canVerify"
+              prepend-icon="mdi-backup-restore"
+              :text="t('restores.restore')"
+              variant="text"
+              @click="restore(destination)"
+            />
           </v-card-actions>
         </v-card>
 
@@ -138,18 +150,27 @@
         <v-btn :text="t('actions.close')" @click="open = false" />
       </v-card-actions>
     </v-card>
+
+    <RestoreDialog
+      v-model="restoreOpen"
+      :instance="instance"
+      :source="restoreSource"
+      @started="open = false"
+    />
   </v-dialog>
 </template>
 
 <script lang="ts" setup>
   // Types
-  import type { BackupRun, BackupRunDestination, BackupVerification } from '@/api/types'
+  import type { BackupRun, BackupRunDestination, BackupVerification, Instance } from '@/api/types'
+  import type { RestoreSource } from '@/utils/restore'
 
   // Composables
   import { ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
-  // Stores and utilities
+  // Components, stores and utilities
+  import RestoreDialog from '@/components/backups/RestoreDialog.vue'
   import { useBackupsStore } from '@/stores/backups'
   import { useNotificationsStore } from '@/stores/notifications'
   import { getBackupDestinationStatusLook, getBackupStatusLook } from '@/utils/backupStatus'
@@ -157,11 +178,15 @@
 
   /**
    * What a backup did at each of its destinations, and the verification of its points. A verification runs in the
-   * daemon: its outcome comes back with the backup.
+   * daemon: its outcome comes back with the backup. A point is restored from here, over the instance or as a new one.
    */
   const props = defineProps<{
     run: BackupRun | null
     canVerify: boolean
+    /**
+     * The instance the backup was made from, whose data a point can replace.
+     */
+    instance?: Instance | null
   }>()
 
   const open = defineModel<boolean>({ default: false })
@@ -172,6 +197,24 @@
 
   const verifying = ref<string | null>(null)
   const actionError = ref<string | null>(null)
+  const restoreOpen = ref(false)
+  const restoreSource = ref<RestoreSource | null>(null)
+
+  function restore (destination: BackupRunDestination) {
+    const run = props.run
+    if (!run || !destination.snapshotKey) {
+      return
+    }
+    restoreSource.value = {
+      destinationId: destination.destinationId,
+      destinationName: destination.destinationName,
+      snapshotKey: destination.snapshotKey,
+      sourceName: run.instanceName,
+      createdAt: run.startedAt,
+      kind: run.kind,
+    }
+    restoreOpen.value = true
+  }
 
   function describeVerification (verification: BackupVerification): string {
     const date = d(new Date(verification.verifiedAt), 'long')

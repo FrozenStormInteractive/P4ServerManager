@@ -25,4 +25,6 @@ public interface IInstancesClient
     Task HealthCheckDeleted(Guid instanceId, Guid runId);
 
     Task BackupUpdated(BackupRunDto run);
+
+    Task RestoreUpdated(RestoreRunDto run);
 }

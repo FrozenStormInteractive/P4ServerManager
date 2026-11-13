@@ -18,6 +18,47 @@ public static partial class ConfigShowParser
     {
         Dictionary<string, string> forAny = new(StringComparer.Ordinal);
         Dictionary<string, string> forServer = new(StringComparer.Ordinal);
+        foreach (Configurable configurable in Read(output))
+        {
+            if (configurable.Server == "any")
+            {
+                forAny[configurable.Name] = configurable.Value;
+            }
+            else if (serverId is not null && configurable.Server == serverId)
+            {
+                forServer[configurable.Name] = configurable.Value;
+            }
+        }
+
+        foreach ((string name, string value) in forServer)
+        {
+            forAny[name] = value;
+        }
+        return forAny;
+    }
+
+    /// <summary>
+    /// The values set for <paramref name="serverId"/> itself, without the ones of every server.
+    /// </summary>
+    /// <param name="output">What <c>p4d -cshow</c> printed.</param>
+    /// <param name="serverId">The server ID.</param>
+    /// <exception cref="InvalidDataException">A line is not a configurable: the output is not what this parser knows.</exception>
+    public static IReadOnlyDictionary<string, string> ParseOwn(string output, string serverId)
+    {
+        Dictionary<string, string> own = new(StringComparer.Ordinal);
+        foreach (Configurable configurable in Read(output).Where(c => c.Server == serverId))
+        {
+            own[configurable.Name] = configurable.Value;
+        }
+        return own;
+    }
+
+    /// <summary>
+    /// Every line of the output, in order, read as it is enumerated: enumerate it once.
+    /// </summary>
+    /// <exception cref="InvalidDataException">A line is not a configurable, thrown when it is reached.</exception>
+    private static IEnumerable<Configurable> Read(string output)
+    {
         foreach (string line in output.Split('\n'))
         {
             string trimmed = line.TrimEnd('\r');
@@ -31,24 +72,14 @@ public static partial class ConfigShowParser
             {
                 throw new InvalidDataException($"p4d -cshow printed a line that is not a configurable: {trimmed}");
             }
-
-            string server = match.Groups["server"].Value;
-            if (server == "any")
-            {
-                forAny[match.Groups["name"].Value] = match.Groups["value"].Value;
-            }
-            else if (serverId is not null && server == serverId)
-            {
-                forServer[match.Groups["name"].Value] = match.Groups["value"].Value;
-            }
+            yield return new Configurable(
+                match.Groups["server"].Value,
+                match.Groups["name"].Value,
+                match.Groups["value"].Value);
         }
-
-        foreach ((string name, string value) in forServer)
-        {
-            forAny[name] = value;
-        }
-        return forAny;
     }
+
+    private sealed record Configurable(string Server, string Name, string Value);
 
     // Blanks may vary before the value, never inside it: a single blank follows the equal sign.
     [GeneratedRegex(@"^(?<server>[^\s:]+):\s+(?<name>[^\s=]+)\s+=\s(?<value>.*)$")]

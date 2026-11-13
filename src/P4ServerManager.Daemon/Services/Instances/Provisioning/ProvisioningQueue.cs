@@ -18,15 +18,31 @@ public enum ProvisioningKind
     /// An existing root, taken over as it is: its database is upgraded to the build of the instance.
     /// </summary>
     Import,
+
+    /// <summary>
+    /// A backup point: its database and its archives, with a super user of the restored server.
+    /// </summary>
+    Restore,
 }
 
 /// <param name="InstanceId">Instance to provision, saved in the Provisioning state.</param>
-/// <param name="Kind">Whether the server is created or imported.</param>
-/// <param name="SuperUser">Super user to create. Required to create a server, unused to import one.</param>
+/// <param name="Kind">Whether the server is created, imported or restored.</param>
+/// <param name="SuperUser">
+/// Super user to create, or of the restored server. Required to create or restore a server, unused to import one.
+/// </param>
+/// <param name="Restore">The restore, for a restored server.</param>
 public sealed record ProvisioningRequest(
     Guid InstanceId,
     ProvisioningKind Kind,
-    SuperUserCredentials? SuperUser = null);
+    SuperUserCredentials? SuperUser = null,
+    RestoreProvisioning? Restore = null);
+
+/// <summary>
+/// What a restore into a new instance needs beyond the instance.
+/// </summary>
+/// <param name="RunId">The restore, saved as running, which names the destination and the point.</param>
+/// <param name="RestoreLicense">Whether to restore the license file of the point.</param>
+public sealed record RestoreProvisioning(Guid RunId, bool RestoreLicense);
 
 /// <summary>
 /// Instances waiting to be provisioned by the <see cref="ProvisioningWorker"/>.

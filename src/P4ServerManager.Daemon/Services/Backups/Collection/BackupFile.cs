@@ -146,6 +146,18 @@ public sealed class BackupFileIndex
     }
 
     /// <summary>
+    /// The SHA-256 the index knows for a file of this size and last write time at <paramref name="path"/>, if any.
+    /// </summary>
+    public string? FindSha256(string path, long size, DateTime modifiedUtc)
+    {
+        return entries.TryGetValue(path, out IndexEntry? known)
+            && known.Size == size
+            && known.Modified == modifiedUtc.Ticks
+                ? known.Sha256
+                : null;
+    }
+
+    /// <summary>
     /// Files read again since the index was loaded.
     /// </summary>
     public int HashedFiles { get; private set; }

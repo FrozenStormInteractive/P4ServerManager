@@ -48,7 +48,7 @@ public sealed class PortChangeContext(
     P4ServerInstance instance,
     bool wasRunning,
     int newPort,
-    SuperUserCredentials? superUser) : InstanceOperationContext(db, instance), ISuperUserContext
+    SuperUserCredentials? superUser) : InstanceOperationContext(db, instance), IServerAddressChangeContext
 {
     public bool WasRunning { get; } = wasRunning;
 

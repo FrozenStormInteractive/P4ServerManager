@@ -78,6 +78,18 @@ public sealed class InstanceNotifier(
         }
     }
 
+    public async Task RestoreChangedAsync(RestoreRunDto run)
+    {
+        try
+        {
+            await hubContext.Clients.All.RestoreUpdated(run);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not push the restore of instance {Id}", run.InstanceId);
+        }
+    }
+
     public async Task HealthCheckDeletedAsync(Guid instanceId, Guid runId)
     {
         try

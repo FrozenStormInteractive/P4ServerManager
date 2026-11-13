@@ -27,6 +27,7 @@ async function mountWith (runs: BackupRun[], selected: string[]) {
   server.use(
     http.get(`${instanceUrl}/health-checks`, () => HttpResponse.json([])),
     http.get(`${instanceUrl}/backups`, () => HttpResponse.json(runs)),
+    http.get(`${instanceUrl}/restores`, () => HttpResponse.json([])),
     http.get(`${instanceUrl}/backup-destinations`, () => HttpResponse.json({ destinationIds: selected })),
     http.get('/api/backup-destinations', () => HttpResponse.json([nas, cloud])),
   )

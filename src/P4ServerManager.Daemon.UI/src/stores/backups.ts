@@ -2,8 +2,12 @@
 import type {
   BackupDestination,
   BackupKind,
+  BackupPoint,
   BackupRun,
   CreateBackupDestinationRequest,
+  Instance,
+  RestoreInstanceRequest,
+  RestoreRun,
   UpdateBackupDestinationRequest,
 } from '@/api/types'
 
@@ -18,7 +22,7 @@ import * as api from '@/api/backups'
  * The answer of a request can come after a push of the hub that is newer than it. A backup that ended never runs
  * again, so a snapshot that says it runs is an old one.
  */
-function isOutdated (known: BackupRun | undefined, incoming: BackupRun): boolean {
+function isOutdated (known: BackupRun | RestoreRun | undefined, incoming: BackupRun | RestoreRun): boolean {
   return !!known && known.status !== 'Running' && incoming.status === 'Running'
 }
 
@@ -35,6 +39,7 @@ export const useBackupsStore = defineStore('backups', () => {
   const runsLoaded = ref<Record<string, boolean>>({})
   const runsErrors = ref<Record<string, string | null>>({})
   const instanceDestinations = ref<Record<string, string[]>>({})
+  const restores = ref<Record<string, RestoreRun[]>>({})
   const watched = new Set<string>()
 
   function getRuns (instanceId: string): BackupRun[] {
@@ -43,6 +48,14 @@ export const useBackupsStore = defineStore('backups', () => {
 
   function getRunningRun (instanceId: string): BackupRun | null {
     return getRuns(instanceId).find(run => run.status === 'Running') ?? null
+  }
+
+  function getRestores (instanceId: string): RestoreRun[] {
+    return restores.value[instanceId] ?? []
+  }
+
+  function getRunningRestore (instanceId: string): RestoreRun | null {
+    return getRestores(instanceId).find(run => run.status === 'Running') ?? null
   }
 
   function getInstanceDestinations (instanceId: string): string[] {
@@ -88,20 +101,30 @@ export const useBackupsStore = defineStore('backups', () => {
     runs.value[run.instanceId] = [...others, run].toSorted((a, b) => b.startedAt.localeCompare(a.startedAt))
   }
 
+  function setRestore (run: RestoreRun) {
+    if (isOutdated(getRestores(run.instanceId).find(other => other.id === run.id), run)) {
+      return
+    }
+    const others = getRestores(run.instanceId).filter(other => other.id !== run.id)
+    restores.value[run.instanceId] = [...others, run].toSorted((a, b) => b.startedAt.localeCompare(a.startedAt))
+  }
+
   function removeInstance (instanceId: string) {
     watched.delete(instanceId)
     delete runs.value[instanceId]
     delete runsLoaded.value[instanceId]
     delete runsErrors.value[instanceId]
     delete instanceDestinations.value[instanceId]
+    delete restores.value[instanceId]
   }
 
   async function fetchRuns (instanceId: string) {
     watched.add(instanceId)
     try {
-      const [fetched, selected] = await Promise.all([
+      const [fetched, selected, fetchedRestores] = await Promise.all([
         api.listBackups(instanceId),
         api.getInstanceBackupDestinations(instanceId),
+        api.listRestores(instanceId),
       ])
       const known = getRuns(instanceId)
       runs.value[instanceId] = fetched.map(run => {
@@ -109,6 +132,11 @@ export const useBackupsStore = defineStore('backups', () => {
         return local && isOutdated(local, run) ? local : run
       })
       instanceDestinations.value[instanceId] = selected
+      const knownRestores = getRestores(instanceId)
+      restores.value[instanceId] = fetchedRestores.map(run => {
+        const local = knownRestores.find(other => other.id === run.id)
+        return local && isOutdated(local, run) ? local : run
+      })
       runsLoaded.value[instanceId] = true
       runsErrors.value[instanceId] = null
     } catch (error) {
@@ -140,6 +168,22 @@ export const useBackupsStore = defineStore('backups', () => {
     await api.verifyBackup(instanceId, runId, destinationId, deep)
   }
 
+  function listPoints (destinationId: string, sourceId?: string): Promise<BackupPoint[]> {
+    return api.listBackupPoints(destinationId, sourceId)
+  }
+
+  async function startRestore (instanceId: string, destinationId: string, snapshotKey: string) {
+    setRestore(await api.startRestore(instanceId, destinationId, snapshotKey))
+  }
+
+  async function cancelRestore (instanceId: string, runId: string) {
+    await api.cancelRestore(instanceId, runId)
+  }
+
+  function restoreInstance (body: RestoreInstanceRequest): Promise<Instance> {
+    return api.restoreInstance(body)
+  }
+
   return {
     destinations,
     destinationsLoaded,
@@ -148,7 +192,10 @@ export const useBackupsStore = defineStore('backups', () => {
     runsLoaded,
     runsErrors,
     instanceDestinations,
+    restores,
     getRuns,
+    getRestores,
+    getRunningRestore,
     getRunningRun,
     getInstanceDestinations,
     fetchDestinations,
@@ -157,6 +204,7 @@ export const useBackupsStore = defineStore('backups', () => {
     removeDestination,
     testDestination,
     setRun,
+    setRestore,
     removeInstance,
     fetchRuns,
     refresh,
@@ -164,5 +212,9 @@ export const useBackupsStore = defineStore('backups', () => {
     start,
     cancel,
     verify,
+    listPoints,
+    startRestore,
+    cancelRestore,
+    restoreInstance,
   }
 })

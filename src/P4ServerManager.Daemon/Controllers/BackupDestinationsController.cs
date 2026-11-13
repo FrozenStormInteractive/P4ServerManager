@@ -6,6 +6,7 @@ using P4ServerManager.Daemon.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Backups.Destinations;
+using P4ServerManager.Daemon.Services.Backups.Restore;
 
 namespace P4ServerManager.Daemon.Controllers;
 
@@ -21,7 +22,8 @@ namespace P4ServerManager.Daemon.Controllers;
 [Tags("Backups")]
 public sealed class BackupDestinationsController(
     DaemonDbContext db,
-    BackupDestinationService destinationService) : ControllerBase
+    BackupDestinationService destinationService,
+    BackupPointService pointService) : ControllerBase
 {
     /// <summary>
     /// Lists the backup destinations.
@@ -192,6 +194,43 @@ public sealed class BackupDestinationsController(
         return destination is null
             ? Problem(statusCode: StatusCodes.Status404NotFound)
             : await destinationService.TestAsync(destination, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists the backup points stored at a destination, read from the destination itself: it shows the points of
+    /// instances this daemon never knew, such as after a reinstallation, once the destination is added again with its
+    /// passphrase. Each point is restorable on its own.
+    /// </summary>
+    /// <param name="id">Identifier of the destination.</param>
+    /// <param name="sourceId">Only the points of this instance, from <see cref="BackupPointDto.SourceId"/>.</param>
+    /// <param name="cancellationToken">Aborts the request.</param>
+    /// <response code="200">The points, newest first.</response>
+    /// <response code="404">No destination has this identifier.</response>
+    /// <response code="422">The destination cannot be opened.</response>
+    [HttpGet("{id:guid}/points")]
+    [ProducesResponseType<IReadOnlyList<BackupPointDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity, "application/problem+json")]
+    public async Task<ActionResult<IReadOnlyList<BackupPointDto>>> GetPoints(
+        Guid id,
+        [FromQuery] Guid? sourceId,
+        CancellationToken cancellationToken)
+    {
+        BackupDestination? destination = await FindAsync(id, cancellationToken);
+        if (destination is null)
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound);
+        }
+
+        try
+        {
+            IReadOnlyList<BackupPoint> points = await pointService.ListAsync(destination, sourceId, cancellationToken);
+            return points.Select(p => p.ToDto()).ToList();
+        }
+        catch (BackupDestinationException exception)
+        {
+            return Problem(exception.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
     }
 
     private Task<BackupDestination?> FindAsync(Guid id, CancellationToken cancellationToken)

@@ -1,5 +1,6 @@
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Instances.Admin;
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Perforce.Parsing;
@@ -16,18 +17,23 @@ public sealed class UpdateServerAddressStep(
     IP4ServerBuildCache buildCache,
     IProcessRunner processRunner,
     DaemonPaths paths,
-    ILogger<UpdateServerAddressStep> logger) : IOperationStep<PortChangeContext>
+    ILogger<UpdateServerAddressStep> logger) : IOperationStep<IServerAddressChangeContext>
 {
     public string Key => "update-server-address";
 
     public string Title => "Update the address of the server spec";
 
     public async Task<string?> RunAsync(
-        PortChangeContext context,
+        IServerAddressChangeContext context,
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {
         P4ServerInstance instance = context.Instance;
+        if (context.OldPort == context.NewPort)
+        {
+            return "Same port: nothing to update";
+        }
+
         string? serverId = await ServerLayout.TryReadServerIdAsync(instance.RootPath, cancellationToken);
         if (serverId is null)
         {
@@ -74,4 +80,18 @@ public sealed class UpdateServerAddressStep(
             return $"Address {address} to {newAddress}";
         }, cancellationToken);
     }
+}
+
+/// <summary>
+/// Context of an operation that moves the address of the server spec to another port, with the
+/// <see cref="UpdateServerAddressStep"/>.
+/// </summary>
+public interface IServerAddressChangeContext : ISuperUserContext
+{
+    /// <summary>
+    /// The port the address names.
+    /// </summary>
+    int OldPort { get; }
+
+    int NewPort { get; }
 }

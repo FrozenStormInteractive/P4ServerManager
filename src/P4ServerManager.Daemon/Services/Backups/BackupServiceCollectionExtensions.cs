@@ -1,5 +1,7 @@
 using P4ServerManager.Daemon.Services.Backups.Collection;
 using P4ServerManager.Daemon.Services.Backups.Destinations;
+using P4ServerManager.Daemon.Services.Backups.Restore;
+using P4ServerManager.Daemon.Services.Backups.Restore.Steps;
 using P4ServerManager.Daemon.Services.Backups.Steps;
 using P4ServerManager.Daemon.Services.Backups.Verification;
 
@@ -33,6 +35,26 @@ public static class BackupServiceCollectionExtensions
 
         services.AddSingleton<VerifyBackupStep>();
         services.AddSingleton<VerifyBackupOperation>();
+
+        services.AddSingleton<BackupPointService>();
+        services.AddScoped<RestoredInstanceService>();
+        services.AddSingleton<RestoreRunNotifier>();
+        services.AddSingleton<IVolumeSpaceReader, VolumeSpaceReader>();
+        services.AddSingleton<OpenRestoreSourceStep>();
+        services.AddSingleton<CheckFreeSpaceStep>();
+        services.AddSingleton<SetAsideServerFilesStep>();
+        services.AddSingleton<RestoreMetadataStep>();
+        services.AddSingleton<ReplayCheckpointStep>();
+        services.AddSingleton<LocateRestoredFilesStep>();
+        services.AddSingleton<RestoreFilesStep>();
+        services.AddSingleton<CheckDatabaseStep>();
+        services.AddSingleton<VerifyArchivesStep>();
+        services.AddSingleton<FinishRestoreStep>();
+        services.AddSingleton<RestoreOperation>();
+        services.AddSingleton<ConfigureRestoredServerStep>();
+        services.AddSingleton<RestoreSslStep>();
+        services.AddSingleton<RelocateDepotsStep>();
+        services.AddSingleton<NewInstanceRestoreOperation>();
         return services;
     }
 }

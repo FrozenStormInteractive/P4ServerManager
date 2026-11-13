@@ -24,6 +24,8 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
 
     public DbSet<BackupRunDestination> BackupRunDestinations => Set<BackupRunDestination>();
 
+    public DbSet<RestoreRun> RestoreRuns => Set<RestoreRun>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Only what data annotations cannot express lives here: enums stored as text and the owned super user.
@@ -62,5 +64,11 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
 
         modelBuilder.Entity<BackupRunDestination>()
             .Property(d => d.Status).HasConversion<string>();
+
+        modelBuilder.Entity<RestoreRun>(run =>
+        {
+            run.Property(r => r.Target).HasConversion<string>();
+            run.Property(r => r.Status).HasConversion<string>();
+        });
     }
 }

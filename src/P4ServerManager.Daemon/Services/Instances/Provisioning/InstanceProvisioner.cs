@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Backups.Restore;
 using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Operations;
 
@@ -16,6 +17,9 @@ public sealed class InstanceProvisioner(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
     CreateInstanceOperation createOperation,
     ImportInstanceOperation importOperation,
+    NewInstanceRestoreOperation restoreOperation,
+    RestoreRunNotifier restoreRunNotifier,
+    TimeProvider timeProvider,
     OperationRunner operationRunner,
     P4ServerLauncher launcher,
     InstanceRuntimeRegistry runtimeRegistry,
@@ -84,6 +88,10 @@ public sealed class InstanceProvisioner(
         P4ServerInstance instance,
         CancellationToken cancellationToken)
     {
+        if (request.Kind == ProvisioningKind.Restore)
+        {
+            return RestoreAsync(request, db, instance, cancellationToken);
+        }
         if (request.Kind == ProvisioningKind.Import)
         {
             ImportInstanceContext context = new(db, instance, paths.GetImportCheckpointPath(instance.Id));
@@ -97,5 +105,60 @@ public sealed class InstanceProvisioner(
             createOperation,
             new CreateInstanceContext(db, instance, superUser),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the restore of a point into the new instance, and keeps how it ended with the run, whatever happens.
+    /// </summary>
+    private async Task RestoreAsync(
+        ProvisioningRequest request,
+        DaemonDbContext db,
+        P4ServerInstance instance,
+        CancellationToken cancellationToken)
+    {
+        RestoreProvisioning restore = request.Restore
+            ?? throw new InvalidOperationException("A restored server needs its restore.");
+        SuperUserCredentials superUser = request.SuperUser
+            ?? throw new InvalidOperationException("A restored server needs a super user.");
+        RestoreRun run = await db.RestoreRuns.FirstOrDefaultAsync(r => r.Id == restore.RunId, cancellationToken)
+            ?? throw new InvalidOperationException($"Restore {restore.RunId} does not exist.");
+
+        NewInstanceRestoreContext? context = null;
+        try
+        {
+            BackupDestination destination = await db.BackupDestinations
+                .FirstOrDefaultAsync(d => d.Id == run.DestinationId, cancellationToken)
+                ?? throw new InstanceOperationException($"Backup destination {run.DestinationName} was removed from the daemon.");
+            context = new NewInstanceRestoreContext(db, instance, run, destination, superUser)
+            {
+                SuperUser = superUser,
+                RestoreLicense = restore.RestoreLicense,
+            };
+            await operationRunner.RunAsync(instance.Id, restoreOperation, context, cancellationToken);
+            run.Status = context.Outcome == RestoreContext.RestoredOutcome
+                ? RestoreRunStatus.Succeeded
+                : RestoreRunStatus.SucceededWithProblems;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            run.Status = RestoreRunStatus.Interrupted;
+            run.Error = "The daemon stopped during the restore.";
+            throw;
+        }
+        catch (Exception exception)
+        {
+            run.Status = RestoreRunStatus.Failed;
+            run.Error = exception.Message;
+            throw;
+        }
+        finally
+        {
+            run.FinishedAt = timeProvider.GetUtcNow();
+            if (context is not null)
+            {
+                await context.CloseAsync();
+            }
+            await restoreRunNotifier.SaveAsync(db, run);
+        }
     }
 }

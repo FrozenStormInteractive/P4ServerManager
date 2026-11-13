@@ -1,6 +1,7 @@
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Backups.Destinations;
+using P4ServerManager.Daemon.Services.Backups.Restore;
 
 namespace P4ServerManager.Daemon.Contracts;
 
@@ -53,6 +54,49 @@ public static class BackupContractMappings
             run.Error,
             run.Warnings,
             run.Destinations.OrderBy(d => d.Id).Select(ToDto).ToList());
+    }
+
+    public static RestoreRunDto ToDto(this RestoreRun run)
+    {
+        return new RestoreRunDto(
+            run.Id,
+            run.InstanceId,
+            run.InstanceName,
+            run.Target,
+            run.DestinationId,
+            run.DestinationName,
+            run.SnapshotKey,
+            run.PointId,
+            run.PointCreatedAt,
+            run.SourceName,
+            run.Status,
+            run.StartedAt,
+            run.FinishedAt,
+            run.FileCount,
+            run.TotalBytes,
+            run.DownloadedBytes,
+            run.ReusedFiles,
+            run.VerifyProblemCount,
+            run.VerifyProblems,
+            run.Warnings,
+            run.Error);
+    }
+
+    public static BackupPointDto ToDto(this BackupPoint point)
+    {
+        return new BackupPointDto(
+            point.Snapshot.Key,
+            point.Header.Id,
+            point.Header.SourceId,
+            point.Header.SourceName,
+            point.Kind,
+            point.Header.CreatedAt,
+            point.CheckpointNumber,
+            point.JournalNumber,
+            point.P4dVersion,
+            point.Unicode,
+            point.CaseSensitive,
+            point.ServerId);
     }
 
     public static BackupRunDestinationDto ToDto(this BackupRunDestination destination)

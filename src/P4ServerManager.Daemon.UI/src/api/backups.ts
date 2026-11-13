@@ -3,8 +3,12 @@ import type {
   BackupDestination,
   BackupDestinationTestResult,
   BackupKind,
+  BackupPoint,
   BackupRun,
   CreateBackupDestinationRequest,
+  Instance,
+  RestoreInstanceRequest,
+  RestoreRun,
   UpdateBackupDestinationRequest,
 } from './types'
 
@@ -89,4 +93,38 @@ export function verifyBackup (instanceId: string, runId: string, destinationId: 
     `${instanceUrl(instanceId)}/backups/${encodeURIComponent(runId)}/verify`,
     { destinationId, deep },
   )
+}
+
+/**
+ * The backup points stored at a destination, newest first, read from the destination itself.
+ */
+export function listBackupPoints (destinationId: string, sourceId?: string): Promise<BackupPoint[]> {
+  const query = sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ''
+  return request('GET', `${destinationUrl(destinationId)}/points${query}`)
+}
+
+/**
+ * The restores of an instance, the latest first.
+ */
+export function listRestores (instanceId: string): Promise<RestoreRun[]> {
+  return request('GET', `${instanceUrl(instanceId)}/restores`)
+}
+
+/**
+ * Begins to replace the data of an instance with a backup point. The hub tells its progress.
+ */
+export function startRestore (instanceId: string, destinationId: string, snapshotKey: string): Promise<RestoreRun> {
+  return request('POST', `${instanceUrl(instanceId)}/restores`, { destinationId, snapshotKey })
+}
+
+export async function cancelRestore (instanceId: string, runId: string): Promise<void> {
+  await request('POST', `${instanceUrl(instanceId)}/restores/${encodeURIComponent(runId)}/cancel`)
+}
+
+/**
+ * Makes a new instance from a backup point. The daemon answers once the instance is created; its restore runs as its
+ * provisioning.
+ */
+export function restoreInstance (body: RestoreInstanceRequest): Promise<Instance> {
+  return request('POST', '/api/instances/restore', body)
 }

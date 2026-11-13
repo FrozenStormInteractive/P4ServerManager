@@ -127,7 +127,7 @@ public sealed class UploadBackupStep(
             return $"Failed: {state.Record.Error}";
         }
 
-        string summary = $"{uploadedObjects} objects uploaded ({FormatBytes(uploadedBytes)})";
+        string summary = $"{uploadedObjects} objects uploaded ({ByteSize.Format(uploadedBytes)})";
         return missingArchives > 0
             ? $"{summary}; {missingArchives} archives deleted meanwhile were left out"
             : summary;
@@ -192,6 +192,7 @@ public sealed class UploadBackupStep(
             [BackupLabels.P4dVersion] = $"{context.Instance.Build?.Version}/{context.Instance.Build?.BuildNumber}",
             [BackupLabels.Unicode] = context.Instance.Unicode ? "true" : "false",
             [BackupLabels.CaseSensitive] = context.Instance.CaseSensitive ? "true" : "false",
+            [BackupLabels.Port] = context.Instance.Port.ToString(CultureInfo.InvariantCulture),
         };
         if (checkpoint is not null)
         {
@@ -220,18 +221,5 @@ public sealed class UploadBackupStep(
             CreatedAt = context.Run.StartedAt,
             Labels = labels,
         };
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        string[] units = ["B", "KiB", "MiB", "GiB", "TiB"];
-        double value = bytes;
-        int unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-        return string.Create(CultureInfo.InvariantCulture, $"{value:0.#} {units[unit]}");
     }
 }

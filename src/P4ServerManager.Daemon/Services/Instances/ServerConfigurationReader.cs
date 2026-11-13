@@ -19,10 +19,28 @@ public sealed class ServerConfigurationReader(IP4ServerBuildCache buildCache, IP
     {
         // The values of the server ID win over the ones of every server.
         string? serverId = await ServerLayout.ReadServerIdAsync(instance.RootPath, cancellationToken);
+        return await ReadAsync(instance, serverId, [], cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads the configurables as they apply to <paramref name="serverId"/>, whatever the root says: for a root whose
+    /// <c>server.id</c> is not restored yet.
+    /// </summary>
+    /// <param name="instance">The instance, with its <see cref="P4ServerInstance.Build"/> loaded.</param>
+    /// <param name="serverId">The server ID whose values win, or null for the values of every server only.</param>
+    /// <param name="arguments">More arguments of p4d, such as <c>-J off</c> when the folder of the journal is missing.</param>
+    /// <param name="cancellationToken">Aborts the read.</param>
+    /// <exception cref="InvalidDataException">p4d printed a line that is not a configurable.</exception>
+    public async Task<ServerConfiguration> ReadAsync(
+        P4ServerInstance instance,
+        string? serverId,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
         ProcessResult result = await processRunner.RunCheckedAsync(
             new ProcessCommand(
                 buildCache.GetP4dPath(instance.Build!),
-                [.. P4ServerLauncher.GetRootArguments(instance), "-cshow"],
+                [.. P4ServerLauncher.GetRootArguments(instance), .. arguments, "-cshow"],
                 Timeout: ProcessRunnerExtensions.CommandTimeout),
             cancellationToken);
         return new ServerConfiguration(serverId, ConfigShowParser.Parse(result.StandardOutput, serverId));

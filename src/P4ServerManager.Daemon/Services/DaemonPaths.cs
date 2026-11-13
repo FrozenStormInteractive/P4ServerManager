@@ -149,6 +149,15 @@ public sealed class DaemonPaths
         return Path.Combine(GetInstanceDirectory(instanceId), "backup-index.jsonl");
     }
 
+    /// <summary>
+    /// The folders a restore moved aside, while it runs: a later daemon process puts them back when the restore did not
+    /// end.
+    /// </summary>
+    public string GetRestoreStatePath(Guid instanceId)
+    {
+        return Path.Combine(GetInstanceDirectory(instanceId), "restore-state.json");
+    }
+
     public string GetPidFilePath(Guid instanceId)
     {
         return Path.Combine(GetInstanceDirectory(instanceId), "p4d.pid");

@@ -30,6 +30,11 @@ public sealed class BackupRepository : IDisposable
     public const string SnapshotsPrefix = "snapshots/";
 
     /// <summary>
+    /// Suffix of the file a restore writes before it is checked and renamed.
+    /// </summary>
+    public const string RestoreSuffix = ".p4sm-restore";
+
+    /// <summary>
     /// Problems a verification keeps, so that a damaged repository does not flood its report.
     /// </summary>
     public const int MaxProblems = 500;
@@ -270,6 +275,56 @@ public sealed class BackupRepository : IDisposable
         return await OpenDecodedAsync(GetObjectKey(name), cancellationToken);
     }
 
+    /// <summary>
+    /// Writes the content of a file of a point to <paramref name="path"/>, with its last write time. The content goes to
+    /// <c>&lt;path&gt;.p4sm-restore</c> first and replaces <paramref name="path"/> only once its size and SHA-256 match the
+    /// manifest: a failed restore never leaves a wrong file at <paramref name="path"/>.
+    /// </summary>
+    /// <param name="entry">The file, from the manifest of the point.</param>
+    /// <param name="path">Where to write it. Its folder must exist.</param>
+    /// <param name="cancellationToken">Aborts the download.</param>
+    /// <exception cref="BackupObjectNotFoundException">The repository has no object for the file.</exception>
+    /// <exception cref="BackupIntegrityException">The content is not the one the manifest lists.</exception>
+    public async Task RestoreFileAsync(BackupManifestEntry entry, string path, CancellationToken cancellationToken)
+    {
+        string temporaryPath = path + RestoreSuffix;
+        try
+        {
+            await using (Stream content = await OpenObjectAsync(entry.Object, cancellationToken))
+            await using (FileStream file = new(
+                temporaryPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                BufferSize,
+                FileOptions.Asynchronous))
+            {
+                string? problem;
+                try
+                {
+                    problem = await CopyContentAsync(content, file, entry, cancellationToken);
+                }
+                catch (ZstdException exception)
+                {
+                    throw new BackupIntegrityException($"The content of {entry.Path} cannot be decompressed.", exception);
+                }
+                if (problem is not null)
+                {
+                    throw new BackupIntegrityException($"{entry.Path}: {problem}");
+                }
+                await file.FlushAsync(cancellationToken);
+            }
+
+            File.SetLastWriteTimeUtc(temporaryPath, entry.ModifiedAt.UtcDateTime);
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        catch
+        {
+            TryDelete(temporaryPath);
+            throw;
+        }
+    }
+
     public static string GetManifestKey(BackupManifestHeader header)
     {
         string timestamp = header.CreatedAt.UtcDateTime.ToString(TimestampFormat, CultureInfo.InvariantCulture);
@@ -327,14 +382,7 @@ public sealed class BackupRepository : IDisposable
     {
         await using Stream content = await OpenDecodedAsync(key, cancellationToken);
         using StreamReader reader = new(content, Encoding.UTF8);
-        string? headerLine = await reader.ReadLineAsync(cancellationToken);
-        BackupManifestHeader header = Deserialize(headerLine, ManifestJsonContext.Default.BackupManifestHeader)
-            ?? throw new BackupIntegrityException($"Manifest {key} has no header.");
-        if (header.FormatVersion != BackupManifestHeader.CurrentFormatVersion)
-        {
-            throw new BackupIntegrityException(
-                $"Manifest {key} has version {header.FormatVersion} of the format, not {BackupManifestHeader.CurrentFormatVersion}.");
-        }
+        BackupManifestHeader header = await ReadHeaderAsync(reader, key, cancellationToken);
 
         List<BackupManifestEntry> entries = [];
         while (await reader.ReadLineAsync(cancellationToken) is { } line)
@@ -348,6 +396,19 @@ public sealed class BackupRepository : IDisposable
         }
         
         return new BackupManifest(header, entries);
+    }
+
+    /// <summary>
+    /// Reads only the header of a manifest: what the point is, without its files. The rest of the manifest is not read,
+    /// so damage past the header goes unnoticed here.
+    /// </summary>
+    /// <exception cref="BackupObjectNotFoundException">No manifest has this key.</exception>
+    /// <exception cref="BackupIntegrityException">The header cannot be read.</exception>
+    public async Task<BackupManifestHeader> ReadManifestHeaderAsync(string key, CancellationToken cancellationToken)
+    {
+        await using Stream content = await OpenDecodedAsync(key, cancellationToken);
+        using StreamReader reader = new(content, Encoding.UTF8);
+        return await ReadHeaderAsync(reader, key, cancellationToken);
     }
 
     /// <summary>
@@ -481,22 +542,7 @@ public sealed class BackupRepository : IDisposable
         try
         {
             await using Stream content = await OpenObjectAsync(entry.Object, cancellationToken);
-            using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            byte[] buffer = new byte[BufferSize];
-            long size = 0;
-            int read;
-            while ((read = await content.ReadAsync(buffer, cancellationToken)) > 0)
-            {
-                hash.AppendData(buffer, 0, read);
-                size += read;
-            }
-
-            string sha256 = Convert.ToHexStringLower(hash.GetHashAndReset());
-            if (!string.Equals(sha256, entry.Sha256, StringComparison.OrdinalIgnoreCase))
-            {
-                return "The content does not match its SHA-256.";
-            }
-            return size != entry.Size ? $"The content has {size} bytes, not {entry.Size}." : null;
+            return await CopyContentAsync(content, Stream.Null, entry, cancellationToken);
         }
         catch (BackupObjectNotFoundException)
         {
@@ -506,6 +552,51 @@ public sealed class BackupRepository : IDisposable
         {
             return exception.Message;
         }
+    }
+
+    /// <summary>
+    /// Copies a content to <paramref name="destination"/> and compares it with what the manifest says of it.
+    /// </summary>
+    /// <returns>What is wrong with the content, or null when it is what the manifest says.</returns>
+    private static async Task<string?> CopyContentAsync(
+        Stream content,
+        Stream destination,
+        BackupManifestEntry entry,
+        CancellationToken cancellationToken)
+    {
+        using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        byte[] buffer = new byte[BufferSize];
+        long size = 0;
+        int read;
+        while ((read = await content.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            hash.AppendData(buffer, 0, read);
+            await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            size += read;
+        }
+
+        string sha256 = Convert.ToHexStringLower(hash.GetHashAndReset());
+        if (!string.Equals(sha256, entry.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            return "The content does not match its SHA-256.";
+        }
+        return size != entry.Size ? $"The content has {size} bytes, not {entry.Size}." : null;
+    }
+
+    private static async Task<BackupManifestHeader> ReadHeaderAsync(
+        StreamReader reader,
+        string key,
+        CancellationToken cancellationToken)
+    {
+        string? headerLine = await reader.ReadLineAsync(cancellationToken);
+        BackupManifestHeader header = Deserialize(headerLine, ManifestJsonContext.Default.BackupManifestHeader)
+            ?? throw new BackupIntegrityException($"Manifest {key} has no header.");
+        if (header.FormatVersion != BackupManifestHeader.CurrentFormatVersion)
+        {
+            throw new BackupIntegrityException(
+                $"Manifest {key} has version {header.FormatVersion} of the format, not {BackupManifestHeader.CurrentFormatVersion}.");
+        }
+        return header;
     }
 
     private async Task<Stream> OpenDecodedAsync(string key, CancellationToken cancellationToken)

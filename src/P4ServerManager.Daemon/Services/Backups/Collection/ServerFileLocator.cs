@@ -43,19 +43,56 @@ public sealed partial class ServerFileLocator(
     /// files in a folder that holds the root.</exception>
     public async Task<ServerFileLayout> ReadLayoutAsync(P4ServerInstance instance, CancellationToken cancellationToken)
     {
-        string rootPath = Path.GetFullPath(instance.RootPath);
         try
         {
-            ServerConfiguration configuration = await configurationReader.ReadAsync(instance, cancellationToken);
-            IReadOnlyList<DepotRecord> depots = DepotRecord.ReadAll(
-                await RunP4dAsync(instance, ["-jd", "-", "db.depot"], cancellationToken));
-            return Resolve(rootPath, configuration.Configurables, depots);
+            ServerDescription description = await ReadDescriptionAsync(instance, cancellationToken);
+            return Resolve(Path.GetFullPath(instance.RootPath), description.Configurables, description.Depots);
         }
         catch (InvalidDataException exception)
         {
             throw new InstanceOperationException(
                 $"The layout of the server cannot be read for sure, so it is not backed up. {exception.Message}");
         }
+    }
+
+    /// <summary>
+    /// Reads the configurables and the depots of a server, which <see cref="Resolve"/> turns into its layout.
+    /// </summary>
+    /// <param name="instance">The instance, with its <see cref="P4ServerInstance.Build"/> loaded.</param>
+    /// <param name="cancellationToken">Aborts the reads.</param>
+    /// <exception cref="InvalidDataException">p4d printed what this reader does not know.</exception>
+    public async Task<ServerDescription> ReadDescriptionAsync(
+        P4ServerInstance instance,
+        CancellationToken cancellationToken)
+    {
+        ServerConfiguration configuration = await configurationReader.ReadAsync(instance, cancellationToken);
+        IReadOnlyList<DepotRecord> depots = DepotRecord.ReadAll(
+            await RunP4dAsync(instance, ["-jd", "-", "db.depot"], cancellationToken));
+        return new ServerDescription(configuration.Configurables, depots);
+    }
+
+    /// <summary>
+    /// Reads the configurables and the depots of a restored root, before its <c>server.id</c> and the folder of its
+    /// journal exist: as they apply to <paramref name="serverId"/>, and without opening the journal.
+    /// </summary>
+    /// <param name="instance">The instance, with its <see cref="P4ServerInstance.Build"/> loaded.</param>
+    /// <param name="serverId">The server ID whose values win, or null for the values of every server only.</param>
+    /// <param name="cancellationToken">Aborts the reads.</param>
+    /// <exception cref="InvalidDataException">p4d printed what this reader does not know.</exception>
+    public async Task<ServerDescription> ReadRestoredDescriptionAsync(
+        P4ServerInstance instance,
+        string? serverId,
+        CancellationToken cancellationToken)
+    {
+        string[] noJournal = ["-J", "off"];
+        ServerConfiguration configuration = await configurationReader.ReadAsync(
+            instance,
+            serverId,
+            noJournal,
+            cancellationToken);
+        IReadOnlyList<DepotRecord> depots = DepotRecord.ReadAll(
+            await RunP4dAsync(instance, [.. noJournal, "-jd", "-", "db.depot"], cancellationToken));
+        return new ServerDescription(configuration.Configurables, depots);
     }
 
     /// <summary>
@@ -204,7 +241,7 @@ public sealed partial class ServerFileLocator(
     /// <summary>
     /// The folder of a depot map, such as <c>depot/...</c>: relative to <paramref name="depotRoot"/>, or absolute.
     /// </summary>
-    private static string ResolveMap(string depotRoot, string map)
+    public static string ResolveMap(string depotRoot, string map)
     {
         string trimmed = map.Trim();
         if (trimmed.EndsWith("...", StringComparison.Ordinal))
@@ -266,6 +303,15 @@ public sealed record ServerFileLayout(
     IReadOnlyList<ArchiveSource> ArchiveSources,
     IReadOnlyList<string> ExcludedDirectories,
     IReadOnlyList<ObjectStoreDepot> ObjectStoreDepots);
+
+/// <summary>
+/// What a server says of where it keeps its files.
+/// </summary>
+/// <param name="Configurables">Its configurables, as <c>p4d -cshow</c> applies them to it.</param>
+/// <param name="Depots">Every depot of its <c>db.depot</c>.</param>
+public sealed record ServerDescription(
+    IReadOnlyDictionary<string, string> Configurables,
+    IReadOnlyList<DepotRecord> Depots);
 
 /// <summary>
 /// A folder the backup takes whole.
