@@ -2,7 +2,6 @@ using System.Globalization;
 
 using P4ServerManager.Backup.Manifests;
 using P4ServerManager.Contracts;
-using P4ServerManager.Daemon.Services.Backups.Collection;
 using P4ServerManager.Daemon.Services.Backups.Destinations;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Operations;
@@ -11,13 +10,13 @@ namespace P4ServerManager.Daemon.Services.Backups.Steps;
 
 /// <summary>
 /// Opens the repository of each destination and reads the latest point of the instance there. An incremental backup
-/// needs that point to end right before the journal p4d writes to: otherwise the destination misses journals, and only
-/// a full backup can go there. A destination that cannot take the backup fails alone; the backup stops only when none
-/// can, before it touches the server.
+/// needs such a point, with its checkpoint, at each destination. Whether the point ends right before the journal p4d
+/// rotates is checked by <see cref="SaveBackupMetadataStep"/>, once the rotation gave the number of that journal. A
+/// destination that cannot take the backup fails alone; the backup stops only when none can, before it touches the
+/// server.
 /// </summary>
 public sealed class OpenBackupDestinationsStep(
     BackupDestinationService destinationService,
-    ServerFileLocator locator,
     BackupRunNotifier runNotifier,
     ILogger<OpenBackupDestinationsStep> logger) : IOperationStep<BackupContext>
 {
@@ -30,10 +29,6 @@ public sealed class OpenBackupDestinationsStep(
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {
-        int? journalCounter = context.Kind == BackupKind.Incremental
-            ? await locator.ReadJournalCounterAsync(context.Instance, cancellationToken)
-            : null;
-
         foreach (BackupDestinationState state in context.Destinations)
         {
             progress.Report(new OperationStepProgress(state.Destination.Name, null));
@@ -46,7 +41,7 @@ public sealed class OpenBackupDestinationsStep(
                     state.KnownObjects.Add(entry.Object);
                 }
 
-                if (journalCounter is { } counter && CheckChain(state.Base, counter) is { } problem)
+                if (context.Kind == BackupKind.Incremental && CheckBase(state.Base) is { } problem)
                 {
                     state.Fail(problem);
                 }
@@ -82,31 +77,42 @@ public sealed class OpenBackupDestinationsStep(
     }
 
     /// <summary>
-    /// Why an incremental backup cannot build on <paramref name="basePoint"/>, if it cannot.
+    /// Why an incremental backup cannot build on <paramref name="basePoint"/> whatever journal p4d rotates, if it cannot.
     /// </summary>
     /// <param name="basePoint">The latest point of the instance at the destination.</param>
-    /// <param name="journalCounter">The journal p4d writes to: the rotation gives it this number.</param>
-    public static string? CheckChain(BackupManifest? basePoint, int journalCounter)
+    public static string? CheckBase(BackupManifest? basePoint)
     {
         if (basePoint is null)
         {
             return "The destination has no backup of this instance yet. Make a full backup first.";
         }
+        return TryGetNumber(basePoint.Header.Labels, BackupLabels.CheckpointNumber, out _)
+            ? null
+            : "The latest backup at the destination does not tell its checkpoint. Make a full backup.";
+    }
 
-        Dictionary<string, string> labels = basePoint.Header.Labels;
-        if (!TryGetNumber(labels, BackupLabels.CheckpointNumber, out int checkpoint))
+    /// <summary>
+    /// Why an incremental backup cannot build on <paramref name="basePoint"/>, if it cannot.
+    /// </summary>
+    /// <param name="basePoint">The latest point of the instance at the destination.</param>
+    /// <param name="journalNumber">The number of the journal p4d rotated for this backup.</param>
+    public static string? CheckChain(BackupManifest? basePoint, int journalNumber)
+    {
+        if (CheckBase(basePoint) is { } problem)
         {
-            return "The latest backup at the destination does not tell its checkpoint. Make a full backup.";
+            return problem;
         }
 
+        Dictionary<string, string> labels = basePoint!.Header.Labels;
+        TryGetNumber(labels, BackupLabels.CheckpointNumber, out int checkpoint);
         int expected = TryGetNumber(labels, BackupLabels.JournalNumber, out int journal) ? journal + 1 : checkpoint;
-        if (journalCounter == expected)
+        if (journalNumber == expected)
         {
             return null;
         }
-        return journalCounter > expected
-            ? $"The destination misses journals {expected} to {journalCounter - 1}, rotated since its latest backup. Make a full backup."
-            : $"The server writes journal {journalCounter}, older than the latest backup at the destination. Make a full backup.";
+        return journalNumber > expected
+            ? $"The destination misses journals {expected} to {journalNumber - 1}, rotated since its latest backup. Make a full backup."
+            : $"The server rotated journal {journalNumber}, older than the latest backup at the destination. Make a full backup.";
     }
 
     private static bool TryGetNumber(Dictionary<string, string> labels, string name, out int number)

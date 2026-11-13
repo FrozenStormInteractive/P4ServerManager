@@ -18,6 +18,7 @@ public sealed class SaveBackupMetadataStep(
     IP4ServerBuildCache buildCache,
     IProcessRunner processRunner,
     ServerFileLocator locator,
+    BackupRunNotifier runNotifier,
     DaemonPaths paths) : IOperationStep<BackupContext>
 {
     /// <summary>
@@ -34,8 +35,8 @@ public sealed class SaveBackupMetadataStep(
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {
-        P4ServerInstance instance = context.Instance;
-        ServerFileLayout layout = await locator.ReadLayoutAsync(instance, cancellationToken);
+        var instance = context.Instance;
+        var layout = await locator.ReadLayoutAsync(instance, cancellationToken);
         context.Layout = layout;
         context.Index = await BackupFileIndex.LoadAsync(paths.GetBackupIndexPath(instance.Id), cancellationToken);
 
@@ -82,6 +83,7 @@ public sealed class SaveBackupMetadataStep(
             }
             context.Run.JournalNumber = journal.File.Number;
             kept = [journal];
+            await CheckChainsAsync(context, journal.File.Number);
         }
 
         foreach ((string path, JournalFile file) in kept)
@@ -104,6 +106,30 @@ public sealed class SaveBackupMetadataStep(
         return full
             ? $"Checkpoint {context.Run.CheckpointNumber}"
             : $"Journal {context.Run.JournalNumber}";
+    }
+
+    /// <summary>
+    /// Fails the destinations whose latest point does not end right before <paramref name="journalNumber"/>: they miss
+    /// journals, and only a full backup can go there. p4d tells the number of the journal only by rotating it, so the
+    /// check comes after the rotation. A journal rotated for nothing stays with the others, harmless.
+    /// </summary>
+    private async Task CheckChainsAsync(BackupContext context, int journalNumber)
+    {
+        foreach (BackupDestinationState state in context.Destinations.Where(d => !d.Failed))
+        {
+            if (OpenBackupDestinationsStep.CheckChain(state.Base, journalNumber) is { } problem)
+            {
+                state.Fail(problem);
+            }
+        }
+
+        await runNotifier.SaveAsync(context.Db, context.Run);
+        if (context.Destinations.All(d => d.Failed))
+        {
+            throw new InstanceOperationException(
+                "No destination can take the backup. "
+                + string.Join(" ", context.Destinations.Select(d => $"{d.Destination.Name}: {d.Record.Error}")));
+        }
     }
 
     private static IEnumerable<(string Path, JournalFile File)> ListJournalFiles(ServerFileLayout layout)

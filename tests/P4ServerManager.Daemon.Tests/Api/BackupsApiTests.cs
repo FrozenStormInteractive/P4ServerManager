@@ -43,6 +43,12 @@ public sealed class BackupsApiTests : IAsyncLifetime
     private WebApplicationFactory<Program> _factory = null!;
     private HttpClient _client = null!;
     private int _journalCounter;
+    private string _depotDump = "Dumping to -...\n"
+        + "@nx@ 4 1794529632 @62@ 2 0 0 0 0 @db.depot@ @@ @@ @@ @@ \n"
+        + "@pv@ 2 @db.depot@ @depot@ 0 @@ @depot/...@ @@ \n"
+        + "@pv@ 2 @db.depot@ @spec@ 2 @.p4s@ @spec/...@ @@ \n"
+        + "@pv@ 2 @db.depot@ @remote@ 1 @@ @//...@ @@ \n"
+        + "@ex@ 63264 1794529632\n";
 
     private string DataDirectory => Path.Combine(_directory, "data");
 
@@ -218,9 +224,9 @@ public sealed class BackupsApiTests : IAsyncLifetime
         manifest.Header.Labels["journal"].ShouldBe("1");
         manifest.Entries.Select(e => (e.Role, e.Path)).OrderBy(e => e.Path).ShouldBe(
         [
-            ("archive", "depots/depot/art.png,d/1.1.gz"),
-            ("archive", "depots/depot/new.txt,v"),
-            ("archive", "depots/depot/readme.txt,v"),
+            ("archive", "archives/depot/art.png,d/1.1.gz"),
+            ("archive", "archives/depot/new.txt,v"),
+            ("archive", "archives/depot/readme.txt,v"),
             ("checkpoint", "journals/main.ckp.1.gz"),
             ("journal", "journals/main.jnl.1.gz"),
             ("root-file", "root/server.id"),
@@ -259,8 +265,43 @@ public sealed class BackupsApiTests : IAsyncLifetime
 
         incremental.Status.ShouldBe(BackupRunStatus.Failed);
         incremental.Destinations[0].Error!.ShouldContain("misses journals 1 to 1");
-        // The server was not touched: no journal was rotated.
-        Directory.EnumerateFiles(JournalsPath, "*.jnl.*").ShouldNotContain(f => f.EndsWith("main.jnl.2.gz"));
+        incremental.Destinations[0].UploadedObjects.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Backup_TakesTheDepotRootWhole_EvenTheFoldersOfNoKnownDepot()
+    {
+        Guid instanceId = await CreateInstanceAsync();
+        string path = Path.Combine(_directory, "backups-a");
+        BackupDestinationDto a = await CreateDestinationAsync("a", path);
+        await SetDestinationsAsync(instanceId, a.Id);
+        string other = Path.Combine(ServerDirectory, "archives", "other");
+        Directory.CreateDirectory(other);
+        File.WriteAllText(Path.Combine(other, "file.txt,v"), "head 1.1;\n");
+
+        BackupRunDto full = await BackupAndWaitAsync(instanceId, BackupKind.Full);
+
+        full.Status.ShouldBe(BackupRunStatus.Succeeded);
+        BackupManifest manifest = await ReadManifestAsync(path, full.Destinations[0].SnapshotKey!);
+        manifest.Entries.ShouldContain(e => e.Path == "archives/other/file.txt,v");
+    }
+
+    [Theory]
+    [InlineData("@pv@ 2 @db.depot@ @abs@ 0 @@ @/elsewhere/...@ @@ \n", "outside server.depot.root")]
+    [InlineData("@pv@ 3 @db.depot@ @depot@ 0 @@ @depot/...@ @@ @new@ \n", "only version 2 is known")]
+    [InlineData("@pv@ 2 @db.depot@ @depot@ 0 @@ @depot/...@ \n", "columns instead of 5")]
+    public async Task Backup_FailsBeforeTouchingTheServer_WhenTheDepotsAreNotKnownForSure(string depots, string error)
+    {
+        Guid instanceId = await CreateInstanceAsync();
+        BackupDestinationDto a = await CreateDestinationAsync("a", Path.Combine(_directory, "backups-a"));
+        await SetDestinationsAsync(instanceId, a.Id);
+        _depotDump = "Dumping to -...\n" + depots;
+
+        BackupRunDto full = await BackupAndWaitAsync(instanceId, BackupKind.Full);
+
+        full.Status.ShouldBe(BackupRunStatus.Failed);
+        full.Error!.ShouldContain(error);
+        Directory.Exists(JournalsPath).ShouldBeFalse();
     }
 
     [Fact]
@@ -289,23 +330,16 @@ public sealed class BackupsApiTests : IAsyncLifetime
     private ProcessResult RunFakeP4d(ProcessCommand command)
     {
         IReadOnlyList<string> arguments = command.Arguments;
-        if (arguments.Contains("db.config"))
+        if (arguments.Contains("-cshow"))
         {
             return Output(
-                "@pv@ 3 @db.config@ @any@ @journalPrefix@ @../journals/main@ \n"
-                + "@pv@ 3 @db.config@ @any@ @server.depot.root@ @../archives@ \n"
-                + "@pv@ 3 @db.config@ @other@ @journalPrefix@ @elsewhere@ \n");
+                "any: journalPrefix = ../journals/main\n"
+                + "any: server.depot.root = ../archives\n"
+                + "other: journalPrefix = elsewhere\n");
         }
         if (arguments.Contains("db.depot"))
         {
-            return Output(
-                "@pv@ 9 @db.depot@ @depot@ 0 @@ @depot/...@ @@ \n"
-                + "@pv@ 9 @db.depot@ @spec@ 2 @.p4s@ @spec/...@ @@ \n"
-                + "@pv@ 9 @db.depot@ @remote@ 1 @@ @//...@ @@ \n");
-        }
-        if (arguments.Contains("db.counters"))
-        {
-            return Output($"@pv@ 1 @db.counters@ @journal@ @{_journalCounter}@ \n");
+            return Output(_depotDump);
         }
         if (arguments.Contains("-jc"))
         {

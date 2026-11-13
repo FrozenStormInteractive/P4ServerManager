@@ -5,9 +5,9 @@ using P4ServerManager.Daemon.Services.Operations;
 namespace P4ServerManager.Daemon.Services.Backups.Steps;
 
 /// <summary>
-/// Lists the archives of every depot and the files of the root the checkpoint does not hold, once the database is
-/// frozen: an archive written meanwhile is harmless, it only goes unused. Only the files whose size or date changed
-/// since the last backup are read, to hash them.
+/// Lists the archives under <c>server.depot.root</c> and the files of the root the checkpoint does not hold, once the
+/// database is frozen: an archive written meanwhile is harmless, it only goes unused. Only the files whose size or date
+/// changed since the last backup are read, to hash them.
 /// </summary>
 public sealed class ScanServerFilesStep : IOperationStep<BackupContext>
 {
@@ -34,29 +34,18 @@ public sealed class ScanServerFilesStep : IOperationStep<BackupContext>
             await AddAsync(BackupFileRoles.RootFile, $"root/{relative}", path);
         }
 
-        foreach (DepotLocation depot in layout.Depots)
+        foreach (string directory in layout.ArchiveDirectories)
         {
-            if (!Directory.Exists(depot.Directory))
+            // A depot nothing was submitted to yet has no folder.
+            if (!Directory.Exists(directory))
             {
-                // A depot nothing was submitted to yet has no folder.
                 continue;
             }
-            if (Contains(depot.Directory, layout.RootPath))
-            {
-                throw new InstanceOperationException(
-                    $"Depot {depot.Name} keeps its files in {depot.Directory}, which holds the root of the server: such a layout cannot be backed up.");
-            }
 
-            EnumerationOptions enumeration = new()
+            foreach (string path in EnumerateArchives(directory, layout.ExcludedDirectories))
             {
-                RecurseSubdirectories = true,
-                AttributesToSkip = 0,
-                IgnoreInaccessible = false,
-            };
-            foreach (string path in Directory.EnumerateFiles(depot.Directory, "*", enumeration))
-            {
-                string relative = Path.GetRelativePath(depot.Directory, path).Replace(Path.DirectorySeparatorChar, '/');
-                await AddAsync(BackupFileRoles.Archive, $"depots/{depot.Name}/{relative}", path);
+                string relative = Path.GetRelativePath(layout.DepotRoot, path).Replace(Path.DirectorySeparatorChar, '/');
+                await AddAsync(BackupFileRoles.Archive, $"archives/{relative}", path);
             }
         }
 
@@ -68,7 +57,7 @@ public sealed class ScanServerFilesStep : IOperationStep<BackupContext>
         async Task AddAsync(string role, string manifestPath, string fullPath)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // Two depots can share a folder: a file is backed up once.
+            // Depots can share a folder: a file is backed up once.
             if (!seen.Add(fullPath))
             {
                 return;
@@ -89,17 +78,30 @@ public sealed class ScanServerFilesStep : IOperationStep<BackupContext>
     }
 
     /// <summary>
-    /// Whether <paramref name="path"/> is <paramref name="directory"/> or inside it.
+    /// Every file under <paramref name="directory"/>, except the ones of <paramref name="excluded"/>.
     /// </summary>
-    private static bool Contains(string directory, string path)
+    private static IEnumerable<string> EnumerateArchives(string directory, IReadOnlyList<string> excluded)
     {
-        StringComparison comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        string parent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
-        string child = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-        return child.Equals(parent, comparison)
-            || child.StartsWith(parent + Path.DirectorySeparatorChar, comparison);
+        EnumerationOptions enumeration = new()
+        {
+            AttributesToSkip = 0,
+            IgnoreInaccessible = false,
+        };
+        Stack<string> pending = new([directory]);
+        while (pending.TryPop(out string? current))
+        {
+            foreach (string path in Directory.EnumerateFiles(current, "*", enumeration))
+            {
+                yield return path;
+            }
+            foreach (string child in Directory.EnumerateDirectories(current, "*", enumeration))
+            {
+                if (!excluded.Any(e => ServerFileLocator.Contains(e, child)))
+                {
+                    pending.Push(child);
+                }
+            }
+        }
     }
 
     /// <summary>
