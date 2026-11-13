@@ -997,7 +997,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
     {
         Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
         await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
-        StubConfigDump(UnicodeConfigDump);
+        StubConfigShow(UnicodeConfigShow);
 
         HttpResponseMessage response = await _client.PostAsync(
             $"/api/instances/{id}/convert-to-unicode",
@@ -1036,7 +1036,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
         commands[0].Arguments.ShouldContain("-z");
         commands[0].Arguments.ShouldContain("-jd");
         commands[1].Arguments.ShouldContain("-xi");
-        commands[2].Arguments.ShouldContain("db.config");
+        commands[2].Arguments.ShouldContain("-cshow");
     }
 
     [Fact]
@@ -1070,7 +1070,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
         Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
         await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
         // p4d exits with 0 but the unicode configurable is not set.
-        StubConfigDump("@pv@ 1 @db.config@ @any@ @monitor@ @1@");
+        StubConfigShow("any: monitor = 1\n");
 
         await _client.PostAsync(
             $"/api/instances/{id}/convert-to-unicode",
@@ -1108,7 +1108,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
     {
         Guid id = await CreateReadyInstanceAsync("main", InstanceRuntimeStatus.Stopped);
         await PinToBuildAsync(id, "r25.1", "2025.1", "2850123");
-        StubConfigDump(UnicodeConfigDump);
+        StubConfigShow(UnicodeConfigShow);
         await _client.PostAsync(
             $"/api/instances/{id}/convert-to-unicode",
             null,
@@ -1528,14 +1528,14 @@ public sealed class InstancesApiTests : IAsyncLifetime
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
-    private const string UnicodeConfigDump = "@pv@ 1 @db.config@ @any@ @unicode@ @1@";
+    private const string UnicodeConfigShow = "any: unicode = 1\n";
 
-    private void StubConfigDump(string dump)
+    private void StubConfigShow(string output)
     {
         _processRunner.RunAsync(
-                Arg.Is<ProcessCommand>(c => c.Arguments.Contains("db.config")),
+                Arg.Is<ProcessCommand>(c => c.Arguments.Contains("-cshow")),
                 Arg.Any<CancellationToken>())
-            .Returns(new ProcessResult(0, dump, string.Empty));
+            .Returns(new ProcessResult(0, output, string.Empty));
     }
 
     /// <summary>

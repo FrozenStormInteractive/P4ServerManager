@@ -38,6 +38,7 @@ public static class InstanceServiceCollectionExtensions
         services.AddSingleton<InstanceRuntimeRegistry>();
         services.AddSingleton<InstanceNotifier>();
         services.AddSingleton<P4ServerLauncher>();
+        services.AddSingleton<ServerConfigurationReader>();
         services.AddSingleton<InstanceSupervisor>();
         services.AddHostedService(provider => provider.GetRequiredService<InstanceSupervisor>());
         services.AddSingleton<InstanceBatchRunner>();

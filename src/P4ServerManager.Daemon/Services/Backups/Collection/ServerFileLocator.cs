@@ -15,7 +15,10 @@ namespace P4ServerManager.Daemon.Services.Backups.Collection;
 /// configurables come from <c>p4d -cshow</c>, the depots from a dump of <c>db.depot</c>, read strictly. The backup takes
 /// <c>server.depot.root</c> whole, so it misses no folder under it, and adds the folder of each depot kept elsewhere.
 /// </summary>
-public sealed partial class ServerFileLocator(IP4ServerBuildCache buildCache, IProcessRunner processRunner)
+public sealed partial class ServerFileLocator(
+    ServerConfigurationReader configurationReader,
+    IP4ServerBuildCache buildCache,
+    IProcessRunner processRunner)
 {
     /// <summary>
     /// Start of the paths, in a manifest, of the archives under <c>server.depot.root</c>.
@@ -41,15 +44,12 @@ public sealed partial class ServerFileLocator(IP4ServerBuildCache buildCache, IP
     public async Task<ServerFileLayout> ReadLayoutAsync(P4ServerInstance instance, CancellationToken cancellationToken)
     {
         string rootPath = Path.GetFullPath(instance.RootPath);
-        string? serverId = await ServerLayout.TryReadServerIdAsync(rootPath, cancellationToken);
         try
         {
-            IReadOnlyDictionary<string, string> configurables = ConfigShowParser.Parse(
-                await RunP4dAsync(instance, ["-cshow"], cancellationToken),
-                serverId);
+            ServerConfiguration configuration = await configurationReader.ReadAsync(instance, cancellationToken);
             IReadOnlyList<DepotRecord> depots = DepotRecord.ReadAll(
                 await RunP4dAsync(instance, ["-jd", "-", "db.depot"], cancellationToken));
-            return Resolve(rootPath, configurables, depots);
+            return Resolve(rootPath, configuration.Configurables, depots);
         }
         catch (InvalidDataException exception)
         {

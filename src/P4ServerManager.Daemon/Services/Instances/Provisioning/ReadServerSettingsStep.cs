@@ -1,9 +1,6 @@
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
-using P4ServerManager.Daemon.Services.Perforce;
-using P4ServerManager.Daemon.Services.Perforce.Parsing;
-using P4ServerManager.Daemon.Services.Processes;
 
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
@@ -12,8 +9,7 @@ namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 /// case handling is not recorded in the database: it comes from the import request.
 /// </summary>
 public sealed class ReadServerSettingsStep(
-    IP4ServerBuildCache buildCache,
-    IProcessRunner processRunner,
+    ServerConfigurationReader configurationReader,
     InstanceNotifier notifier) : IOperationStep<IInstanceOperationContext>
 {
     public string Key => "read-settings";
@@ -26,18 +22,14 @@ public sealed class ReadServerSettingsStep(
         CancellationToken cancellationToken)
     {
         P4ServerInstance instance = context.Instance;
-        ProcessResult dump = await processRunner.RunCheckedAsync(
-            new ProcessCommand(
-                buildCache.GetP4dPath(instance.Build!),
-                [.. P4ServerLauncher.GetRootArguments(instance), "-jd", "-", "db.config"],
-                Timeout: ProcessRunnerExtensions.CommandTimeout),
-            cancellationToken);
+        ServerConfiguration configuration = await configurationReader.ReadAsync(instance, cancellationToken);
 
-        instance.Unicode = ConfigDumpParser.IsUnicode(dump.StandardOutput);
-        string? serverId = await ServerLayout.ReadServerIdAsync(instance.RootPath, cancellationToken);
+        instance.Unicode = configuration.IsUnicode;
         await context.Db.SaveChangesAsync(cancellationToken);
         await notifier.InstanceChangedAsync(instance);
         string mode = instance.Unicode ? "Unicode mode" : "Not in Unicode mode";
-        return serverId is null ? $"{mode}, no server ID" : $"{mode}, server ID {serverId}";
+        return configuration.ServerId is null
+            ? $"{mode}, no server ID"
+            : $"{mode}, server ID {configuration.ServerId}";
     }
 }

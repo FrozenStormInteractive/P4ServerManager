@@ -1,9 +1,7 @@
 using P4ServerManager.Daemon.Database.Entities;
-using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
-using P4ServerManager.Daemon.Services.Perforce.Parsing;
 using P4ServerManager.Daemon.Services.Processes;
 
 namespace P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
@@ -16,6 +14,7 @@ namespace P4ServerManager.Daemon.Services.Instances.UnicodeConversion;
 public sealed class SwitchToUnicodeStep(
     IP4ServerBuildCache buildCache,
     IProcessRunner processRunner,
+    ServerConfigurationReader configurationReader,
     InstanceNotifier notifier) : IOperationStep<UnicodeConversionContext>
 {
     public string Key => "switch-to-unicode";
@@ -40,13 +39,8 @@ public sealed class SwitchToUnicodeStep(
             throw new InstanceOperationException($"'p4d -xi' failed: {DescribeFailure(result)}");
         }
 
-        ProcessResult dump = await processRunner.RunCheckedAsync(
-            new ProcessCommand(
-                p4dPath,
-                [.. root, "-jd", "-", "db.config"],
-                Timeout: ProcessRunnerExtensions.CommandTimeout),
-            CancellationToken.None);
-        if (!ConfigDumpParser.IsUnicode(dump.StandardOutput))
+        ServerConfiguration configuration = await configurationReader.ReadAsync(instance, CancellationToken.None);
+        if (!configuration.IsUnicode)
         {
             throw new InstanceOperationException("p4d did not switch the server to Unicode mode.");
         }

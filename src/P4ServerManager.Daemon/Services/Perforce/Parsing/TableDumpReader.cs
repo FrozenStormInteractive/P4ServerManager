@@ -85,11 +85,6 @@ public static class TableDumpReader
 public static class P4Tables
 {
     /// <summary>
-    /// <c>db.config</c>, version 1: the configurables of each server, <c>any</c> for all of them.
-    /// </summary>
-    public static readonly TableSchema Config = new("db.config", 1, ["serverName", "name", "value"]);
-
-    /// <summary>
     /// <c>db.depot</c>, version 2, from 2017.2 to 2026.1 at least. <c>type</c> is a DepotType: 0 local, 1 remote,
     /// 2 spec, 3 stream, 4 archive, 5 unload, 6 tangent, 7 graph, 8 extension, 9 trait.
     /// </summary>
