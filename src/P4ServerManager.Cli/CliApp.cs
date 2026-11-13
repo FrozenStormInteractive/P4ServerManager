@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.CommandLine.Help;
 
+using P4ServerManager.Cli.Commands.Backups;
 using P4ServerManager.Cli.Commands.Builds;
 using P4ServerManager.Cli.Commands.Instances;
 
@@ -29,6 +30,7 @@ internal static class CliApp
         };
         root.Subcommands.Add(InstanceCommand.Create(services));
         root.Subcommands.Add(BuildCommand.Create(services));
+        root.Subcommands.Add(BackupDestinationCommand.Create(services));
         return root;
     }
 }

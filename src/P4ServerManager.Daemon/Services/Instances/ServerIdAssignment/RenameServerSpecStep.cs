@@ -1,6 +1,7 @@
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
+using P4ServerManager.Daemon.Services.Instances.Steps;
 using P4ServerManager.Daemon.Services.Operations;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
@@ -17,14 +18,14 @@ public sealed class RenameServerSpecStep(
     IP4ServerBuildCache buildCache,
     IProcessRunner processRunner,
     DaemonPaths paths,
-    ILogger<RenameServerSpecStep> logger) : IOperationStep<ServerIdAssignmentContext>
+    ILogger<RenameServerSpecStep> logger) : IOperationStep<IServerSpecRenameContext>
 {
     public string Key => "rename-server-spec";
 
     public string Title => "Rename the server spec";
 
     public async Task<string?> RunAsync(
-        ServerIdAssignmentContext context,
+        IServerSpecRenameContext context,
         IProgress<OperationStepProgress> progress,
         CancellationToken cancellationToken)
     {
@@ -115,3 +116,17 @@ public sealed class RenameServerSpecStep(
         }
     }
 }
+
+/// <summary>
+/// Context of an operation whose server spec follows a new server ID, with the <see cref="RenameServerSpecStep"/>.
+/// </summary>
+public interface IServerSpecRenameContext : ISuperUserContext
+{
+    /// <summary>
+    /// Server ID before the change, or null when the server had none.
+    /// </summary>
+    string? OldServerId { get; }
+
+    string NewServerId { get; }
+}
+

@@ -1,5 +1,5 @@
 // Types
-import type { Build, BuildArchiveStatus, HealthCheckRun, Instance, OperationSnapshot } from '@/api/types'
+import type { BackupDestination, BackupRun, Build, BuildArchiveStatus, HealthCheckRun, Instance, OperationSnapshot } from '@/api/types'
 
 export function createInstance (overrides: Partial<Instance> = {}): Instance {
   return {
@@ -93,6 +93,58 @@ export function createHealthCheckRun (instanceId: string, overrides: Partial<Hea
     progress: null,
     findings: [],
     reportHidden: false,
+    ...overrides,
+  }
+}
+
+export function createBackupDestination (overrides: Partial<BackupDestination> = {}): BackupDestination {
+  return {
+    id: '3c2b1a00-0000-4000-8000-000000000001',
+    name: 'nas',
+    kind: 'Local',
+    location: '/volume1/backups',
+    local: { path: '/volume1/backups' },
+    s3: null,
+    gcs: null,
+    azure: null,
+    ftp: null,
+    hasCredentials: false,
+    repositoryId: '3c2b1a00-0000-4000-8000-0000000000ff',
+    instanceCount: 1,
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+export function createBackupRun (instanceId: string, overrides: Partial<BackupRun> = {}): BackupRun {
+  return {
+    id: '9a8b7c6d-0000-4000-8000-000000000001',
+    instanceId,
+    instanceName: 'main',
+    kind: 'Full',
+    trigger: 'Manual',
+    status: 'Succeeded',
+    startedAt: '2026-11-10T08:00:00.000Z',
+    finishedAt: '2026-11-10T08:05:00.000Z',
+    checkpointNumber: 12,
+    journalNumber: null,
+    fileCount: 4,
+    totalBytes: 4096,
+    error: null,
+    warnings: [],
+    destinations: [
+      {
+        destinationId: '3c2b1a00-0000-4000-8000-000000000001',
+        destinationName: 'nas',
+        status: 'Succeeded',
+        uploadedObjects: 4,
+        uploadedBytes: 2048,
+        snapshotKey: 'snapshots/x/20261110T080000000Z-y',
+        error: null,
+        lastVerification: null,
+      },
+    ],
     ...overrides,
   }
 }

@@ -38,6 +38,7 @@ public static class InstanceServiceCollectionExtensions
         services.AddSingleton<InstanceRuntimeRegistry>();
         services.AddSingleton<InstanceNotifier>();
         services.AddSingleton<P4ServerLauncher>();
+        services.AddSingleton<ServerConfigurationReader>();
         services.AddSingleton<InstanceSupervisor>();
         services.AddHostedService(provider => provider.GetRequiredService<InstanceSupervisor>());
         services.AddSingleton<InstanceBatchRunner>();
@@ -52,6 +53,7 @@ public static class InstanceServiceCollectionExtensions
         services.AddSingleton<ResolveBuildStep>();
         services.AddSingleton<StopServerStep>();
         services.AddSingleton<StartServerStep>();
+        services.AddSingleton<StartServerInMaintenanceModeStep>();
         services.AddSingleton<SaveCheckpointStep>();
         services.AddSingleton<UpgradeDatabaseStep>();
     }
@@ -74,6 +76,7 @@ public static class InstanceServiceCollectionExtensions
         services.AddSingleton<CreateInstanceOperation>();
         services.AddSingleton<ImportInstanceOperation>();
         services.AddSingleton<ProvisioningQueue>();
+        services.AddScoped<InstanceCreationService>();
         services.AddSingleton<InstanceProvisioner>();
         services.AddSingleton<LegacyProfileStore>();
         services.AddHostedService<ProvisioningWorker>();

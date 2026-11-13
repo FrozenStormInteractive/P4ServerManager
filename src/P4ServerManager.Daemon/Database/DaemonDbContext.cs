@@ -16,6 +16,16 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
 
     public DbSet<HealthCheckFinding> HealthCheckFindings => Set<HealthCheckFinding>();
 
+    public DbSet<BackupDestination> BackupDestinations => Set<BackupDestination>();
+
+    public DbSet<InstanceBackupDestination> InstanceBackupDestinations => Set<InstanceBackupDestination>();
+
+    public DbSet<BackupRun> BackupRuns => Set<BackupRun>();
+
+    public DbSet<BackupRunDestination> BackupRunDestinations => Set<BackupRunDestination>();
+
+    public DbSet<RestoreRun> RestoreRuns => Set<RestoreRun>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Only what data annotations cannot express lives here: enums stored as text and the owned super user.
@@ -41,5 +51,24 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
 
         modelBuilder.Entity<HealthCheckFinding>()
             .Property(f => f.Check).HasConversion<string>();
+
+        modelBuilder.Entity<BackupDestination>()
+            .Property(d => d.Kind).HasConversion<string>();
+
+        modelBuilder.Entity<BackupRun>(run =>
+        {
+            run.Property(r => r.Kind).HasConversion<string>();
+            run.Property(r => r.Trigger).HasConversion<string>();
+            run.Property(r => r.Status).HasConversion<string>();
+        });
+
+        modelBuilder.Entity<BackupRunDestination>()
+            .Property(d => d.Status).HasConversion<string>();
+
+        modelBuilder.Entity<RestoreRun>(run =>
+        {
+            run.Property(r => r.Target).HasConversion<string>();
+            run.Property(r => r.Status).HasConversion<string>();
+        });
     }
 }

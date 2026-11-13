@@ -51,6 +51,22 @@ public enum InstanceRuntimeStatus
     /// spec when a super user is stored, then stopped again if it did not run.
     /// </summary>
     ChangingPort,
+
+    /// <summary>
+    /// Backed up while it keeps running: a checkpoint or a rotation of its journal, then its files uploaded to its
+    /// backup destinations.
+    /// </summary>
+    BackingUp,
+
+    /// <summary>
+    /// A backup point of it is being checked at a destination. p4d is not touched.
+    /// </summary>
+    VerifyingBackup,
+
+    /// <summary>
+    /// A backup point replaces its data: p4d is stopped while the files are restored, then started to verify them.
+    /// </summary>
+    Restoring,
 }
 
 public static class InstanceRuntimeStatusExtensions
@@ -69,6 +85,9 @@ public static class InstanceRuntimeStatusExtensions
             or InstanceRuntimeStatus.ConvertingToUnicode
             or InstanceRuntimeStatus.CheckingHealth
             or InstanceRuntimeStatus.ChangingServerId
-            or InstanceRuntimeStatus.ChangingPort;
+            or InstanceRuntimeStatus.ChangingPort
+            or InstanceRuntimeStatus.BackingUp
+            or InstanceRuntimeStatus.VerifyingBackup
+            or InstanceRuntimeStatus.Restoring;
     }
 }

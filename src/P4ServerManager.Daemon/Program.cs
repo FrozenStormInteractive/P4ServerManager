@@ -15,6 +15,7 @@ using P4ServerManager.Daemon.Hosting;
 using P4ServerManager.Daemon.Hubs;
 using P4ServerManager.Daemon.Options;
 using P4ServerManager.Daemon.Services;
+using P4ServerManager.Daemon.Services.Backups;
 using P4ServerManager.Daemon.Services.Builds;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Operations;
@@ -58,6 +59,7 @@ builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
 builder.Services.AddSingleton<OperationTracker>();
 builder.Services.AddSingleton<OperationRunner>();
 builder.Services.AddInstanceServices();
+builder.Services.AddBackupServices();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 // Encrypts the stored passwords. The keys live in the data directory, readable by the daemon only.

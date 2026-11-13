@@ -14,7 +14,7 @@ namespace P4ServerManager.Cli.Api;
 /// </summary>
 /// <param name="httpClient">Sends the requests to the daemon. Disposed with the client.</param>
 /// <param name="socketPath">Socket the requests go through, named in the errors.</param>
-internal sealed class DaemonClient(HttpClient httpClient, string socketPath) : IDisposable
+internal sealed partial class DaemonClient(HttpClient httpClient, string socketPath) : IDisposable
 {
     private static readonly CliJsonContext Json = CliJsonContext.Default;
 

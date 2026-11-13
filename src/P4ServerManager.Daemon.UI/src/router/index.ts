@@ -40,6 +40,12 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/InstanceHealthPage.vue'),
         props: true,
       },
+      {
+        path: 'backups',
+        name: 'instance-backups',
+        component: () => import('@/pages/InstanceBackupsPage.vue'),
+        props: true,
+      },
     ],
   },
   {
@@ -53,6 +59,11 @@ export const routes: RouteRecordRaw[] = [
         path: 'builds',
         name: 'settings-builds',
         component: () => import('@/pages/settings/SettingsBuildsPage.vue'),
+      },
+      {
+        path: 'backups',
+        name: 'settings-backups',
+        component: () => import('@/pages/settings/SettingsBackupsPage.vue'),
       },
     ],
   },

@@ -5,9 +5,7 @@ using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
-using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances;
-using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.PortChange;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
 using P4ServerManager.Daemon.Services.Instances.ServerIdAssignment;
@@ -28,8 +26,7 @@ public sealed class InstancesController(
     DaemonDbContext db,
     InstanceRuntimeRegistry runtimeRegistry,
     OperationTracker operationTracker,
-    InstanceNotifier notifier,
-    TimeProvider timeProvider) : ControllerBase
+    InstanceNotifier notifier) : ControllerBase
 {
     /// <summary>
     /// Lists the instances.
@@ -80,76 +77,33 @@ public sealed class InstancesController(
     /// the <c>OperationProgress</c> event of the <c>/hubs/instances</c> hub.
     /// </summary>
     /// <param name="request">Settings of the instance, checked by <see cref="CreateInstanceRequestValidator"/>.</param>
-    /// <param name="queue">Queue of the provisionings.</param>
-    /// <param name="paths">Paths of the data directory.</param>
-    /// <param name="passwordProtector">Encrypts the password of the super user, which the daemon stores.</param>
+    /// <param name="creationService">Adds the instance and queues its provisioning.</param>
     /// <param name="cancellationToken">Aborts the request.</param>
     /// <response code="202">The instance is created and its provisioning has started.</response>
     /// <response code="400">The settings are not valid. The errors are keyed by field.</response>
+    /// <response code="409">Another instance already uses this name or port.</response>
     /// <response code="502">The list of p4d releases could not be read from the Perforce FTP.</response>
     [HttpPost]
     [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway, "application/problem+json")]
     public async Task<ActionResult<InstanceDto>> CreateInstance(
         CreateInstanceRequest request,
-        [FromServices] ProvisioningQueue queue,
-        [FromServices] DaemonPaths paths,
-        [FromServices] SuperUserPasswordProtector passwordProtector,
+        [FromServices] InstanceCreationService creationService,
         CancellationToken cancellationToken)
     {
-        Guid id = Guid.NewGuid();
-        DateTimeOffset now = timeProvider.GetUtcNow();
-        P4ServerInstance instance = new()
-        {
-            Id = id,
-            Name = request.Name,
-            Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
-            Port = request.Port,
-            Ssl = request.Ssl,
-            RootPath = string.IsNullOrWhiteSpace(request.ServerDirectory)
-                ? paths.GetDefaultRootPath(id)
-                : ServerLayout.GetRootPath(Path.GetFullPath(request.ServerDirectory)),
-            Release = request.Release,
-            // Checked by the validator. Without a build, the provisioning pins the latest one.
-            BuildId = request.Build is null
-                ? null
-                : await db.Builds
-                    .Where(b => b.Release == request.Release && b.BuildNumber == request.Build)
-                    .Select(b => (Guid?)b.Id)
-                    .FirstOrDefaultAsync(cancellationToken),
-            CaseSensitive = request.CaseSensitive,
-            Unicode = request.Unicode,
-            AutoStart = request.AutoStart,
-            State = P4ServerInstanceState.Provisioning,
-            // Stored now, checked once the server is provisioned.
-            SuperUser = new InstanceSuperUser
-            {
-                UserName = request.SuperUser.Name,
-                ProtectedPassword = passwordProtector.Protect(request.SuperUser.Password),
-                Status = SuperUserStatus.Unchecked,
-                UpdatedAt = now,
-            },
-            CreatedAt = now,
-        };
-        db.Instances.Add(instance);
+        P4ServerInstance instance;
         try
         {
-            await db.SaveChangesAsync(cancellationToken);
+            instance = await creationService.CreateAsync(request, cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (InstanceConflictException exception)
         {
-            // Another request took the name or the port in the meantime.
-            return Problem(
-                "Another instance already uses this name or port.",
-                statusCode: StatusCodes.Status409Conflict);
+            return Problem(exception.Message, statusCode: StatusCodes.Status409Conflict);
         }
 
-        SuperUserCredentials superUser = new(request.SuperUser.Name, request.SuperUser.Password);
-        await queue.EnqueueAsync(new ProvisioningRequest(id, ProvisioningKind.Create, superUser), cancellationToken);
-        await notifier.InstanceChangedAsync(instance);
-
-        return AcceptedAtAction(nameof(GetInstance), new { id }, await ToDtoAsync(instance));
+        return AcceptedAtAction(nameof(GetInstance), new { id = instance.Id }, await ToDtoAsync(instance));
     }
 
     /// <summary>

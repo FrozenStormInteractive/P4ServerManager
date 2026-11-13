@@ -55,7 +55,7 @@ public sealed class OperationPlanTests
             new CheckRootStep(null!),
             new ReadSslFingerprintStep(null!, null!, null!),
             _saveCheckpoint,
-            new ReadServerSettingsStep(null!, null!, null!),
+            new ReadServerSettingsStep(null!, null!),
             _upgradeDatabase,
             _startServer);
 
@@ -91,7 +91,7 @@ public sealed class OperationPlanTests
         UnicodeConversionOperation operation = new(
             _stopServer,
             _saveCheckpoint,
-            new SwitchToUnicodeStep(null!, null!, null!),
+            new SwitchToUnicodeStep(null!, null!, null!, null!),
             _startServer);
         UnicodeConversionContext context = new(
             null!,

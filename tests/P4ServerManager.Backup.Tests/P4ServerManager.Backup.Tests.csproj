@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\P4ServerManager.Backup\P4ServerManager.Backup.csproj" />
+    <ProjectReference Include="..\..\src\P4ServerManager.Backup.Azure\P4ServerManager.Backup.Azure.csproj" />
+    <ProjectReference Include="..\..\src\P4ServerManager.Backup.Ftp\P4ServerManager.Backup.Ftp.csproj" />
+    <ProjectReference Include="..\..\src\P4ServerManager.Backup.Gcs\P4ServerManager.Backup.Gcs.csproj" />
+    <ProjectReference Include="..\..\src\P4ServerManager.Backup.S3\P4ServerManager.Backup.S3.csproj" />
+  </ItemGroup>
+
+</Project>

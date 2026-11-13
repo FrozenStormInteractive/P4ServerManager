@@ -5,6 +5,10 @@ using Microsoft.EntityFrameworkCore;
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Backups;
+using P4ServerManager.Daemon.Services.Backups.Destinations;
+using P4ServerManager.Daemon.Services.Backups.Restore;
+using P4ServerManager.Daemon.Services.Backups.Verification;
 using P4ServerManager.Daemon.Services.Instances.Admin;
 using P4ServerManager.Daemon.Services.Instances.HealthChecks;
 using P4ServerManager.Daemon.Services.Instances.PortChange;
@@ -31,6 +35,12 @@ public sealed partial class InstanceSupervisor(
     PortChangeOperation portChangeOperation,
     SuperUserService superUserService,
     HealthCheckRunner healthCheckRunner,
+    BackupOperation backupOperation,
+    VerifyBackupOperation verifyBackupOperation,
+    BackupRunNotifier backupRunNotifier,
+    BackupDestinationService backupDestinationService,
+    RestoreOperation restoreOperation,
+    RestoreRunNotifier restoreRunNotifier,
     InstanceRuntimeRegistry runtimeRegistry,
     OperationTracker operationTracker,
     InstanceNotifier notifier,
@@ -50,7 +60,9 @@ public sealed partial class InstanceSupervisor(
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
         await AdoptAsync(cancellationToken);
+        await EndLeftRestoresAsync(cancellationToken);
         serversLeftStopped = await healthCheckRunner.EndLeftRunsAsync(cancellationToken);
+        await EndLeftBackupsAsync(cancellationToken);
         await base.StartAsync(cancellationToken);
     }
 

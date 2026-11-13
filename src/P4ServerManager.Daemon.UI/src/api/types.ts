@@ -17,6 +17,9 @@ export type RuntimeStatus
     | 'CheckingHealth'
     | 'ChangingServerId'
     | 'ChangingPort'
+    | 'BackingUp'
+    | 'VerifyingBackup'
+    | 'Restoring'
 
 export interface Instance {
   id: string
@@ -434,4 +437,238 @@ export interface HealthCheckRun {
    * daemon deletes it once a later check replaces it.
    */
   reportHidden: boolean
+}
+
+export type BackupDestinationKind = 'Local' | 'S3' | 'S3Compatible' | 'GoogleCloudStorage' | 'AzureBlob' | 'Ftp'
+
+export type FtpEncryption = 'Explicit' | 'Implicit' | 'None'
+
+export interface LocalDestinationSettings {
+  /**
+   * Absolute path of the folder, on the machine of the daemon.
+   */
+  path: string
+}
+
+export interface S3DestinationSettings {
+  bucket: string
+  prefix: string | null
+  region: string
+  /**
+   * URL of the S3-compatible API. Null for Amazon S3.
+   */
+  endpoint: string | null
+  forcePathStyle: boolean
+  accessKeyId: string
+  storageClass: string | null
+}
+
+export interface GcsDestinationSettings {
+  bucket: string
+  prefix: string | null
+}
+
+export interface AzureBlobDestinationSettings {
+  accountUrl: string
+  container: string
+  prefix: string | null
+}
+
+export interface FtpDestinationSettings {
+  host: string
+  port: number | null
+  encryption: FtpEncryption
+  path: string
+  userName: string
+  /**
+   * SHA-256 fingerprint of a self-signed certificate to trust. Null to validate the certificate as usual.
+   */
+  certificateFingerprint: string | null
+}
+
+/**
+ * Secrets of a destination: only ever sent, never returned.
+ */
+export interface BackupDestinationCredentials {
+  secretAccessKey?: string | null
+  serviceAccountJson?: string | null
+  accountKey?: string | null
+  sasToken?: string | null
+  password?: string | null
+}
+
+/**
+ * A place where the backups of the instances go: an encrypted backup repository on a storage. Exactly the settings of
+ * its kind are set.
+ */
+export interface BackupDestination {
+  id: string
+  name: string
+  kind: BackupDestinationKind
+  /**
+   * Where the repository is, such as `s3://bucket/prefix`. Never a credential.
+   */
+  location: string
+  local: LocalDestinationSettings | null
+  s3: S3DestinationSettings | null
+  gcs: GcsDestinationSettings | null
+  azure: AzureBlobDestinationSettings | null
+  ftp: FtpDestinationSettings | null
+  hasCredentials: boolean
+  repositoryId: string
+  instanceCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BackupDestinationSettings {
+  local?: LocalDestinationSettings | null
+  s3?: S3DestinationSettings | null
+  gcs?: GcsDestinationSettings | null
+  azure?: AzureBlobDestinationSettings | null
+  ftp?: FtpDestinationSettings | null
+}
+
+export interface CreateBackupDestinationRequest extends BackupDestinationSettings {
+  name: string
+  kind: BackupDestinationKind
+  credentials: BackupDestinationCredentials | null
+  passphrase: string
+}
+
+export interface UpdateBackupDestinationRequest extends BackupDestinationSettings {
+  name: string
+  /**
+   * Null keeps the stored secrets.
+   */
+  credentials: BackupDestinationCredentials | null
+}
+
+export interface BackupDestinationTestResult {
+  succeeded: boolean
+  error: string | null
+  capabilities: string[]
+}
+
+export type BackupKind = 'Full' | 'Incremental'
+
+export type BackupTrigger = 'Manual' | 'Scheduled'
+
+export type BackupRunStatus = 'Running' | 'Succeeded' | 'PartiallySucceeded' | 'Failed' | 'Canceled' | 'Interrupted'
+
+export type BackupDestinationStatus = 'Pending' | 'Uploading' | 'Succeeded' | 'Failed'
+
+export interface BackupVerification {
+  verifiedAt: string
+  deep: boolean
+  succeeded: boolean
+  checkedObjects: number
+  problemCount: number
+  problems: string[]
+  error: string | null
+}
+
+export interface BackupRunDestination {
+  destinationId: string
+  destinationName: string
+  status: BackupDestinationStatus
+  uploadedObjects: number
+  uploadedBytes: number
+  snapshotKey: string | null
+  error: string | null
+  lastVerification: BackupVerification | null
+}
+
+/**
+ * A backup of an instance, running or ended. It is kept after the instance is deleted.
+ */
+export interface BackupRun {
+  id: string
+  instanceId: string
+  instanceName: string
+  kind: BackupKind
+  trigger: BackupTrigger
+  status: BackupRunStatus
+  startedAt: string
+  finishedAt: string | null
+  checkpointNumber: number | null
+  journalNumber: number | null
+  fileCount: number
+  totalBytes: number
+  error: string | null
+  /**
+   * What the backup could not take, though it succeeded, such as the archives of a depot in an object store.
+   */
+  warnings: string[]
+  destinations: BackupRunDestination[]
+}
+
+/**
+ * A backup point stored at a destination, read from the destination itself: it lists the points of instances this
+ * daemon never knew, such as after a reinstallation.
+ */
+export interface BackupPoint {
+  /**
+   * Key of the manifest of the point: what a restore asks for.
+   */
+  key: string
+  id: string
+  sourceId: string
+  sourceName: string
+  kind: BackupKind
+  createdAt: string
+  checkpointNumber: number | null
+  journalNumber: number | null
+  p4dVersion: string | null
+  unicode: boolean
+  caseSensitive: boolean
+  serverId: string | null
+}
+
+export type RestoreTarget = 'ExistingInstance' | 'NewInstance'
+
+export type RestoreRunStatus = 'Running' | 'Succeeded' | 'SucceededWithProblems' | 'Failed' | 'Canceled' | 'Interrupted'
+
+/**
+ * A restore of a backup point, running or ended.
+ */
+export interface RestoreRun {
+  id: string
+  instanceId: string
+  instanceName: string
+  target: RestoreTarget
+  destinationId: string
+  destinationName: string
+  snapshotKey: string
+  pointId: string
+  pointCreatedAt: string | null
+  sourceName: string | null
+  status: RestoreRunStatus
+  startedAt: string
+  finishedAt: string | null
+  fileCount: number
+  totalBytes: number
+  downloadedBytes: number
+  /**
+   * Files the instance already had, unchanged, put back rather than downloaded.
+   */
+  reusedFiles: number
+  verifyProblemCount: number
+  verifyProblems: string[]
+  warnings: string[]
+  error: string | null
+}
+
+export interface RestoreInstanceRequest {
+  name: string
+  description: string | null
+  port: number
+  release: string | null
+  build: string | null
+  serverDirectory: string | null
+  ssl: boolean
+  autoStart: boolean
+  includeLicense: boolean
+  superUser: { name: string, password: string }
+  source: { destinationId: string, snapshotKey: string }
 }

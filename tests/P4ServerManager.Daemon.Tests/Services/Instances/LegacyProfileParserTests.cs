@@ -1,5 +1,4 @@
 using P4ServerManager.Daemon.Services.Instances.Import;
-using P4ServerManager.Daemon.Services.Perforce.Parsing;
 
 namespace P4ServerManager.Daemon.Tests.Services.Instances;
 
@@ -205,23 +204,5 @@ public class LegacyProfileParserTests
                 }
             }
             """;
-    }
-
-    [Fact]
-    public void ConfigDumpParser_FindsTheUnicodeMode()
-    {
-        const string unicode = """
-            Dumping to -...
-            @nx@ 2 1792816412 @62@ 10 1 0 0 0 @/p4/root@ @-@ @@ @@ @@
-            @pv@ 1 @db.config@ @any@ @configurationVersion@ @1@
-            @pv@ 1 @db.config@ @any@ @unicode@ @1@
-            """;
-        const string notUnicode = """
-            @pv@ 1 @db.config@ @any@ @configurationVersion@ @1@
-            @pv@ 1 @db.config@ @main@ @security@ @3@
-            """;
-
-        ConfigDumpParser.IsUnicode(unicode).ShouldBeTrue();
-        ConfigDumpParser.IsUnicode(notUnicode).ShouldBeFalse();
     }
 }

@@ -3,8 +3,8 @@ import type { Instance } from '@/api/types'
 
 /**
  * What the UI shows for an instance: its lifecycle state while it is not ready, then whether p4d runs, or is being
- * started, stopped, restarted, upgraded, converted to Unicode mode, checked, given another server ID or port, or
- * deleted by the daemon.
+ * started, stopped, restarted, upgraded, converted to Unicode mode, checked, given another server ID or port, backed
+ * up, restored, or deleted by the daemon.
  */
 export type InstanceStatus
   = | 'provisioning'
@@ -19,6 +19,9 @@ export type InstanceStatus
     | 'checkingHealth'
     | 'changingServerId'
     | 'changingPort'
+    | 'backingUp'
+    | 'verifyingBackup'
+    | 'restoring'
     | 'deleting'
     | 'unknown'
 
@@ -64,6 +67,15 @@ export function getInstanceStatus (instance: Instance): InstanceStatus {
     case 'ChangingPort': {
       return 'changingPort'
     }
+    case 'BackingUp': {
+      return 'backingUp'
+    }
+    case 'VerifyingBackup': {
+      return 'verifyingBackup'
+    }
+    case 'Restoring': {
+      return 'restoring'
+    }
     default: {
       return 'unknown'
     }
@@ -83,6 +95,9 @@ const colors: Record<InstanceStatus, string> = {
   checkingHealth: 'info',
   changingServerId: 'info',
   changingPort: 'info',
+  backingUp: 'info',
+  verifyingBackup: 'info',
+  restoring: 'info',
   deleting: 'error',
   unknown: 'grey',
 }
@@ -106,6 +121,9 @@ const inProgressStatuses = new Set<InstanceStatus>([
   'checkingHealth',
   'changingServerId',
   'changingPort',
+  'backingUp',
+  'verifyingBackup',
+  'restoring',
   'deleting',
 ])
 

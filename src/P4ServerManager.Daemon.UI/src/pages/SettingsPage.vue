@@ -50,6 +50,7 @@
 
   const sections = [
     { name: 'settings-builds', title: 'settings.sections.builds', icon: 'mdi-package-variant-closed' },
+    { name: 'settings-backups', title: 'settings.sections.backups', icon: 'mdi-cloud-upload-outline' },
   ] as const
 
   const current = computed(() => sections.find(section => section.name === route.name))

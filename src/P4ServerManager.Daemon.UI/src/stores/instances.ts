@@ -1,6 +1,7 @@
 // Types
 import type { InstancesHub } from '@/api/hub'
 import type {
+  BackupRun,
   CreateInstanceRequest,
   HealthCheckRun,
   Instance,
@@ -8,6 +9,7 @@ import type {
   InstanceActionResult,
   InstanceSelection,
   OperationSnapshot,
+  RestoreRun,
   SetSuperUserRequest,
   UpdateInstanceRequest,
 } from '@/api/types'
@@ -20,6 +22,7 @@ import { computed, ref } from 'vue'
 import { connectInstancesHub } from '@/api/hub'
 import * as api from '@/api/instances'
 import i18n from '@/plugins/i18n'
+import { useBackupsStore } from '@/stores/backups'
 import { useHealthChecksStore } from '@/stores/healthChecks'
 import { useNotificationsStore } from '@/stores/notifications'
 import { formatPort } from '@/utils/instancePort'
@@ -70,6 +73,7 @@ export const useInstancesStore = defineStore('instances', () => {
     delete instances.value[id]
     delete operations.value[id]
     useHealthChecksStore().removeInstance(id)
+    useBackupsStore().removeInstance(id)
   }
 
   function setOperation (snapshot: OperationSnapshot) {
@@ -153,6 +157,56 @@ export const useInstancesStore = defineStore('instances', () => {
       upToDate ? t('upgradeInstance.upToDate', params) : t('upgradeInstance.upgraded', params),
       upToDate ? 'info' : 'success',
     )
+  }
+
+  function setBackup (run: BackupRun) {
+    const backups = useBackupsStore()
+    const wasRunning = backups.getRuns(run.instanceId).some(r => r.id === run.id && r.status === 'Running')
+    backups.setRun(run)
+    if (wasRunning && run.status !== 'Running') {
+      notifyBackupEnded(run)
+    }
+  }
+
+  function setRestore (run: RestoreRun) {
+    const backups = useBackupsStore()
+    const wasRunning = backups.getRestores(run.instanceId).some(r => r.id === run.id && r.status === 'Running')
+    backups.setRestore(run)
+    if (wasRunning && run.status !== 'Running') {
+      notifyRestoreEnded(run)
+    }
+  }
+
+  /**
+   * Tells every client how a restore ended: it may run for hours, with no one looking at its page.
+   */
+  function notifyRestoreEnded (run: RestoreRun) {
+    const { t } = i18n.global
+    const params = { name: run.instanceName }
+    const colors: Partial<Record<RestoreRun['status'], 'success' | 'warning' | 'error' | 'info'>> = {
+      Succeeded: 'success',
+      SucceededWithProblems: 'warning',
+      Failed: 'error',
+      Canceled: 'info',
+      Interrupted: 'warning',
+    }
+    useNotificationsStore().notify(t(`restores.notifications.${run.status}`, params), colors[run.status] ?? 'info')
+  }
+
+  /**
+   * Tells every client how a backup ended: it may run for hours, with no one looking at its page.
+   */
+  function notifyBackupEnded (run: BackupRun) {
+    const { t } = i18n.global
+    const params = { name: run.instanceName }
+    const colors: Partial<Record<BackupRun['status'], 'success' | 'warning' | 'error' | 'info'>> = {
+      Succeeded: 'success',
+      PartiallySucceeded: 'warning',
+      Failed: 'error',
+      Canceled: 'info',
+      Interrupted: 'warning',
+    }
+    useNotificationsStore().notify(t(`backups.notifications.${run.status}`, params), colors[run.status] ?? 'info')
   }
 
   function setHealthCheck (run: HealthCheckRun) {
@@ -307,9 +361,12 @@ export const useInstancesStore = defineStore('instances', () => {
       onOperationProgress: setOperation,
       onHealthCheckUpdated: setHealthCheck,
       onHealthCheckDeleted: (instanceId, runId) => useHealthChecksStore().removeRun(instanceId, runId),
+      onBackupUpdated: setBackup,
+      onRestoreUpdated: setRestore,
       onConnected: () => {
         void fetchAll()
         void useHealthChecksStore().refresh()
+        void useBackupsStore().refresh()
       },
     })
   }

@@ -104,9 +104,18 @@ public sealed class P4ServerLauncher(
         return pid;
     }
 
+    /// <param name="instance">The instance.</param>
+    /// <param name="cancellationToken">Aborts the wait for p4d.</param>
+    /// <param name="maintenanceMode">
+    /// Whether p4d runs in maintenance mode (<c>-n</c>) this time, whatever the instance says; null follows the instance.
+    /// </param>
     /// <returns>The pid of the started p4d.</returns>
-    public async Task<int> StartAsync(P4ServerInstance instance, CancellationToken cancellationToken)
+    public async Task<int> StartAsync(
+        P4ServerInstance instance,
+        CancellationToken cancellationToken,
+        bool? maintenanceMode = null)
     {
+        bool maintenance = maintenanceMode ?? instance.MaintenanceMode;
         P4ServerBuild build = instance.Build
             ?? throw new InstanceConflictException($"Instance {instance.Name} has no p4d build yet.");
         if (IsRunning(instance))
@@ -127,7 +136,7 @@ public sealed class P4ServerLauncher(
             "-p", GetListenAddress(instance),
             "-L", logPath,
         ];
-        if (instance.MaintenanceMode)
+        if (maintenance)
         {
             arguments.Add("-n");
         }
@@ -137,7 +146,7 @@ public sealed class P4ServerLauncher(
             "Starting p4d for instance {Name} on port {Port}{Mode}",
             instance.Name,
             instance.Port,
-            instance.MaintenanceMode ? " in maintenance mode" : string.Empty);
+            maintenance ? " in maintenance mode" : string.Empty);
         int pid = OperatingSystem.IsWindows()
             ? StartOnWindows(p4dPath, arguments, environment, pidFile)
             : await StartOnUnixAsync(
