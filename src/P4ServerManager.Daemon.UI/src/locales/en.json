@@ -45,6 +45,8 @@
     "checkingHealth": "Checking health",
     "changingServerId": "Changing the server ID",
     "changingPort": "Changing the port",
+    "backingUp": "Backing up",
+    "verifyingBackup": "Verifying a backup",
     "deleting": "Deleting",
     "unknown": "Unknown",
     "inMaintenance": "{status} (maintenance)"
@@ -151,7 +153,8 @@
     "openSections": "Instance sections",
     "sections": {
       "overview": "Overview",
-      "health": "Health"
+      "health": "Health",
+      "backups": "Backups"
     }
   },
   "health": {
@@ -246,7 +249,9 @@
       "upgrade": "Upgrade",
       "convert-to-unicode": "Conversion to Unicode",
       "change-server-id": "Change of the server ID",
-      "change-port": "Change of the port"
+      "change-port": "Change of the port",
+      "backup": "Backup",
+      "verify-backup": "Verification of a backup"
     },
     "steps": {
       "resolve-build": "Get the p4d build",
@@ -267,7 +272,12 @@
       "set-server-id": "Set the server ID",
       "rename-server-spec": "Rename the server spec",
       "set-port": "Change the port",
-      "update-server-address": "Update the address of the server spec"
+      "update-server-address": "Update the address of the server spec",
+      "open-backup-destinations": "Open the backup destinations",
+      "save-backup-metadata": "Save the database",
+      "scan-server-files": "List the files of the server",
+      "finish-backup": "Finish the backup",
+      "verify-backup": "Verify the backup"
     },
     "skipped": "Skipped"
   },
@@ -436,7 +446,8 @@
     "title": "Settings",
     "openSections": "Settings sections",
     "sections": {
-      "builds": "p4d builds"
+      "builds": "p4d builds",
+      "backups": "Backup destinations"
     }
   },
   "builds": {
@@ -541,5 +552,156 @@
     "title": "Page not found",
     "text": "This page does not exist.",
     "back": "Back to the dashboard"
+  },
+  "backupDestinations": {
+    "text": "Each destination is an encrypted backup repository on a storage. Every instance chooses its own destinations; a backup goes to all of them at once, and each one only receives what it lacks.",
+    "add": "Add a destination",
+    "loadError": "The destinations could not be loaded: {message}",
+    "empty": "No destination yet. Add one to back up the instances.",
+    "headers": {
+      "name": "Name",
+      "kind": "Kind",
+      "location": "Location",
+      "instances": "Instances"
+    },
+    "kinds": {
+      "Local": "Local folder",
+      "S3": "Amazon S3",
+      "S3Compatible": "S3-compatible",
+      "GoogleCloudStorage": "Google Cloud Storage",
+      "AzureBlob": "Azure Blob Storage",
+      "Ftp": "FTP"
+    },
+    "test": "Test",
+    "testSucceeded": "{name} works. Guarantees of the storage: {capabilities}.",
+    "testFailed": "{name} does not work: {error}",
+    "noCapabilities": "none",
+    "remove": "Remove",
+    "removeTitle": "Remove {name}?",
+    "removeText": "The destination leaves the daemon. Its repository and its backups stay on the storage, and can be attached again with the passphrase.",
+    "removed": "Destination {name} removed.",
+    "dialog": {
+      "createTitle": "New backup destination",
+      "editTitle": "Edit {name}",
+      "name": "Name",
+      "kind": "Kind",
+      "path": "Folder",
+      "pathHint": "Absolute path on the machine of the daemon, such as a mounted share.",
+      "ftpPath": "Folder on the server",
+      "bucket": "Bucket",
+      "prefix": "Prefix",
+      "prefixHint": "Folder of the repository in the bucket or the container. Optional.",
+      "region": "Region",
+      "endpoint": "Endpoint",
+      "endpointHint": "URL of the S3-compatible API, such as https://s3.eu-central-003.backblazeb2.com.",
+      "forcePathStyle": "Put the bucket in the path of the URLs",
+      "accessKeyId": "Access key ID",
+      "secretAccessKey": "Secret access key",
+      "storageClass": "Storage class",
+      "storageClassHint": "Such as STANDARD_IA. Leave empty for the default.",
+      "serviceAccountJson": "Service account key",
+      "serviceAccountJsonHint": "Paste the JSON key file of a service account that can write to the bucket.",
+      "accountUrl": "Account URL",
+      "accountUrlHint": "Such as https://account.blob.core.windows.net.",
+      "container": "Container",
+      "azureAuth": "Authentication",
+      "accountKey": "Account key",
+      "sasToken": "Shared access signature",
+      "host": "Host",
+      "port": "Port",
+      "portHint": "Leave empty for 21, or 990 with implicit TLS.",
+      "encryption": "Encryption",
+      "encryptions": {
+        "Explicit": "Explicit TLS (FTPS)",
+        "Implicit": "Implicit TLS",
+        "None": "None"
+      },
+      "insecureFtp": "Without TLS, the password and the transfers go in clear on the network. The backups stay encrypted.",
+      "userName": "User",
+      "password": "Password",
+      "certificateFingerprint": "Certificate fingerprint",
+      "certificateFingerprintHint": "SHA-256 fingerprint of a self-signed certificate to trust. Leave empty to validate the certificate as usual.",
+      "changeSecret": "Change the stored secret",
+      "passphrase": "Passphrase",
+      "passphraseConfirm": "Confirm the passphrase",
+      "passphraseHint": "At least 12 characters. It encrypts the backups.",
+      "passphraseWarning": "Keep the passphrase somewhere else, such as a password manager. It is the only way to read the backups from another daemon: without it, they are lost.",
+      "passphraseMismatch": "The passphrases do not match.",
+      "passphraseTooShort": "At least 12 characters",
+      "required": "Required",
+      "absolutePath": "Must be an absolute path",
+      "created": "Destination {name} added.",
+      "saved": "Destination {name} saved."
+    }
+  },
+  "backups": {
+    "title": "Backups",
+    "start": "Back up now",
+    "full": "Full backup",
+    "fullHint": "A checkpoint of the database, with every archive.",
+    "incremental": "Incremental backup",
+    "incrementalHint": "A rotation of the journal, on top of the latest backup at each destination.",
+    "cancel": "Stop the backup",
+    "loadError": "The backups could not be loaded: {message}",
+    "destinations": {
+      "title": "Destinations",
+      "text": "Where the backups of this instance go. A backup goes to all of them at once.",
+      "none": "No destination is chosen: the instance is not backed up.",
+      "noneDefined": "No backup destination exists yet.",
+      "manage": "Manage the destinations",
+      "label": "Destinations",
+      "saved": "Destinations saved."
+    },
+    "history": {
+      "title": "History",
+      "empty": "No backup yet.",
+      "started": "Started",
+      "kind": "Kind",
+      "status": "Status",
+      "files": "Files",
+      "destinations": "Destinations",
+      "details": "Details"
+    },
+    "kinds": {
+      "Full": "Full",
+      "Incremental": "Incremental"
+    },
+    "statuses": {
+      "Running": "Running",
+      "Succeeded": "Succeeded",
+      "PartiallySucceeded": "Partly succeeded",
+      "Failed": "Failed",
+      "Canceled": "Canceled",
+      "Interrupted": "Interrupted"
+    },
+    "destinationStatuses": {
+      "Pending": "Waiting",
+      "Uploading": "Uploading",
+      "Succeeded": "Done",
+      "Failed": "Failed"
+    },
+    "run": {
+      "title": "Backup of {date}",
+      "checkpoint": "Checkpoint",
+      "journal": "Journal",
+      "files": "Files",
+      "filesValue": "{count} ({size})",
+      "uploaded": "{count} objects uploaded ({size})",
+      "verify": "Verify",
+      "verifyDeep": "Verify in depth",
+      "verifyHint": "A verification checks that every object is there; in depth, it reads them all back, which downloads the whole backup.",
+      "verified": "Verified on {date}: {count} objects, nothing wrong.",
+      "verifiedDeep": "Verified in depth on {date}: {count} objects, nothing wrong.",
+      "problems": "Verified on {date}: {problems} problems in {count} objects.",
+      "verificationError": "The verification of {date} could not run: {error}",
+      "verifyStarted": "Verification of the backup at {name} begun."
+    },
+    "notifications": {
+      "Succeeded": "Backup of {name} done.",
+      "PartiallySucceeded": "Backup of {name} done, but some destinations failed.",
+      "Failed": "Backup of {name} failed.",
+      "Canceled": "Backup of {name} canceled.",
+      "Interrupted": "Backup of {name} interrupted."
+    }
   }
 }

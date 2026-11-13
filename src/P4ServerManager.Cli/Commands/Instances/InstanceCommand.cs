@@ -1,5 +1,7 @@
 using System.CommandLine;
 
+using P4ServerManager.Cli.Commands.Backups;
+
 namespace P4ServerManager.Cli.Commands.Instances;
 
 /// <summary>
@@ -26,6 +28,7 @@ internal static class InstanceCommand
         command.Subcommands.Add(ChangeServerIdCommand.Create(services));
         command.Subcommands.Add(ChangePortCommand.Create(services));
         command.Subcommands.Add(InstanceHealthCommand.Create(services));
+        command.Subcommands.Add(InstanceBackupCommand.Create(services));
         command.Subcommands.Add(DeleteInstanceCommand.Create(services));
         command.Subcommands.Add(InstanceOperationCommand.Create(services));
         return command;

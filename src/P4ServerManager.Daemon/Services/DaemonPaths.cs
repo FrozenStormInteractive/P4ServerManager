@@ -135,6 +135,20 @@ public sealed class DaemonPaths
         return Path.Combine(GetInstanceDirectory(instanceId), "health-checks", $"{runId:N}.jnl.fix");
     }
 
+    /// <summary>
+    /// Where the objects of a backup are encrypted before they are uploaded. Emptied when the daemon starts.
+    /// </summary>
+    public string BackupTemporaryDirectory => Path.Combine(DataDirectory, "tmp", "backups");
+
+    /// <summary>
+    /// Size, date and SHA-256 of the files of an instance at its last backup, so that only the files that changed are
+    /// read again. Rebuilt when it is missing.
+    /// </summary>
+    public string GetBackupIndexPath(Guid instanceId)
+    {
+        return Path.Combine(GetInstanceDirectory(instanceId), "backup-index.jsonl");
+    }
+
     public string GetPidFilePath(Guid instanceId)
     {
         return Path.Combine(GetInstanceDirectory(instanceId), "p4d.pid");

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Backup repositories: encrypted, content-addressed objects and manifests on a passive storage target. Knows
+       nothing of Perforce: the daemon decides what goes in a backup. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ZstdSharp.Port" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="P4ServerManager.Backup.Tests" />
+    <InternalsVisibleTo Include="P4ServerManager.Daemon.Tests" />
+  </ItemGroup>
+
+</Project>

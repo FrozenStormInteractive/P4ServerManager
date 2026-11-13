@@ -17,6 +17,171 @@ namespace P4ServerManager.Daemon.Database.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.BackupDestination", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedCredentials")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedPassphrase")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RepositoryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Settings")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("BackupDestinations");
+                });
+
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.BackupRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CheckpointNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FileCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstanceName")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("JournalNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("TotalBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstanceId");
+
+                    b.ToTable("BackupRuns");
+                });
+
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.BackupRunDestination", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("DestinationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DestinationName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SnapshotKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UploadedBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UploadedObjects")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("VerificationCheckedObjects")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("VerificationDeep")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("VerificationError")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("VerificationProblemCount")
+                        .HasColumnType("INTEGER");
+
+                    b.PrimitiveCollection<string>("VerificationProblems")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("VerificationSucceeded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("BackupRunDestinations");
+                });
+
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.BuildArchivePolicy", b =>
                 {
                     b.Property<int>("Id")
@@ -129,6 +294,21 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.HasIndex("InstanceId");
 
                     b.ToTable("HealthCheckRuns");
+                });
+
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.InstanceBackupDestination", b =>
+                {
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DestinationId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("InstanceId", "DestinationId");
+
+                    b.HasIndex("DestinationId");
+
+                    b.ToTable("InstanceBackupDestinations");
                 });
 
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.P4ServerBuild", b =>
@@ -262,22 +442,56 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.ToTable("Instances");
                 });
 
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.BackupRunDestination", b =>
+                {
+                    b.HasOne("P4ServerManager.Daemon.Database.Entities.BackupRun", "Run")
+                        .WithMany("Destinations")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.HealthCheckFinding", b =>
                 {
-                    b.HasOne("P4ServerManager.Daemon.Database.Entities.HealthCheckRun", null)
+                    b.HasOne("P4ServerManager.Daemon.Database.Entities.HealthCheckRun", "Run")
                         .WithMany("Findings")
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Run");
                 });
 
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.HealthCheckRun", b =>
                 {
-                    b.HasOne("P4ServerManager.Daemon.Database.Entities.P4ServerInstance", null)
+                    b.HasOne("P4ServerManager.Daemon.Database.Entities.P4ServerInstance", "Instance")
                         .WithMany()
                         .HasForeignKey("InstanceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Instance");
+                });
+
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.InstanceBackupDestination", b =>
+                {
+                    b.HasOne("P4ServerManager.Daemon.Database.Entities.BackupDestination", "Destination")
+                        .WithMany("Instances")
+                        .HasForeignKey("DestinationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("P4ServerManager.Daemon.Database.Entities.P4ServerInstance", "Instance")
+                        .WithMany()
+                        .HasForeignKey("InstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Destination");
+
+                    b.Navigation("Instance");
                 });
 
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.P4ServerInstance", b =>
@@ -326,6 +540,16 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.Navigation("Build");
 
                     b.Navigation("SuperUser");
+                });
+
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.BackupDestination", b =>
+                {
+                    b.Navigation("Instances");
+                });
+
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.BackupRun", b =>
+                {
+                    b.Navigation("Destinations");
                 });
 
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.HealthCheckRun", b =>

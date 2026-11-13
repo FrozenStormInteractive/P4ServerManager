@@ -4,9 +4,15 @@
     <File Path="Directory.Packages.props" />
   </Folder>
   <Folder Name="/Tests/">
+    <Project Path="tests/P4ServerManager.Backup.Tests/P4ServerManager.Backup.Tests.csproj" />
     <Project Path="tests/P4ServerManager.Daemon.Tests/P4ServerManager.Daemon.Tests.csproj" />
     <Project Path="tests/P4ServerManager.Cli.Tests/P4ServerManager.Cli.Tests.csproj" />
   </Folder>
+  <Project Path="src/P4ServerManager.Backup/P4ServerManager.Backup.csproj" />
+  <Project Path="src/P4ServerManager.Backup.Azure/P4ServerManager.Backup.Azure.csproj" />
+  <Project Path="src/P4ServerManager.Backup.Ftp/P4ServerManager.Backup.Ftp.csproj" />
+  <Project Path="src/P4ServerManager.Backup.Gcs/P4ServerManager.Backup.Gcs.csproj" />
+  <Project Path="src/P4ServerManager.Backup.S3/P4ServerManager.Backup.S3.csproj" />
   <Project Path="src/P4ServerManager.Cli/P4ServerManager.Cli.csproj" />
   <Project Path="src/P4ServerManager.Contracts/P4ServerManager.Contracts.csproj" />
   <Project Path="src/P4ServerManager.Daemon.UI/P4ServerManager.Daemon.UI.esproj">

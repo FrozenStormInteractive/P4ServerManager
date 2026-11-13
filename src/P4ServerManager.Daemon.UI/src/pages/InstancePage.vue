@@ -35,6 +35,23 @@
           />
         </template>
       </v-list-item>
+
+      <v-list-item
+        exact
+        prepend-icon="mdi-cloud-upload-outline"
+        :title="t('instance.sections.backups')"
+        :to="{ name: 'instance-backups', params: { id } }"
+      >
+        <template v-if="backups.getRunningRun(id)" #append>
+          <v-progress-circular
+            color="info"
+            data-backup="running"
+            indeterminate
+            size="14"
+            width="2"
+          />
+        </template>
+      </v-list-item>
     </v-list>
   </v-navigation-drawer>
 
@@ -59,6 +76,7 @@
   import { useDisplay } from 'vuetify'
 
   // Stores
+  import { useBackupsStore } from '@/stores/backups'
   import { useHealthChecksStore } from '@/stores/healthChecks'
   import { useInstancesStore } from '@/stores/instances'
 
@@ -74,6 +92,7 @@
   const { mobile } = useDisplay()
   const instances = useInstancesStore()
   const healthChecks = useHealthChecksStore()
+  const backups = useBackupsStore()
 
   // Left null, the drawer opens on wide screens and stays closed on small ones.
   const drawer = ref<boolean | null>(null)
