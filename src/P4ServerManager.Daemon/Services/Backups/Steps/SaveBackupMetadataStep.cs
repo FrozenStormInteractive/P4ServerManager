@@ -38,6 +38,12 @@ public sealed class SaveBackupMetadataStep(
         var instance = context.Instance;
         var layout = await locator.ReadLayoutAsync(instance, cancellationToken);
         context.Layout = layout;
+        foreach (ObjectStoreDepot depot in layout.ObjectStoreDepots)
+        {
+            context.Run.Warnings.Add(
+                $"Depot {depot.Name} keeps its archives in an object store: they are not in this backup. "
+                + "Back up that store apart.");
+        }
         context.Index = await BackupFileIndex.LoadAsync(paths.GetBackupIndexPath(instance.Id), cancellationToken);
 
         Directory.CreateDirectory(layout.JournalDirectory);

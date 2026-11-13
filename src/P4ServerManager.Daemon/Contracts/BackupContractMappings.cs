@@ -51,6 +51,7 @@ public static class BackupContractMappings
             run.FileCount,
             run.TotalBytes,
             run.Error,
+            run.Warnings,
             run.Destinations.OrderBy(d => d.Id).Select(ToDto).ToList());
     }
 

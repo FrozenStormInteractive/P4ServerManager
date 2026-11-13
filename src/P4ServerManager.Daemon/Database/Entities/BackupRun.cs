@@ -43,6 +43,11 @@ public sealed class BackupRun
 
     public string? Error { get; set; }
 
+    /// <summary>
+    /// What the backup could not take, though it succeeded, such as the archives of a depot in an object store.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+
     public List<BackupRunDestination> Destinations { get; set; } = [];
 }
 

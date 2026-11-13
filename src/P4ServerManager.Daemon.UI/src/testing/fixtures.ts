@@ -132,6 +132,7 @@ export function createBackupRun (instanceId: string, overrides: Partial<BackupRu
     fileCount: 4,
     totalBytes: 4096,
     error: null,
+    warnings: [],
     destinations: [
       {
         destinationId: '3c2b1a00-0000-4000-8000-000000000001',

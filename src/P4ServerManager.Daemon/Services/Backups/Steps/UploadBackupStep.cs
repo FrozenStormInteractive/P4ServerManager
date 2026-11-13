@@ -205,6 +205,10 @@ public sealed class UploadBackupStep(
         {
             labels[BackupLabels.ServerId] = serverId;
         }
+        foreach (ObjectStoreDepot depot in context.Layout?.ObjectStoreDepots ?? [])
+        {
+            labels[BackupLabels.ObjectStoreDepotPrefix + depot.Name] = depot.ObjectAddress;
+        }
 
         return new BackupManifestHeader
         {

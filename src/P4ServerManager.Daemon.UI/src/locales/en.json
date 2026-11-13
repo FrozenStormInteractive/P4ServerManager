@@ -694,7 +694,8 @@
       "verifiedDeep": "Verified in depth on {date}: {count} objects, nothing wrong.",
       "problems": "Verified on {date}: {problems} problems in {count} objects.",
       "verificationError": "The verification of {date} could not run: {error}",
-      "verifyStarted": "Verification of the backup at {name} begun."
+      "verifyStarted": "Verification of the backup at {name} begun.",
+      "warnings": "{count} warning | {count} warnings"
     },
     "notifications": {
       "Succeeded": "Backup of {name} done.",

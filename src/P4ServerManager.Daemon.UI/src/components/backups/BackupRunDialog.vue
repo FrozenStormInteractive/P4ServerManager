@@ -44,6 +44,18 @@
         </v-alert>
 
         <v-alert
+          v-for="warning in run.warnings"
+          :key="warning"
+          class="mb-4"
+          data-testid="run-warning"
+          density="compact"
+          type="warning"
+          variant="tonal"
+        >
+          {{ warning }}
+        </v-alert>
+
+        <v-alert
           v-if="actionError"
           class="mb-4"
           closable

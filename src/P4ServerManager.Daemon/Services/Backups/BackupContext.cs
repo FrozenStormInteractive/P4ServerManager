@@ -28,6 +28,12 @@ public static class BackupLabels
     public const string Unicode = "unicode";
 
     public const string CaseSensitive = "caseSensitive";
+
+    /// <summary>
+    /// Start of the label of each depot whose archives an object store keeps, and this backup lacks, followed by its
+    /// name. Its value is the configuration of the store, from <c>db.depot</c>, to find the archives on restore.
+    /// </summary>
+    public const string ObjectStoreDepotPrefix = "objectStoreDepot:";
 }
 
 /// <summary>

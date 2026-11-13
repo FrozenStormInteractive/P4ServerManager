@@ -111,6 +111,10 @@ namespace P4ServerManager.Daemon.Database.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
+                    b.PrimitiveCollection<string>("Warnings")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InstanceId");

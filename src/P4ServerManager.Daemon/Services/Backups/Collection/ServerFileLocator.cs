@@ -12,26 +12,32 @@ namespace P4ServerManager.Daemon.Services.Backups.Collection;
 
 /// <summary>
 /// Reads the layout of a server with p4d, on its root, without any user: it works whether p4d runs or not. The
-/// configurables come from <c>p4d -cshow</c>. The depots come from a dump of <c>db.depot</c>, read strictly, and only to
-/// check that every depot keeps its files under <c>server.depot.root</c>: the backup takes that folder whole, so it
-/// needs no list of the depots, and misses none.
+/// configurables come from <c>p4d -cshow</c>, the depots from a dump of <c>db.depot</c>, read strictly. The backup takes
+/// <c>server.depot.root</c> whole, so it misses no folder under it, and adds the folder of each depot kept elsewhere.
 /// </summary>
 public sealed partial class ServerFileLocator(IP4ServerBuildCache buildCache, IProcessRunner processRunner)
 {
+    /// <summary>
+    /// Start of the paths, in a manifest, of the archives under <c>server.depot.root</c>.
+    /// </summary>
+    public const string ArchivesPrefix = "archives";
+
+    /// <summary>
+    /// Start of the paths, in a manifest, of the archives of a depot kept outside <c>server.depot.root</c>, followed
+    /// by its name.
+    /// </summary>
+    public const string DepotsPrefix = "depots";
+
     private static readonly TimeSpan ReadTimeout = TimeSpan.FromMinutes(5);
 
     private static StringComparison PathComparison => OperatingSystem.IsWindows()
         ? StringComparison.OrdinalIgnoreCase
         : StringComparison.Ordinal;
 
-    private static StringComparer PathComparer => OperatingSystem.IsWindows()
-        ? StringComparer.OrdinalIgnoreCase
-        : StringComparer.Ordinal;
-
     /// <param name="instance">The instance, with its <see cref="P4ServerInstance.Build"/> loaded.</param>
     /// <param name="cancellationToken">Aborts the reads.</param>
     /// <exception cref="InstanceOperationException">p4d printed what this reader does not know, or a depot keeps its
-    /// files where the backup cannot take them.</exception>
+    /// files in a folder that holds the root.</exception>
     public async Task<ServerFileLayout> ReadLayoutAsync(P4ServerInstance instance, CancellationToken cancellationToken)
     {
         string rootPath = Path.GetFullPath(instance.RootPath);
@@ -58,8 +64,8 @@ public sealed partial class ServerFileLocator(IP4ServerBuildCache buildCache, IP
     /// <param name="rootPath">The P4ROOT, absolute.</param>
     /// <param name="configurables">The configurables of the server.</param>
     /// <param name="depots">Every depot of the server.</param>
-    /// <exception cref="InstanceOperationException">A depot keeps its files outside <c>server.depot.root</c>, in a
-    /// folder that holds the root, or in an object store.</exception>
+    /// <exception cref="InstanceOperationException">A depot keeps its files in a folder that holds the root: the
+    /// backup cannot take its archives without the live database.</exception>
     public static ServerFileLayout Resolve(
         string rootPath,
         IReadOnlyDictionary<string, string> configurables,
@@ -80,48 +86,73 @@ public sealed partial class ServerFileLocator(IP4ServerBuildCache buildCache, IP
                 ? ResolvePath(rootPath, configured)
                 : rootPath;
 
-        List<string> depotDirectories = [];
+        // The backup takes server.depot.root whole, unless it holds the root or the checkpoints of the server: it then
+        // takes the folder of each depot under it.
+        bool takeWhole = !Contains(depotRoot, rootPath) && !SamePath(depotRoot, journalDirectory);
+        List<ArchiveSource> sources = takeWhole ? [new ArchiveSource(depotRoot, depotRoot, ArchivesPrefix)] : [];
+        List<ObjectStoreDepot> objectStoreDepots = [];
         foreach (DepotRecord depot in depots)
         {
             if (depot.Type == DepotRecord.RemoteType)
             {
                 continue;
             }
-
             if (depot.ObjectAddress.Length > 0)
             {
-                throw new InstanceOperationException(
-                    $"Depot {depot.Name} keeps its archives in an object store ({depot.ObjectAddress}), "
-                    + "which the backup cannot reach.");
+                objectStoreDepots.Add(new ObjectStoreDepot(depot.Name, depot.ObjectAddress));
+                continue;
             }
 
             string directory = ResolveMap(depotRoot, depot.Map);
-            if (!Contains(depotRoot, directory))
-            {
-                throw new InstanceOperationException(
-                    $"Depot {depot.Name} keeps its files in {directory}, outside server.depot.root ({depotRoot}): "
-                    + "the backup would miss them. Move the depot under server.depot.root.");
-            }
             if (Contains(directory, rootPath))
             {
                 throw new InstanceOperationException(
                     $"Depot {depot.Name} keeps its files in {directory}, which holds the root of the server: "
                     + "such a layout cannot be backed up.");
             }
-            depotDirectories.Add(directory);
+
+            if (!Contains(depotRoot, directory))
+            {
+                // A depot outside server.depot.root goes under its own name: the db.depot of the checkpoint tells
+                // where to put its files back.
+                sources.Add(new ArchiveSource(directory, directory, $"{DepotsPrefix}/{depot.Name}"));
+            }
+            else if (!takeWhole)
+            {
+                sources.Add(new ArchiveSource(directory, depotRoot, ArchivesPrefix));
+            }
         }
 
-        // The backup takes server.depot.root whole, unless it holds the root or the checkpoints of the server: it then
-        // takes the folder of each depot, every one checked above.
-        bool takeWhole = !Contains(depotRoot, rootPath) && !SamePath(depotRoot, journalDirectory);
-        IReadOnlyList<string> archiveDirectories = takeWhole
-            ? [depotRoot]
-            : depotDirectories.Distinct(PathComparer).ToList();
-        IReadOnlyList<string> excluded = takeWhole && Contains(depotRoot, journalDirectory)
+        // A folder inside another one is listed with it, once.
+        List<ArchiveSource> outermost = [];
+        for (int i = 0; i < sources.Count; i++)
+        {
+            bool nested = false;
+            for (int j = 0; j < sources.Count && !nested; j++)
+            {
+                nested = j != i
+                    && Contains(sources[j].Directory, sources[i].Directory)
+                    && (j < i || !SamePath(sources[j].Directory, sources[i].Directory));
+            }
+            if (!nested)
+            {
+                outermost.Add(sources[i]);
+            }
+        }
+
+        // Whatever the sources, the folder of the checkpoints and journals is backed up apart.
+        IReadOnlyList<string> excluded = outermost.Any(s => Contains(s.Directory, journalDirectory))
             ? [journalDirectory]
             : [];
 
-        return new ServerFileLayout(rootPath, journalDirectory, journalPrefix, depotRoot, archiveDirectories, excluded);
+        return new ServerFileLayout(
+            rootPath,
+            journalDirectory,
+            journalPrefix,
+            depotRoot,
+            outermost,
+            excluded,
+            objectStoreDepots);
     }
 
     /// <summary>
@@ -207,7 +238,7 @@ public sealed partial class ServerFileLocator(IP4ServerBuildCache buildCache, IP
 
 /// <summary>
 /// Where a server keeps its files, read from its own configuration rather than assumed: an imported server may keep its
-/// journals in its root, or its depots anywhere under <c>server.depot.root</c>.
+/// journals in its root, or its depots anywhere.
 /// </summary>
 /// <param name="RootPath">The P4ROOT.</param>
 /// <param name="JournalDirectory">Folder of the checkpoints and of the rotated journals.</param>
@@ -218,21 +249,42 @@ public sealed partial class ServerFileLocator(IP4ServerBuildCache buildCache, IP
 /// <param name="DepotRoot">
 /// The folder of <c>server.depot.root</c>, or the root without it: the archives are backed up relative to it.
 /// </param>
-/// <param name="ArchiveDirectories">
-/// Folders the backup takes whole: <see cref="DepotRoot"/> itself, or the folder of each depot when
-/// <see cref="DepotRoot"/> also holds the root or the checkpoints.
+/// <param name="ArchiveSources">
+/// Folders the backup takes whole: <see cref="DepotRoot"/> itself, or the folder of each depot under it when
+/// <see cref="DepotRoot"/> also holds the root or the checkpoints, and the folder of each depot kept elsewhere.
 /// </param>
 /// <param name="ExcludedDirectories">
-/// Folders inside <see cref="ArchiveDirectories"/> that hold no archive: the folder of the checkpoints and journals,
+/// Folders inside <see cref="ArchiveSources"/> that hold no archive: the folder of the checkpoints and journals,
 /// which the backup takes apart.
 /// </param>
+/// <param name="ObjectStoreDepots">Depots whose archives the backup cannot take.</param>
 public sealed record ServerFileLayout(
     string RootPath,
     string JournalDirectory,
     string? JournalPrefix,
     string DepotRoot,
-    IReadOnlyList<string> ArchiveDirectories,
-    IReadOnlyList<string> ExcludedDirectories);
+    IReadOnlyList<ArchiveSource> ArchiveSources,
+    IReadOnlyList<string> ExcludedDirectories,
+    IReadOnlyList<ObjectStoreDepot> ObjectStoreDepots);
+
+/// <summary>
+/// A folder the backup takes whole.
+/// </summary>
+/// <param name="Directory">The folder.</param>
+/// <param name="BaseDirectory">The folder its files are relative to in the manifest.</param>
+/// <param name="Prefix">
+/// Start of their paths in the manifest: <see cref="ServerFileLocator.ArchivesPrefix"/>, or
+/// <see cref="ServerFileLocator.DepotsPrefix"/> and the name of a depot kept outside <c>server.depot.root</c>.
+/// </param>
+public sealed record ArchiveSource(string Directory, string BaseDirectory, string Prefix);
+
+/// <summary>
+/// A depot that keeps its archives in an object store rather than on the disk: the backup cannot take them.
+/// </summary>
+/// <param name="Name">Name of the depot.</param>
+/// <param name="ObjectAddress">Its configuration of the object store, from <c>db.depot</c>. It may hold secrets: it
+/// goes only into the encrypted manifests.</param>
+public sealed record ObjectStoreDepot(string Name, string ObjectAddress);
 
 public enum JournalFileKind
 {

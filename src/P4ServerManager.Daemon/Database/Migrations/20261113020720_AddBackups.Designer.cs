@@ -11,7 +11,7 @@ using P4ServerManager.Daemon.Database;
 namespace P4ServerManager.Daemon.Database.Migrations
 {
     [DbContext(typeof(DaemonDbContext))]
-    [Migration("20261111180129_AddBackups")]
+    [Migration("20261113020720_AddBackups")]
     partial class AddBackups
     {
         /// <inheritdoc />
@@ -112,6 +112,10 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.Property<string>("Trigger")
                         .IsRequired()
                         .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.PrimitiveCollection<string>("Warnings")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

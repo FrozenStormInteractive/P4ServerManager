@@ -48,6 +48,7 @@ describe('InstanceBackupsPage', () => {
       [
         createBackupRun(instance.id, {
           status: 'PartiallySucceeded',
+          warnings: ['Depot cold keeps its archives in an object store: they are not in this backup.'],
           destinations: [
             { ...createBackupRun(instance.id).destinations[0]! },
             {
@@ -72,6 +73,7 @@ describe('InstanceBackupsPage', () => {
     expect(text).toContain('nas')
     expect(text).toContain('cloud')
     expect(text).toContain('4 (4.0 KB)')
+    expect(wrapper.find('[data-testid="run-warnings"]').attributes('aria-label')).toBe('1 warning')
   })
 
   it('warns that an instance without destination is not backed up, and cannot start a backup', async () => {

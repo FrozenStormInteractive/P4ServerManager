@@ -286,8 +286,45 @@ public sealed class BackupsApiTests : IAsyncLifetime
         manifest.Entries.ShouldContain(e => e.Path == "archives/other/file.txt,v");
     }
 
+    [Fact]
+    public async Task Backup_TakesTheDepotsOutsideTheDepotRoot_UnderTheirName()
+    {
+        Guid instanceId = await CreateInstanceAsync();
+        string path = Path.Combine(_directory, "backups-a");
+        BackupDestinationDto a = await CreateDestinationAsync("a", path);
+        await SetDestinationsAsync(instanceId, a.Id);
+        string elsewhere = Path.Combine(_directory, "elsewhere");
+        Directory.CreateDirectory(Path.Combine(elsewhere, "sub"));
+        File.WriteAllText(Path.Combine(elsewhere, "sub", "far.txt,v"), "head 1.1;\n");
+        _depotDump += $"@pv@ 2 @db.depot@ @far@ 0 @@ @{elsewhere.Replace('\\', '/')}/...@ @@ \n";
+
+        BackupRunDto full = await BackupAndWaitAsync(instanceId, BackupKind.Full);
+
+        full.Status.ShouldBe(BackupRunStatus.Succeeded);
+        BackupManifest manifest = await ReadManifestAsync(path, full.Destinations[0].SnapshotKey!);
+        manifest.Entries.ShouldContain(e => e.Path == "depots/far/sub/far.txt,v");
+        manifest.Entries.ShouldContain(e => e.Path == "archives/depot/readme.txt,v");
+    }
+
+    [Fact]
+    public async Task Backup_LeavesOutADepotInAnObjectStore_WithAWarning_AndKeepsItsStoreInTheManifest()
+    {
+        Guid instanceId = await CreateInstanceAsync();
+        string path = Path.Combine(_directory, "backups-a");
+        BackupDestinationDto a = await CreateDestinationAsync("a", path);
+        await SetDestinationsAsync(instanceId, a.Id);
+        _depotDump += "@pv@ 2 @db.depot@ @cold@ 0 @@ @cold/...@ @s3,bucket:cold,secret:hidden@ \n";
+
+        BackupRunDto full = await BackupAndWaitAsync(instanceId, BackupKind.Full);
+
+        full.Status.ShouldBe(BackupRunStatus.Succeeded);
+        full.Warnings.ShouldHaveSingleItem().ShouldContain("Depot cold keeps its archives in an object store");
+        full.Warnings[0].ShouldNotContain("hidden");
+        BackupManifest manifest = await ReadManifestAsync(path, full.Destinations[0].SnapshotKey!);
+        manifest.Header.Labels["objectStoreDepot:cold"].ShouldBe("s3,bucket:cold,secret:hidden");
+    }
+
     [Theory]
-    [InlineData("@pv@ 2 @db.depot@ @abs@ 0 @@ @/elsewhere/...@ @@ \n", "outside server.depot.root")]
     [InlineData("@pv@ 3 @db.depot@ @depot@ 0 @@ @depot/...@ @@ @new@ \n", "only version 2 is known")]
     [InlineData("@pv@ 2 @db.depot@ @depot@ 0 @@ @depot/...@ \n", "columns instead of 5")]
     public async Task Backup_FailsBeforeTouchingTheServer_WhenTheDepotsAreNotKnownForSure(string depots, string error)

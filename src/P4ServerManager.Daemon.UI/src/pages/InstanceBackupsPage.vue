@@ -148,6 +148,20 @@
               size="small"
               :text="t(`backups.statuses.${item.status}`)"
             />
+
+            <v-tooltip v-if="item.warnings.length > 0" location="top" :text="item.warnings.join(' ')">
+              <template #activator="{ props: tooltip }">
+                <v-icon
+                  v-bind="tooltip"
+                  :aria-label="t('backups.run.warnings', { count: item.warnings.length })"
+                  class="ml-1"
+                  color="warning"
+                  data-testid="run-warnings"
+                  icon="mdi-alert-outline"
+                  size="small"
+                />
+              </template>
+            </v-tooltip>
           </template>
 
           <template #item.files="{ item }">

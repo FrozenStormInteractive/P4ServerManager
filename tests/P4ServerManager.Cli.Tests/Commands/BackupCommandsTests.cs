@@ -126,6 +126,7 @@ public sealed class BackupCommandsTests
         result.ExitCode.ShouldBe(0, result.Error);
         result.Output.ShouldContain("Status:");
         result.Output.ShouldContain("Succeeded");
+        result.Output.ShouldContain("Warning: Depot cold keeps its archives in an object store");
         StartBackupRequest request = JsonSerializer.Deserialize(
             _cli.Daemon.RequestsTo(HttpMethod.Post, BackupsPath).Single().Body!,
             CliJsonContext.Default.StartBackupRequest)!;
@@ -170,6 +171,7 @@ public sealed class BackupCommandsTests
             4,
             2048,
             null,
+            ["Depot cold keeps its archives in an object store: they are not in this backup."],
             [
                 new BackupRunDestinationDto(
                     _cloud.Id,

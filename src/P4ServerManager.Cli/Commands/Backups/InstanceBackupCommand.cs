@@ -381,6 +381,11 @@ internal static class InstanceBackupCommand
             await invocation.Output.WriteLineAsync($"{(label + ":").PadRight(width)}{value}");
         }
 
+        foreach (string warning in run.Warnings)
+        {
+            await invocation.Output.WriteLineAsync($"Warning: {warning}");
+        }
+
         foreach (BackupRunDestinationDto destination in run.Destinations)
         {
             string line = destination.Status == BackupDestinationStatus.Succeeded

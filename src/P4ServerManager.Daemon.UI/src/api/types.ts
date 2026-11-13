@@ -595,5 +595,9 @@ export interface BackupRun {
   fileCount: number
   totalBytes: number
   error: string | null
+  /**
+   * What the backup could not take, though it succeeded, such as the archives of a depot in an object store.
+   */
+  warnings: string[]
   destinations: BackupRunDestination[]
 }

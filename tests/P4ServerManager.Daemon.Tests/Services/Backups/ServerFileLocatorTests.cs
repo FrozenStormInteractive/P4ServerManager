@@ -93,13 +93,15 @@ public sealed class ServerFileLocatorTests
     }
 
     [Fact]
-    public void Resolve_RefusesADepotInAnObjectStore()
+    public void Resolve_LeavesOutTheDepotsInAnObjectStore()
     {
-        Should.Throw<InstanceOperationException>(() => ServerFileLocator.Resolve(
+        ServerFileLayout layout = ServerFileLocator.Resolve(
             Root,
             new Dictionary<string, string> { ["server.depot.root"] = "../archives" },
-            [new DepotRecord("cloud", 0, "cloud/...", "s3,bucket:archives")]))
-            .Message.ShouldContain("object store");
+            [new DepotRecord("cloud", 0, Path.Combine(Server, "cloud") + "/...", "s3,bucket:archives")]);
+
+        layout.ObjectStoreDepots.ShouldBe([new ObjectStoreDepot("cloud", "s3,bucket:archives")]);
+        layout.ArchiveSources.ShouldBe([Archives(Path.Combine(Server, "archives"))]);
     }
 
     [Fact]
@@ -148,8 +150,9 @@ public sealed class ServerFileLocatorTests
         layout.JournalDirectory.ShouldBe(Path.Combine(Server, "journals"));
         layout.JournalPrefix.ShouldBe("main");
         layout.DepotRoot.ShouldBe(Path.Combine(Server, "archives"));
-        layout.ArchiveDirectories.ShouldBe([Path.Combine(Server, "archives")]);
+        layout.ArchiveSources.ShouldBe([Archives(Path.Combine(Server, "archives"))]);
         layout.ExcludedDirectories.ShouldBeEmpty();
+        layout.ObjectStoreDepots.ShouldBeEmpty();
     }
 
     [Fact]
@@ -164,7 +167,7 @@ public sealed class ServerFileLocatorTests
             },
             [new DepotRecord("depot", 0, "depot/...")]);
 
-        layout.ArchiveDirectories.ShouldBe([Path.Combine(Server, "data")]);
+        layout.ArchiveSources.ShouldBe([Archives(Path.Combine(Server, "data"))]);
         layout.ExcludedDirectories.ShouldBe([Path.Combine(Server, "data", "journals")]);
     }
 
@@ -179,17 +182,47 @@ public sealed class ServerFileLocatorTests
         layout.JournalDirectory.ShouldBe(Root);
         layout.JournalPrefix.ShouldBeNull();
         layout.DepotRoot.ShouldBe(Root);
-        layout.ArchiveDirectories.ShouldBe([Path.Combine(Root, "depot"), Path.Combine(Root, "spec")]);
+        layout.ArchiveSources.ShouldBe(
+        [
+            new ArchiveSource(Path.Combine(Root, "depot"), Root, ServerFileLocator.ArchivesPrefix),
+            new ArchiveSource(Path.Combine(Root, "spec"), Root, ServerFileLocator.ArchivesPrefix),
+        ]);
     }
 
     [Fact]
-    public void Resolve_RefusesADepotOutsideTheDepotRoot()
+    public void Resolve_AddsTheDepotsOutsideTheDepotRoot_UnderTheirName_Once()
     {
-        Should.Throw<InstanceOperationException>(() => ServerFileLocator.Resolve(
+        string elsewhere = Path.Combine(Server, "elsewhere");
+        ServerFileLayout layout = ServerFileLocator.Resolve(
             Root,
             new Dictionary<string, string> { ["server.depot.root"] = "../archives" },
-            [new DepotRecord("abs", 0, Path.Combine(Server, "elsewhere") + "/...")]))
-            .Message.ShouldContain("outside server.depot.root");
+            [
+                new DepotRecord("depot", 0, "depot/..."),
+                new DepotRecord("abs", 0, elsewhere + "/..."),
+                new DepotRecord("nested", 0, Path.Combine(elsewhere, "nested") + "/..."),
+                new DepotRecord("same", 0, elsewhere + "/..."),
+            ]);
+
+        layout.ArchiveSources.ShouldBe(
+        [
+            Archives(Path.Combine(Server, "archives")),
+            new ArchiveSource(elsewhere, elsewhere, "depots/abs"),
+        ]);
+    }
+
+    [Fact]
+    public void Resolve_LeavesOutTheJournals_WhenADepotOutsideTheDepotRootHoldsThem()
+    {
+        ServerFileLayout layout = ServerFileLocator.Resolve(
+            Root,
+            new Dictionary<string, string>
+            {
+                ["journalPrefix"] = "../shared/journals/main",
+                ["server.depot.root"] = "../archives",
+            },
+            [new DepotRecord("shared", 0, Path.Combine(Server, "shared") + "/...")]);
+
+        layout.ExcludedDirectories.ShouldBe([Path.Combine(Server, "shared", "journals")]);
     }
 
     [Fact]
@@ -200,6 +233,11 @@ public sealed class ServerFileLocatorTests
             new Dictionary<string, string>(),
             [new DepotRecord("all", 0, "...")]))
             .Message.ShouldContain("holds the root");
+    }
+
+    private static ArchiveSource Archives(string directory)
+    {
+        return new ArchiveSource(directory, directory, ServerFileLocator.ArchivesPrefix);
     }
 
     [Theory]

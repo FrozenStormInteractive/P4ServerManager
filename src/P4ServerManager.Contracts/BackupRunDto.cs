@@ -127,6 +127,8 @@ public sealed record BackupRunDestinationDto(
 /// <param name="FileCount">Files of the point: checkpoint, journals, archives and files of the root.</param>
 /// <param name="TotalBytes">Their size.</param>
 /// <param name="Error">Why it failed.</param>
+/// <param name="Warnings">What it could not take, though it succeeded, such as the archives of a depot in an object
+/// store.</param>
 /// <param name="Destinations">What it did at each destination.</param>
 public sealed record BackupRunDto(
     Guid Id,
@@ -142,4 +144,5 @@ public sealed record BackupRunDto(
     int FileCount,
     long TotalBytes,
     string? Error,
+    IReadOnlyList<string> Warnings,
     IReadOnlyList<BackupRunDestinationDto> Destinations);

@@ -5,9 +5,9 @@ using P4ServerManager.Daemon.Services.Operations;
 namespace P4ServerManager.Daemon.Services.Backups.Steps;
 
 /// <summary>
-/// Lists the archives under <c>server.depot.root</c> and the files of the root the checkpoint does not hold, once the
-/// database is frozen: an archive written meanwhile is harmless, it only goes unused. Only the files whose size or date
-/// changed since the last backup are read, to hash them.
+/// Lists the archives (<c>server.depot.root</c> whole, and the folder of each depot kept elsewhere) and the files of the
+/// root the checkpoint does not hold, once the database is frozen: an archive written meanwhile is harmless, it only
+/// goes unused. Only the files whose size or date changed since the last backup are read, to hash them.
 /// </summary>
 public sealed class ScanServerFilesStep : IOperationStep<BackupContext>
 {
@@ -34,18 +34,19 @@ public sealed class ScanServerFilesStep : IOperationStep<BackupContext>
             await AddAsync(BackupFileRoles.RootFile, $"root/{relative}", path);
         }
 
-        foreach (string directory in layout.ArchiveDirectories)
+        foreach (ArchiveSource source in layout.ArchiveSources)
         {
             // A depot nothing was submitted to yet has no folder.
-            if (!Directory.Exists(directory))
+            if (!Directory.Exists(source.Directory))
             {
                 continue;
             }
 
-            foreach (string path in EnumerateArchives(directory, layout.ExcludedDirectories))
+            foreach (string path in EnumerateArchives(source.Directory, layout.ExcludedDirectories))
             {
-                string relative = Path.GetRelativePath(layout.DepotRoot, path).Replace(Path.DirectorySeparatorChar, '/');
-                await AddAsync(BackupFileRoles.Archive, $"archives/{relative}", path);
+                string relative = Path.GetRelativePath(source.BaseDirectory, path)
+                    .Replace(Path.DirectorySeparatorChar, '/');
+                await AddAsync(BackupFileRoles.Archive, $"{source.Prefix}/{relative}", path);
             }
         }
 

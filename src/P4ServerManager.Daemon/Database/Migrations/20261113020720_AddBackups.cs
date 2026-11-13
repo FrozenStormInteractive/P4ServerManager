@@ -46,7 +46,8 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     JournalNumber = table.Column<int>(type: "INTEGER", nullable: true),
                     FileCount = table.Column<int>(type: "INTEGER", nullable: false),
                     TotalBytes = table.Column<long>(type: "INTEGER", nullable: false),
-                    Error = table.Column<string>(type: "TEXT", nullable: true)
+                    Error = table.Column<string>(type: "TEXT", nullable: true),
+                    Warnings = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
