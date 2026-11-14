@@ -1,5 +1,6 @@
 using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.FileSystem;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Instances.Import;
 
@@ -124,5 +125,25 @@ public static class ContractMappings
             profile.IgnoredSettings,
             profile.Problems,
             instanceId);
+    }
+
+    /// <param name="listing">The folder and its subfolders.</param>
+    public static DirectoryListingDto ToDto(this DirectoryListing listing)
+    {
+        return new DirectoryListingDto(
+            DirectoryBrowser.ToApiPath(listing.Path),
+            listing.Parent is null ? null : DirectoryBrowser.ToApiPath(listing.Parent),
+            listing.Writable,
+            listing.Ancestors.Select(ToDirectoryEntryDto).ToList(),
+            listing.Directories.Select(ToDirectoryEntryDto).ToList(),
+            listing.Roots.Select(ToDirectoryEntryDto).ToList());
+    }
+
+    private static DirectoryEntryDto ToDirectoryEntryDto(DirectoryEntry entry)
+    {
+        return new DirectoryEntryDto(
+            DirectoryBrowser.ToApiPath(DirectoryBrowser.GetName(entry.Path)),
+            DirectoryBrowser.ToApiPath(entry.Path),
+            entry.Writable);
     }
 }

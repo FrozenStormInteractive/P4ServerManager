@@ -96,7 +96,7 @@
             </v-col>
           </v-row>
 
-          <v-text-field
+          <ServerDirectoryField
             v-model="fields.serverDirectory"
             class="mb-2"
             :error-messages="serverErrors.serverDirectory"
@@ -252,9 +252,10 @@
   import { useI18n } from 'vue-i18n'
   import { useRouter } from 'vue-router'
 
-  // Stores and utilities
+  // Components, stores and utilities
   import { ApiError } from '@/api/client'
   import { listVersions } from '@/api/p4d'
+  import ServerDirectoryField from '@/components/filesystem/ServerDirectoryField.vue'
   import { useInstancesStore } from '@/stores/instances'
 
   type Rule = (value: unknown) => true | string

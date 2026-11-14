@@ -672,3 +672,48 @@ export interface RestoreInstanceRequest {
   superUser: { name: string, password: string }
   source: { destinationId: string, snapshotKey: string }
 }
+
+/**
+ * A folder of the machine of the daemon.
+ */
+export interface DirectoryEntry {
+  /**
+   * Name of the folder, or its path for a root.
+   */
+  name: string
+  path: string
+  /**
+   * Whether the daemon may create files and folders in it. Other folders are only shown, to reach their subfolders.
+   */
+  writable: boolean
+}
+
+/**
+ * The subfolders of a folder of the machine of the daemon, to pick a path.
+ */
+export interface DirectoryListing {
+  /**
+   * Absolute path of the folder, normalized.
+   */
+  path: string
+  /**
+   * Folder that holds it, or null for a root.
+   */
+  parent: string | null
+  /**
+   * Whether the daemon may create files and folders in the folder.
+   */
+  writable: boolean
+  /**
+   * The folders from its root down to the folder itself.
+   */
+  ancestors: DirectoryEntry[]
+  /**
+   * Its subfolders, by name, without the hidden ones.
+   */
+  directories: DirectoryEntry[]
+  /**
+   * The roots of the file system: `/`, or the drives on Windows.
+   */
+  roots: DirectoryEntry[]
+}

@@ -345,6 +345,29 @@
     "archivedBuild": "{build}, archived",
     "extractedBuild": "{build}, extracted"
   },
+  "directoryPicker": {
+    "title": "Choose a folder",
+    "browse": "Browse the folders of the server",
+    "location": "Location",
+    "up": "Parent folder",
+    "roots": "Drives",
+    "refresh": "Refresh",
+    "newFolder": "New folder",
+    "newFolderName": "Name of the new folder",
+    "empty": "No subfolders",
+    "select": "Select this folder",
+    "loadError": "The folders could not be listed: {message}",
+    "add": "Add",
+    "newFolderHint": "Only added to the path: the folder is created when the path is used.",
+    "newBadge": "new",
+    "readOnly": "read-only",
+    "readOnlyFolder": "The manager cannot create files or folders here.",
+    "rules": {
+      "nameRequired": "Enter a name.",
+      "nameFormat": "A name cannot contain slashes, start or end with a space, nor be '.' or '..'.",
+      "nameTaken": "A folder already has this name."
+    }
+  },
   "importInstance": {
     "title": "Import {name}",
     "root": "Root directory",

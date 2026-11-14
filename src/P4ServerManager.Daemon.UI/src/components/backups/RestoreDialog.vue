@@ -66,7 +66,7 @@
               </v-col>
             </v-row>
 
-            <v-text-field
+            <ServerDirectoryField
               v-model="fields.serverDirectory"
               class="mb-2"
               :error-messages="serverErrors.serverDirectory"
@@ -166,8 +166,9 @@
   import { useI18n } from 'vue-i18n'
   import { useRouter } from 'vue-router'
 
-  // Stores and utilities
+  // Components, stores and utilities
   import { ApiError } from '@/api/client'
+  import ServerDirectoryField from '@/components/filesystem/ServerDirectoryField.vue'
   import { useBackupsStore } from '@/stores/backups'
   import { useNotificationsStore } from '@/stores/notifications'
 

@@ -21,7 +21,7 @@
           />
 
           <template v-if="kind === 'Local'">
-            <v-text-field
+            <ServerDirectoryField
               v-model="local.path"
               :error-messages="fieldErrors['local.path']"
               :hint="t('backupDestinations.dialog.pathHint')"
@@ -316,8 +316,9 @@
   import { computed, reactive, ref, useTemplateRef, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
 
-  // Stores
+  // Components and stores
   import { ApiError } from '@/api/client'
+  import ServerDirectoryField from '@/components/filesystem/ServerDirectoryField.vue'
   import { useBackupsStore } from '@/stores/backups'
   import { useNotificationsStore } from '@/stores/notifications'
 
