@@ -53,6 +53,19 @@
         />
       </template>
 
+      <template #item.isAdministrator="{ item }">
+        <v-switch
+          :aria-label="t('users.administratorOf', { name: item.userName })"
+          color="primary"
+          density="compact"
+          :disabled="isLastAdministrator(item) || changing === item.id"
+          hide-details
+          inset
+          :model-value="item.isAdministrator"
+          @update:model-value="value => askSetAdministrator(item, !!value)"
+        />
+      </template>
+
       <template #item.createdAt="{ item }">
         {{ d(new Date(item.createdAt), 'long') }}
       </template>
@@ -74,7 +87,7 @@
           <v-btn
             :aria-label="t('users.remove')"
             color="error"
-            :disabled="users.users.length <= 1"
+            :disabled="isLastAdministrator(item)"
             icon="mdi-delete-outline"
             size="small"
             variant="text"
@@ -85,6 +98,24 @@
     </v-data-table>
 
     <UserDialog v-model="dialogOpen" :user="selected" />
+
+    <v-dialog v-model="demoteOpen" max-width="480">
+      <v-card :title="t('users.demoteSelfTitle')">
+        <v-card-text>{{ t('users.demoteSelfText') }}</v-card-text>
+
+        <v-card-actions>
+          <v-spacer />
+          <v-btn :text="t('actions.cancel')" @click="demoteOpen = false" />
+
+          <v-btn
+            color="error"
+            :text="t('users.demoteSelf')"
+            variant="flat"
+            @click="demoteSelf"
+          />
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="removeOpen" max-width="480">
       <v-card :title="t('users.removeTitle', { name: selected?.userName ?? '' })">
@@ -125,7 +156,8 @@
   import { useUsersStore } from '@/stores/users'
 
   /**
-   * The accounts of the web interface: added, given a new password and deleted here. The page loads them.
+   * The accounts of the web interface: added, given a new password, named administrators and deleted here. The page
+   * loads them. The last administrator can neither lose its right nor be deleted.
    */
   const { t, d } = useI18n()
   const auth = useAuthStore()
@@ -137,10 +169,13 @@
   const removeOpen = ref(false)
   const selected = ref<User | null>(null)
   const removing = ref(false)
+  const demoteOpen = ref(false)
+  const changing = ref<string | null>(null)
   const actionError = ref<string | null>(null)
 
   const headers = computed(() => [
     { title: t('users.headers.userName'), key: 'userName', sortable: false },
+    { title: t('users.headers.isAdministrator'), key: 'isAdministrator', sortable: false },
     { title: t('users.headers.createdAt'), key: 'createdAt', sortable: false },
     { title: t('users.headers.lastSignInAt'), key: 'lastSignInAt', sortable: false },
     { title: '', key: 'actions', sortable: false, align: 'end' as const },
@@ -149,6 +184,47 @@
   function openDialog (user: User | null) {
     selected.value = user
     dialogOpen.value = true
+  }
+
+  function isLastAdministrator (user: User) {
+    return user.isAdministrator && users.administratorCount <= 1
+  }
+
+  function askSetAdministrator (user: User, isAdministrator: boolean) {
+    if (!isAdministrator && user.id === auth.user?.id) {
+      // The user would lose the access to this page: it confirms first.
+      selected.value = user
+      demoteOpen.value = true
+      return
+    }
+    void setAdministrator(user, isAdministrator)
+  }
+
+  async function demoteSelf () {
+    demoteOpen.value = false
+    if (selected.value) {
+      await setAdministrator(selected.value, false)
+    }
+  }
+
+  async function setAdministrator (user: User, isAdministrator: boolean) {
+    changing.value = user.id
+    actionError.value = null
+    try {
+      const changed = await users.setAdministrator(user.id, isAdministrator)
+      notifications.notify(t(
+        isAdministrator ? 'users.administratorGranted' : 'users.administratorRevoked',
+        { name: changed.userName },
+      ))
+      auth.userChanged(changed)
+      if (!changed.isAdministrator && changed.id === auth.user?.id) {
+        await router.replace({ name: 'dashboard' })
+      }
+    } catch (error) {
+      actionError.value = error instanceof Error ? error.message : String(error)
+    } finally {
+      changing.value = null
+    }
   }
 
   function askRemove (user: User) {

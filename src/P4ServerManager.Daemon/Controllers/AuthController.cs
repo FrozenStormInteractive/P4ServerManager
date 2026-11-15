@@ -41,8 +41,8 @@ public sealed class AuthController(UserService users, ILogger<AuthController> lo
     }
 
     /// <summary>
-    /// Creates the first account, and signs it in. Only allowed while no account exists: then, anybody who reaches
-    /// the daemon can do it, so create it right after the installation.
+    /// Creates the first account, an administrator, and signs it in. Only allowed while no account exists: then,
+    /// anybody who reaches the daemon can do it, so create it right after the installation.
     /// </summary>
     /// <param name="request">The account, checked by <see cref="SetupRequestValidator"/>.</param>
     /// <param name="cancellationToken">Aborts the request.</param>
@@ -64,6 +64,7 @@ public sealed class AuthController(UserService users, ILogger<AuthController> lo
             UserEntity user = await users.CreateAsync(
                 request.UserName,
                 request.Password,
+                isAdministrator: true,
                 firstOnly: true,
                 cancellationToken);
             user = await users.RecordSignInAsync(user, cancellationToken);

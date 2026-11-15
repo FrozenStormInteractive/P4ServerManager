@@ -9,7 +9,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { authGuard, routes } from '@/router'
 import { server } from '@/testing/server'
 
-const user = { id: 'u1', userName: 'admin', createdAt: '2026-11-14T10:00:00.000Z', lastSignInAt: null }
+const user = { id: 'u1', userName: 'admin', isAdministrator: true, createdAt: '2026-11-14T10:00:00.000Z', lastSignInAt: null }
 
 function serveSession (session: AuthSession) {
   server.use(http.get('/api/auth/session', () => HttpResponse.json(session)))
@@ -53,6 +53,19 @@ describe('authGuard', () => {
 
     expect((await navigate('/instances')).name).toBe('instances')
     expect((await navigate('/login')).name).toBe('dashboard')
+  })
+
+  it('keeps the management of the accounts for administrators', async () => {
+    serveSession({ setupRequired: false, user: { ...user, isAdministrator: false } })
+
+    expect((await navigate('/settings/users')).name).toBe('dashboard')
+    expect((await navigate('/settings/builds')).name).toBe('settings-builds')
+  })
+
+  it('lets an administrator manage the accounts', async () => {
+    serveSession({ setupRequired: false, user })
+
+    expect((await navigate('/settings/users')).name).toBe('settings-users')
   })
 
   it('shows the sign-in page when the daemon cannot be reached', async () => {

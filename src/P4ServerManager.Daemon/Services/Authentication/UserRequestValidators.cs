@@ -59,6 +59,12 @@ public sealed class CreateUserRequestValidator : AbstractValidator<CreateUserReq
 }
 
 /// <summary>
+/// Nothing to check in the request itself: whether the account is the last administrator is checked by
+/// <see cref="UserService"/>.
+/// </summary>
+public sealed class SetUserAdministratorRequestValidator : AbstractValidator<SetUserAdministratorRequest>;
+
+/// <summary>
 /// Checks a new password set on an account.
 /// </summary>
 public sealed class SetUserPasswordRequestValidator : AbstractValidator<SetUserPasswordRequest>

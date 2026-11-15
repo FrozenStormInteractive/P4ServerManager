@@ -17,12 +17,15 @@ internal static class UserCommand
     {
         Command command = new(
             "user",
-            "Manage the accounts that sign in to the web interface. All of them have the same rights. The CLI needs "
-            + "no account: whoever can open the socket of the daemon is trusted.");
+            "Manage the accounts that sign in to the web interface. Every account has all rights on the servers; only "
+            + "administrators manage the accounts. The CLI needs no account: whoever can open the socket of the daemon "
+            + "is trusted, as an administrator.");
         command.Aliases.Add("users");
         command.Subcommands.Add(CreateList(services));
         command.Subcommands.Add(CreateCreate(services));
         command.Subcommands.Add(CreateSetPassword(services));
+        command.Subcommands.Add(CreateSetAdministrator(services, isAdministrator: true));
+        command.Subcommands.Add(CreateSetAdministrator(services, isAdministrator: false));
         command.Subcommands.Add(CreateDelete(services));
         return command;
     }
@@ -49,11 +52,12 @@ internal static class UserCommand
                 return 0;
             }
 
-            TableWriter table = new("NAME", "CREATED", "LAST SIGN-IN");
+            TableWriter table = new("NAME", "ADMIN", "CREATED", "LAST SIGN-IN");
             foreach (UserDto user in users)
             {
                 table.AddRow(
                     user.UserName,
+                    user.IsAdministrator ? "yes" : "no",
                     BuildFormatting.FormatDate(user.CreatedAt),
                     BuildFormatting.FormatDate(user.LastSignInAt));
             }
@@ -67,10 +71,15 @@ internal static class UserCommand
     {
         Argument<string> nameArgument = CreateNameArgument();
         Option<bool> passwordStdinOption = CreatePasswordStdinOption();
+        Option<bool> adminOption = new("--admin")
+        {
+            Description = "Make the account an administrator, who manages the accounts. The first account always is one.",
+        };
         Command command = new("create", "Add an account, such as the first one after the installation.")
         {
             nameArgument,
             passwordStdinOption,
+            adminOption,
         };
         command.Aliases.Add("add");
 
@@ -83,7 +92,12 @@ internal static class UserCommand
 
             using DaemonClient client = invocation.CreateClient();
             UserDto user = await client.CreateUserAsync(
-                new CreateUserRequest { UserName = invocation.GetValue(nameArgument), Password = password },
+                new CreateUserRequest
+                {
+                    UserName = invocation.GetValue(nameArgument),
+                    Password = password,
+                    IsAdministrator = invocation.GetValue(adminOption),
+                },
                 cancellationToken);
 
             if (invocation.Json)
@@ -92,7 +106,10 @@ internal static class UserCommand
             }
             else
             {
-                await invocation.Output.WriteLineAsync($"Created account {user.UserName}.");
+                await invocation.Output.WriteLineAsync(
+                    user.IsAdministrator
+                        ? $"Created administrator account {user.UserName}."
+                        : $"Created account {user.UserName}.");
             }
             return 0;
         });
@@ -134,11 +151,46 @@ internal static class UserCommand
         return command;
     }
 
+    private static Command CreateSetAdministrator(CliServices services, bool isAdministrator)
+    {
+        Argument<string> nameArgument = CreateNameArgument();
+        Command command = isAdministrator
+            ? new Command("grant-admin", "Make an account an administrator, who manages the accounts.")
+            : new Command(
+                "revoke-admin",
+                "Take back the administrator right of an account. The last administrator keeps it.");
+        command.Arguments.Add(nameArgument);
+
+        services.SetAction(command, async (invocation, cancellationToken) =>
+        {
+            using DaemonClient client = invocation.CreateClient();
+            UserDto user = await client.ResolveUserAsync(invocation.GetValue(nameArgument), cancellationToken);
+            user = await client.SetUserAdministratorAsync(
+                user.Id,
+                new SetUserAdministratorRequest { IsAdministrator = isAdministrator },
+                cancellationToken);
+
+            if (invocation.Json)
+            {
+                invocation.WriteJson(user, CliJsonContext.Default.UserDto);
+            }
+            else
+            {
+                await invocation.Output.WriteLineAsync(
+                    isAdministrator
+                        ? $"{user.UserName} is an administrator."
+                        : $"{user.UserName} is no longer an administrator.");
+            }
+            return 0;
+        });
+        return command;
+    }
+
     private static Command CreateDelete(CliServices services)
     {
         Argument<string> nameArgument = CreateNameArgument();
         Option<bool> yesOption = new("--yes", "-y") { Description = "Delete without asking for a confirmation." };
-        Command command = new("delete", "Delete an account. Its sessions end. The last account cannot be deleted.")
+        Command command = new("delete", "Delete an account. Its sessions end. The last administrator cannot be deleted.")
         {
             nameArgument,
             yesOption,

@@ -10,6 +10,6 @@ public static class AuthContractMappings
 {
     public static UserDto ToDto(this User user)
     {
-        return new UserDto(user.Id, user.UserName, user.CreatedAt, user.LastSignInAt);
+        return new UserDto(user.Id, user.UserName, user.IsAdministrator, user.CreatedAt, user.LastSignInAt);
     }
 }

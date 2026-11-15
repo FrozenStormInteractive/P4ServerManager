@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { VApp } from 'vuetify/components'
 import SettingsPage from '@/pages/SettingsPage.vue'
+import { useAuthStore } from '@/stores/auth'
 import { createArchiveStatus, createBuild } from '@/testing/fixtures'
 import { mountWithPlugins } from '@/testing/mount'
 import { server } from '@/testing/server'
@@ -23,6 +24,8 @@ const policy: BuildArchivePolicy = {
   releases: [],
   keepLatestPerRelease: null,
 }
+
+const user = { id: 'u1', userName: 'admin', isAdministrator: true, createdAt: '2026-11-14T10:00:00.000Z', lastSignInAt: null }
 
 const versions: P4dVersion[] = [{ release: 'r25.2', version: '2025.2', cachedBuilds: [] }]
 
@@ -64,5 +67,20 @@ describe('SettingsPage', () => {
     const drawer = wrapper.findComponent({ name: 'VNavigationDrawer' })
     expect(drawer.find('[aria-label="settings"]').text()).toContain('p4d builds')
     expect(drawer.find('a[href="/settings/builds"]').exists()).toBe(true)
+  })
+
+  it('lists the accounts section for administrators only', async () => {
+    const { wrapper, router, pinia } = await mountWithPlugins(InApp, { attachTo: document.body })
+    const auth = useAuthStore(pinia)
+    auth.session = { setupRequired: false, user: { ...user, isAdministrator: false } }
+
+    await router.push('/settings')
+    await flushPromises()
+    const drawer = () => wrapper.findComponent({ name: 'VNavigationDrawer' })
+    expect(drawer().find('a[href="/settings/users"]').exists()).toBe(false)
+
+    auth.session = { setupRequired: false, user }
+    await flushPromises()
+    expect(drawer().find('a[href="/settings/users"]').exists()).toBe(true)
   })
 })

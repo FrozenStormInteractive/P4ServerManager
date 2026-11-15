@@ -19,6 +19,10 @@ declare module 'vue-router' {
      * The page needs no signed-in user.
      */
     public?: boolean
+    /**
+     * The page is for administrators only. The other users are sent to the dashboard.
+     */
+    administrator?: boolean
   }
 }
 
@@ -92,6 +96,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'users',
         name: 'settings-users',
         component: () => import('@/pages/settings/SettingsUsersPage.vue'),
+        meta: { administrator: true },
       },
     ],
   },
@@ -115,10 +120,12 @@ export async function authGuard (to: RouteLocationNormalized): Promise<RouteLoca
   const auth = useAuthStore()
   let setupRequired = false
   let signedIn = false
+  let administrator = false
   try {
     const session = await auth.ensureSession()
     setupRequired = session.setupRequired
     signedIn = session.user !== null
+    administrator = session.user?.isAdministrator ?? false
   } catch {
     // The daemon cannot be reached: the sign-in page tells it when the user tries.
   }
@@ -132,7 +139,10 @@ export async function authGuard (to: RouteLocationNormalized): Promise<RouteLoca
     }
     return { name: 'login', query: to.meta.public || to.fullPath === '/' ? {} : { redirect: to.fullPath } }
   }
-  return to.meta.public ? { name: 'dashboard' } : true
+  if (to.meta.public || (to.meta.administrator && !administrator)) {
+    return { name: 'dashboard' }
+  }
+  return true
 }
 
 router.beforeEach(authGuard)

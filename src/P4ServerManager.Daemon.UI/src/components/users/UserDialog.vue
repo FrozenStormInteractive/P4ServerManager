@@ -40,6 +40,16 @@
             type="password"
           />
 
+          <v-checkbox
+            v-if="!user"
+            v-model="fields.isAdministrator"
+            color="primary"
+            :hint="t('users.administratorHint')"
+            :label="t('users.administrator')"
+            name="isAdministrator"
+            persistent-hint
+          />
+
           <v-alert
             v-if="submitError"
             class="mt-4"
@@ -99,7 +109,7 @@
   const notifications = useNotificationsStore()
   const form = useTemplateRef<VForm>('form')
 
-  const fields = reactive({ userName: '', password: '', confirmation: '' })
+  const fields = reactive({ userName: '', password: '', confirmation: '', isAdministrator: false })
   const serverErrors = ref<Record<string, string[]>>({})
   const submitError = ref<string | null>(null)
   const submitting = ref(false)
@@ -115,6 +125,7 @@
       fields.userName = ''
       fields.password = ''
       fields.confirmation = ''
+      fields.isAdministrator = false
       serverErrors.value = {}
       submitError.value = null
     }
@@ -138,7 +149,11 @@
         await users.setPassword(props.user.id, fields.password)
         notifications.notify(t('users.passwordSet', { name: props.user.userName }))
       } else {
-        const user = await users.create({ userName: fields.userName, password: fields.password })
+        const user = await users.create({
+          userName: fields.userName,
+          password: fields.password,
+          isAdministrator: fields.isAdministrator,
+        })
         notifications.notify(t('users.created', { name: user.userName }))
       }
     } catch (error) {

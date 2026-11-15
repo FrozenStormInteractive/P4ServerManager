@@ -5,8 +5,9 @@ using Microsoft.EntityFrameworkCore;
 namespace P4ServerManager.Daemon.Database.Entities;
 
 /// <summary>
-/// An account that signs in to the web interface. All the accounts have the same rights. The CLI needs none: it reaches
-/// the API through the socket of the daemon.
+/// An account that signs in to the web interface. Every account has all rights on the servers; only administrators
+/// manage the accounts. The CLI needs none: it reaches the API through the socket of the daemon, with the rights of an
+/// administrator.
 /// </summary>
 [Index(nameof(UserName), IsUnique = true)]
 public sealed class User
@@ -29,6 +30,12 @@ public sealed class User
     /// Changes with the password. The sessions signed in with another stamp are rejected.
     /// </summary>
     public Guid SecurityStamp { get; set; }
+
+    /// <summary>
+    /// Whether the user manages the accounts: creates them, sets their passwords, deletes them and names the other
+    /// administrators. Once accounts exist, at least one of them is an administrator.
+    /// </summary>
+    public bool IsAdministrator { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

@@ -3,7 +3,7 @@ import type { CreateUserRequest, User } from '@/api/types'
 
 // Utilities
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import * as api from '@/api/users'
 
 /**
@@ -34,10 +34,18 @@ export const useUsersStore = defineStore('users', () => {
     await api.setUserPassword(id, { password })
   }
 
+  async function setAdministrator (id: string, isAdministrator: boolean): Promise<User> {
+    const user = await api.setUserAdministrator(id, { isAdministrator })
+    users.value = users.value.map(existing => existing.id === id ? user : existing)
+    return user
+  }
+
   async function remove (id: string) {
     await api.deleteUser(id)
     users.value = users.value.filter(user => user.id !== id)
   }
 
-  return { users, loaded, error, fetchAll, create, setPassword, remove }
+  const administratorCount = computed(() => users.value.filter(user => user.isAdministrator).length)
+
+  return { users, loaded, error, administratorCount, fetchAll, create, setPassword, setAdministrator, remove }
 })

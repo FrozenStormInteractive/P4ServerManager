@@ -29,6 +29,11 @@ public static class DaemonAuthentication
     public const string WebUserPolicy = "WebUser";
 
     /// <summary>
+    /// Policy of the endpoints that manage the accounts: administrators, and the CLI.
+    /// </summary>
+    public const string AdministratorPolicy = "Administrator";
+
+    /// <summary>
     /// Rate limiting policy of the sign-in and of the creation of the first account.
     /// </summary>
     public const string SignInRateLimitPolicy = "sign-in";
@@ -41,6 +46,7 @@ public static class DaemonAuthentication
             .ValidateOnStart();
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<InitialUserBootstrapper>();
+        builder.Services.AddSingleton<IAuthorizationHandler, AdministratorAuthorizationHandler>();
 
         builder.Services
             .AddAuthentication(DefaultScheme)
@@ -72,7 +78,10 @@ public static class DaemonAuthentication
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
             .AddPolicy(WebUserPolicy, policy => policy
                 .RequireAuthenticatedUser()
-                .AddAuthenticationSchemes(CookieAuthenticationDefaults.AuthenticationScheme));
+                .AddAuthenticationSchemes(CookieAuthenticationDefaults.AuthenticationScheme))
+            .AddPolicy(AdministratorPolicy, policy => policy
+                .RequireAuthenticatedUser()
+                .AddRequirements(new AdministratorRequirement()));
 
         builder.Services.AddRateLimiter(options =>
         {

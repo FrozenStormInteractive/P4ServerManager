@@ -724,6 +724,10 @@ export interface DirectoryListing {
 export interface User {
   id: string
   userName: string
+  /**
+   * Whether the user manages the accounts.
+   */
+  isAdministrator: boolean
   createdAt: string
   /**
    * When the user last signed in, or null if never.
@@ -767,6 +771,11 @@ export interface ChangePasswordRequest {
 export interface CreateUserRequest {
   userName: string
   password: string
+  isAdministrator?: boolean
+}
+
+export interface SetUserAdministratorRequest {
+  isAdministrator: boolean
 }
 
 export interface SetUserPasswordRequest {

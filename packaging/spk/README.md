@@ -43,8 +43,9 @@ The packages land in `artifacts/spk/`, named `P4ServerManager-<arch>-<version>-<
   folder.
 - **Accounts**: the web UI and the REST API on the UI port ask to sign in. The install wizard can create the first
   account; otherwise the web UI asks for it on the first visit, and anybody who reaches the port can create it until
-  then. Settings > Users adds the other accounts, all with the same rights. Passwords are stored as salted PBKDF2
-  hashes. The sessions are cookies signed with the keys in `keys/`: they last 14 days without a request
+  then. That first account is an administrator. Every account has all rights on the servers, but only administrators
+  manage the accounts in Settings > Users: the other users only change their own password. Passwords are stored as
+  salted PBKDF2 hashes. The sessions are cookies signed with the keys in `keys/`: they last 14 days without a request
   (`Authentication__SessionLifetime`) and survive a restart of the daemon. Sign-in attempts are limited to 10 per
   minute and per address (`Authentication__SignInAttemptsPerMinute`). The CLI needs no account: a lost password is
   reset with `sudo p4sm user set-password <name>`. The UI port serves plain HTTP, so the cookie and the passwords

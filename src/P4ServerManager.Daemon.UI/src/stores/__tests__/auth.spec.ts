@@ -6,7 +6,7 @@ import { ApiError, request, setUnauthorizedHandler } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { server } from '@/testing/server'
 
-const user = { id: 'u1', userName: 'admin', createdAt: '2026-11-14T10:00:00.000Z', lastSignInAt: null }
+const user = { id: 'u1', userName: 'admin', isAdministrator: true, createdAt: '2026-11-14T10:00:00.000Z', lastSignInAt: null }
 
 describe('auth store', () => {
   beforeEach(() => {

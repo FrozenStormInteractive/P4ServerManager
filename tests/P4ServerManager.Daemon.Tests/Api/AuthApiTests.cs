@@ -102,6 +102,7 @@ public sealed class AuthApiTests : IAsyncLifetime
         JsonElement session = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         session.GetProperty("user").GetProperty("userName").GetString().ShouldBe("admin");
         session.GetProperty("user").GetProperty("lastSignInAt").ValueKind.ShouldNotBe(JsonValueKind.Null);
+        session.GetProperty("user").GetProperty("isAdministrator").GetBoolean().ShouldBeTrue();
         (await client.GetAsync("api/users", TestContext.Current.CancellationToken)).StatusCode
             .ShouldBe(HttpStatusCode.OK);
     }
@@ -297,7 +298,7 @@ public sealed class AuthApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Users_AreManagedBySignedInUsers()
+    public async Task Users_AreManagedByAdministrators()
     {
         await CreateAccountAsync("admin");
         HttpClient client = CreateBrowserClient();
@@ -306,6 +307,10 @@ public sealed class AuthApiTests : IAsyncLifetime
         HttpResponseMessage created = await client.PostAsJsonAsync(
             "api/users",
             new { userName = "jane", password = Password },
+            TestContext.Current.CancellationToken);
+        HttpResponseMessage createdAdministrator = await client.PostAsJsonAsync(
+            "api/users",
+            new { userName = "bob", password = Password, isAdministrator = true },
             TestContext.Current.CancellationToken);
         HttpResponseMessage duplicate = await client.PostAsJsonAsync(
             "api/users",
@@ -319,19 +324,89 @@ public sealed class AuthApiTests : IAsyncLifetime
         JsonElement users = await client.GetFromJsonAsync<JsonElement>("api/users", TestContext.Current.CancellationToken);
 
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        createdAdministrator.StatusCode.ShouldBe(HttpStatusCode.Created);
         duplicate.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         reset.StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        users.EnumerateArray().Select(u => u.GetProperty("userName").GetString()).ShouldBe(["admin", "jane"]);
+        users.EnumerateArray().Select(u => u.GetProperty("userName").GetString()).ShouldBe(["admin", "bob", "jane"]);
+        users.EnumerateArray().Select(u => u.GetProperty("isAdministrator").GetBoolean()).ShouldBe([true, true, false]);
         users[0].TryGetProperty("passwordHash", out _).ShouldBeFalse();
         (await LoginAsync(CreateBrowserClient(), "jane", "a brand new password")).StatusCode
             .ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
-    public async Task DeleteUser_KeepsTheLastAccount_AndEndsTheSessionsOfADeletedOne()
+    public async Task Users_AreForbidden_ToTheOtherUsers_WhoStillChangeTheirOwnPassword()
+    {
+        User admin = await CreateAccountAsync("admin");
+        await CreateAccountAsync("jane");
+        HttpClient client = CreateBrowserClient();
+        await LoginAsync(client, "jane", Password);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        HttpResponseMessage[] responses =
+        [
+            await client.GetAsync("api/users", cancellationToken),
+            await client.GetAsync($"api/users/{admin.Id}", cancellationToken),
+            await client.PostAsJsonAsync("api/users", new { userName = "bob", password = Password }, cancellationToken),
+            await client.PutAsJsonAsync($"api/users/{admin.Id}/password", new { password = "a brand new password" }, cancellationToken),
+            await client.PutAsJsonAsync($"api/users/{admin.Id}/administrator", new { isAdministrator = false }, cancellationToken),
+            await client.DeleteAsync($"api/users/{admin.Id}", cancellationToken),
+        ];
+        HttpResponseMessage ownPassword = await client.PutAsJsonAsync(
+            "api/auth/password",
+            new { currentPassword = Password, newPassword = "a brand new password" },
+            cancellationToken);
+
+        responses.Select(r => r.StatusCode).ShouldAllBe(status => status == HttpStatusCode.Forbidden);
+        ownPassword.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await client.GetAsync("api/instances", cancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await LoginAsync(CreateBrowserClient(), "admin", Password)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task SetAdministrator_GrantsAndTakesBackTheRight_AtOnce_ButKeepsTheLastAdministrator()
     {
         User admin = await CreateAccountAsync("admin");
         User jane = await CreateAccountAsync("jane");
+        HttpClient adminClient = CreateBrowserClient();
+        HttpClient janeClient = CreateBrowserClient();
+        await LoginAsync(adminClient, "admin", Password);
+        await LoginAsync(janeClient, "jane", Password);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        HttpResponseMessage lastRevoked = await adminClient.PutAsJsonAsync(
+            $"api/users/{admin.Id}/administrator",
+            new { isAdministrator = false },
+            cancellationToken);
+        HttpResponseMessage granted = await adminClient.PutAsJsonAsync(
+            $"api/users/{jane.Id}/administrator",
+            new { isAdministrator = true },
+            cancellationToken);
+        HttpStatusCode janeAsAdministrator = (await janeClient.GetAsync("api/users", cancellationToken)).StatusCode;
+        HttpResponseMessage revoked = await janeClient.PutAsJsonAsync(
+            $"api/users/{admin.Id}/administrator",
+            new { isAdministrator = false },
+            cancellationToken);
+        HttpStatusCode adminAfterwards = (await adminClient.GetAsync("api/users", cancellationToken)).StatusCode;
+
+        lastRevoked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await lastRevoked.Content.ReadAsStringAsync(cancellationToken)).ShouldContain("last administrator");
+        granted.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await granted.Content.ReadFromJsonAsync<JsonElement>(cancellationToken))
+            .GetProperty("isAdministrator").GetBoolean().ShouldBeTrue();
+        janeAsAdministrator.ShouldBe(HttpStatusCode.OK);
+        revoked.StatusCode.ShouldBe(HttpStatusCode.OK);
+        // The session goes on, without the right.
+        adminAfterwards.ShouldBe(HttpStatusCode.Forbidden);
+        (await adminClient.GetAsync("api/instances", cancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task DeleteUser_KeepsTheLastAdministrator_AndEndsTheSessionsOfADeletedOne()
+    {
+        User admin = await CreateAccountAsync("admin");
+        User jane = await CreateAccountAsync("jane");
+        await CreateAccountAsync("bob");
         HttpClient adminClient = CreateBrowserClient();
         HttpClient janeClient = CreateBrowserClient();
         await LoginAsync(adminClient, "admin", Password);
@@ -345,6 +420,7 @@ public sealed class AuthApiTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        // Bob remains, but is not an administrator.
         last.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await janeClient.GetAsync("api/instances", TestContext.Current.CancellationToken)).StatusCode
             .ShouldBe(HttpStatusCode.Unauthorized);
@@ -397,10 +473,15 @@ public sealed class AuthApiTests : IAsyncLifetime
         return client;
     }
 
+    // The first account is an administrator, the next ones are not.
     private Task<User> CreateAccountAsync(string userName)
     {
-        return Factory.Services.GetRequiredService<UserService>()
-            .CreateAsync(userName, Password, firstOnly: false, TestContext.Current.CancellationToken);
+        return Factory.Services.GetRequiredService<UserService>().CreateAsync(
+            userName,
+            Password,
+            isAdministrator: false,
+            firstOnly: false,
+            TestContext.Current.CancellationToken);
     }
 
     private static Task<HttpResponseMessage> LoginAsync(HttpClient client, string userName, string password)

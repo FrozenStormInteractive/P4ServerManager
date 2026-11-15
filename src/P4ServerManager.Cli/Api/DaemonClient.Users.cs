@@ -36,6 +36,19 @@ internal sealed partial class DaemonClient
         await EnsureSuccessAsync(response, cancellationToken);
     }
 
+    public Task<UserDto> SetUserAdministratorAsync(
+        Guid id,
+        SetUserAdministratorRequest request,
+        CancellationToken cancellationToken)
+    {
+        return SendAsync(
+            HttpMethod.Put,
+            $"api/users/{id}/administrator",
+            Json.UserDto,
+            cancellationToken,
+            JsonContent.Create(request, Json.SetUserAdministratorRequest));
+    }
+
     public async Task DeleteUserAsync(Guid id, CancellationToken cancellationToken)
     {
         using HttpResponseMessage response = await SendAsync(

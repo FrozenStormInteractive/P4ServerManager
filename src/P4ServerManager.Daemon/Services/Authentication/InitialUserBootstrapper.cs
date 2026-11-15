@@ -9,8 +9,8 @@ using P4ServerManager.Daemon.Options;
 namespace P4ServerManager.Daemon.Services.Authentication;
 
 /// <summary>
-/// Creates the first account from <see cref="DaemonAuthenticationOptions.InitialUserFile"/>, which the install wizard
-/// of the package writes. Runs at startup, before the daemon listens, so that nobody can create the first account from
+/// Creates the first account, an administrator, from <see cref="DaemonAuthenticationOptions.InitialUserFile"/>, which
+/// the install wizard of the package writes. Runs at startup, before the daemon listens, so that nobody can create the first account from
 /// the web interface in the meantime.
 /// </summary>
 public sealed class InitialUserBootstrapper(
@@ -67,6 +67,11 @@ public sealed class InitialUserBootstrapper(
             return;
         }
 
-        await userService.CreateAsync(request.UserName, request.Password, firstOnly: true, cancellationToken);
+        await userService.CreateAsync(
+            request.UserName,
+            request.Password,
+            isAdministrator: true,
+            firstOnly: true,
+            cancellationToken);
     }
 }

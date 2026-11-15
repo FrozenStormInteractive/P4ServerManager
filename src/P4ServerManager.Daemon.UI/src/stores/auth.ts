@@ -1,5 +1,5 @@
 // Types
-import type { AuthSession, ChangePasswordRequest, LoginRequest, SetupRequest } from '@/api/types'
+import type { AuthSession, ChangePasswordRequest, LoginRequest, SetupRequest, User } from '@/api/types'
 
 // Utilities
 import { defineStore } from 'pinia'
@@ -18,6 +18,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const user = computed(() => session.value?.user ?? null)
   const setupRequired = computed(() => session.value?.setupRequired ?? false)
+  const isAdministrator = computed(() => user.value?.isAdministrator ?? false)
 
   /**
    * The session, read from the daemon the first time only.
@@ -58,6 +59,15 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * Takes in a change of the account of the signed-in user, such as its administrator right.
+   */
+  function userChanged (changed: User) {
+    if (session.value?.user?.id === changed.id) {
+      session.value = { ...session.value, user: changed }
+    }
+  }
+
+  /**
    * Forgets the user once the daemon no longer accepts its session: it expired, its password changed or its account
    * was deleted.
    */
@@ -65,5 +75,17 @@ export const useAuthStore = defineStore('auth', () => {
     session.value = SIGNED_OUT
   }
 
-  return { session, user, setupRequired, ensureSession, setup, login, logout, changePassword, sessionEnded }
+  return {
+    session,
+    user,
+    setupRequired,
+    isAdministrator,
+    ensureSession,
+    setup,
+    login,
+    logout,
+    changePassword,
+    userChanged,
+    sessionEnded,
+  }
 })

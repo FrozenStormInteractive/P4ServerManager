@@ -8,7 +8,7 @@ namespace P4ServerManager.Daemon.Services.Authentication;
 
 /// <summary>
 /// The accounts of the web interface. The passwords are hashed with <see cref="PasswordHasher{TUser}"/> (salted
-/// PBKDF2), never stored.
+/// PBKDF2), never stored. Once accounts exist, at least one of them is an administrator.
 /// </summary>
 public sealed class UserService(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
@@ -17,7 +17,7 @@ public sealed class UserService(
 {
     private readonly PasswordHasher<User> hasher = new();
 
-    // Serializes the changes that depend on the number of accounts: two first accounts, or no account left.
+    // Serializes the changes that depend on the other accounts: two first accounts, or no administrator left.
     private readonly SemaphoreSlim writeLock = new(1, 1);
 
     // Protects against the enumeration of the accounts by timing. Checking a password costs a PBKDF2 hash, tens of
@@ -54,6 +54,15 @@ public sealed class UserService(
     }
 
     /// <summary>
+    /// Whether an account exists and is an administrator.
+    /// </summary>
+    public async Task<bool> IsAdministratorAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Users.AnyAsync(u => u.Id == id && u.IsAdministrator, cancellationToken);
+    }
+
+    /// <summary>
     /// The security stamp of an account, or null when it no longer exists.
     /// </summary>
     public async Task<Guid?> GetSecurityStampAsync(Guid id, CancellationToken cancellationToken)
@@ -70,6 +79,9 @@ public sealed class UserService(
     /// </summary>
     /// <param name="userName">Name of the account, already checked.</param>
     /// <param name="password">Password of the account, already checked.</param>
+    /// <param name="isAdministrator">
+    /// Whether the user manages the accounts. The first account is always an administrator.
+    /// </param>
     /// <param name="firstOnly">Only adds the account when none exists.</param>
     /// <param name="cancellationToken">Aborts the creation.</param>
     /// <exception cref="UserConflictException">
@@ -78,6 +90,7 @@ public sealed class UserService(
     public async Task<User> CreateAsync(
         string userName,
         string password,
+        bool isAdministrator,
         bool firstOnly,
         CancellationToken cancellationToken)
     {
@@ -94,6 +107,8 @@ public sealed class UserService(
             {
                 throw new UserConflictException($"An account named {userName} already exists.");
             }
+            // Otherwise, nobody would manage the accounts from the web interface.
+            isAdministrator |= !await db.Users.AnyAsync(cancellationToken);
 
             User user = new()
             {
@@ -101,12 +116,15 @@ public sealed class UserService(
                 UserName = userName,
                 PasswordHash = string.Empty,
                 SecurityStamp = Guid.NewGuid(),
+                IsAdministrator = isAdministrator,
                 CreatedAt = timeProvider.GetUtcNow(),
             };
             user.PasswordHash = hasher.HashPassword(user, password);
             db.Users.Add(user);
             await db.SaveChangesAsync(cancellationToken);
-            logger.LogInformation("Created account {User}", user.UserName);
+            logger.LogInformation(
+                user.IsAdministrator ? "Created administrator account {User}" : "Created account {User}",
+                user.UserName);
             return user;
         }
         finally
@@ -194,10 +212,48 @@ public sealed class UserService(
     }
 
     /// <summary>
+    /// Names an account administrator, or takes this right back. The right is checked on each request, so the
+    /// sessions of the account go on with the new right.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No account has this identifier.</exception>
+    /// <exception cref="UserConflictException">
+    /// The account is the last administrator, and would lose the right.
+    /// </exception>
+    public async Task<User> SetAdministratorAsync(Guid id, bool isAdministrator, CancellationToken cancellationToken)
+    {
+        await writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            User user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, cancellationToken)
+                ?? throw new KeyNotFoundException();
+            if (user.IsAdministrator == isAdministrator)
+            {
+                return user;
+            }
+            if (!isAdministrator)
+            {
+                await EnsureOtherAdministratorAsync(db, id, cancellationToken);
+            }
+
+            user.IsAdministrator = isAdministrator;
+            await db.SaveChangesAsync(cancellationToken);
+            logger.LogInformation(
+                isAdministrator ? "Made account {User} an administrator" : "Account {User} is no longer an administrator",
+                user.UserName);
+            return user;
+        }
+        finally
+        {
+            writeLock.Release();
+        }
+    }
+
+    /// <summary>
     /// Deletes an account. Its sessions end.
     /// </summary>
     /// <exception cref="KeyNotFoundException">No account has this identifier.</exception>
-    /// <exception cref="UserConflictException">The account is the last one.</exception>
+    /// <exception cref="UserConflictException">The account is the last administrator.</exception>
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         await writeLock.WaitAsync(cancellationToken);
@@ -206,10 +262,9 @@ public sealed class UserService(
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
             User user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, cancellationToken)
                 ?? throw new KeyNotFoundException();
-            if (!await db.Users.AnyAsync(u => u.Id != id, cancellationToken))
+            if (user.IsAdministrator)
             {
-                throw new UserConflictException(
-                    "This is the last account: nobody could sign in to the web interface without it.");
+                await EnsureOtherAdministratorAsync(db, id, cancellationToken);
             }
             db.Users.Remove(user);
             await db.SaveChangesAsync(cancellationToken);
@@ -218,6 +273,21 @@ public sealed class UserService(
         finally
         {
             writeLock.Release();
+        }
+    }
+
+    // Without an administrator, nobody could manage the accounts from the web interface. The last account is always
+    // the last administrator, so it cannot be deleted either.
+    private static async Task EnsureOtherAdministratorAsync(
+        DaemonDbContext db,
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        if (!await db.Users.AnyAsync(u => u.Id != id && u.IsAdministrator, cancellationToken))
+        {
+            throw new UserConflictException(
+                "This is the last administrator: nobody could manage the accounts from the web interface without it. "
+                + "Make another account an administrator first.");
         }
     }
 

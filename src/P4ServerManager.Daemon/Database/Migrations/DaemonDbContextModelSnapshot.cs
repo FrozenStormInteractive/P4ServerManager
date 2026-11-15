@@ -541,6 +541,9 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsAdministrator")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset?>("LastSignInAt")
                         .HasColumnType("TEXT");
 

@@ -8,8 +8,8 @@ import { useUsersStore } from '@/stores/users'
 import { mountWithPlugins } from '@/testing/mount'
 import { server } from '@/testing/server'
 
-const admin = { id: 'u1', userName: 'admin', createdAt: '2026-11-14T10:00:00.000Z', lastSignInAt: null }
-const jane = { id: 'u2', userName: 'jane', createdAt: '2026-11-14T11:00:00.000Z', lastSignInAt: null }
+const admin = { id: 'u1', userName: 'admin', isAdministrator: true, createdAt: '2026-11-14T10:00:00.000Z', lastSignInAt: null }
+const jane = { id: 'u2', userName: 'jane', isAdministrator: false, createdAt: '2026-11-14T11:00:00.000Z', lastSignInAt: null }
 
 async function fill (name: string, value: string) {
   const element = document.querySelector<HTMLInputElement>(`[name="${CSS.escape(name)}"]`)!
@@ -25,6 +25,10 @@ function button (label: string) {
     throw new Error(`No button ${label}.`)
   }
   return element
+}
+
+function switchOf (name: string) {
+  return document.querySelector<HTMLInputElement>(`input[aria-label="${CSS.escape(name)} is an administrator"]`)!
 }
 
 async function mountCard (users = [admin, jane]) {
@@ -69,7 +73,9 @@ describe('UserListCard', () => {
     await fill('confirmation', 'correct horse battery')
     document.querySelector('#user-form')!.dispatchEvent(new Event('submit', { cancelable: true }))
 
-    await vi.waitFor(() => expect(requests).toEqual([{ userName: 'bob', password: 'correct horse battery' }]))
+    await vi.waitFor(() => expect(requests).toEqual([
+      { userName: 'bob', password: 'correct horse battery', isAdministrator: false },
+    ]))
     await vi.waitFor(() => expect(useUsersStore(pinia).users.map(u => u.userName)).toEqual(['admin', 'bob', 'jane']))
   })
 
@@ -92,9 +98,48 @@ describe('UserListCard', () => {
     await vi.waitFor(() => expect(useUsersStore(pinia).users.map(u => u.userName)).toEqual(['admin']))
   })
 
-  it('cannot delete the last account', async () => {
-    await mountCard([admin])
+  it('cannot delete the last administrator, nor take its right back', async () => {
+    await mountCard()
 
-    expect(button('Delete account').disabled).toBe(true)
+    const [deleteAdmin, deleteJane] = document.querySelectorAll<HTMLButtonElement>('button[aria-label="Delete account"]')
+    expect(deleteAdmin!.disabled).toBe(true)
+    expect(deleteJane!.disabled).toBe(false)
+    expect(switchOf('admin').disabled).toBe(true)
+    expect(switchOf('jane').disabled).toBe(false)
+  })
+
+  it('makes another account an administrator', async () => {
+    const requests: unknown[] = []
+    server.use(http.put('/api/users/:id/administrator', async ({ request }) => {
+      requests.push(await request.json())
+      return HttpResponse.json({ ...jane, isAdministrator: true })
+    }))
+    const { pinia } = await mountCard()
+
+    switchOf('jane').click()
+
+    await vi.waitFor(() => expect(requests).toEqual([{ isAdministrator: true }]))
+    await vi.waitFor(() => expect(useUsersStore(pinia).administratorCount).toBe(2))
+    expect(switchOf('admin').disabled).toBe(false)
+  })
+
+  it('asks before the user stops being an administrator, then leaves the page', async () => {
+    const requests: unknown[] = []
+    server.use(http.put('/api/users/:id/administrator', async ({ request }) => {
+      requests.push(await request.json())
+      return HttpResponse.json({ ...admin, isAdministrator: false })
+    }))
+    const { pinia, router } = await mountCard([admin, { ...jane, isAdministrator: true }])
+
+    switchOf('admin').click()
+    await flushPromises()
+    expect(requests).toEqual([])
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('.v-overlay button')]
+      .find(b => b.textContent?.trim() === 'Stop being an administrator')!
+    confirm.click()
+
+    await vi.waitFor(() => expect(requests).toEqual([{ isAdministrator: false }]))
+    await vi.waitFor(() => expect(useAuthStore(pinia).isAdministrator).toBe(false))
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('dashboard'))
   })
 })

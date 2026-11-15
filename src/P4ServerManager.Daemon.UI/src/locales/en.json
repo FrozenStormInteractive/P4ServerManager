@@ -845,7 +845,7 @@
     }
   },
   "users": {
-    "text": "Accounts that sign in to the web interface. All of them have the same rights, the management of the accounts included. The command line needs no account: run 'p4sm user set-password' on the server to reset a lost password.",
+    "text": "Accounts that sign in to the web interface. Every account has all rights on the servers; only administrators manage the accounts. The command line needs no account: run 'p4sm user set-password' on the server to reset a lost password.",
     "add": "Add account",
     "createTitle": "Add an account",
     "passwordTitle": "New password for {name}",
@@ -856,6 +856,14 @@
     "removeText": "Its user can no longer sign in, and its sessions end.",
     "removeSelfText": "This is your account: you are signed out.",
     "you": "You",
+    "administrator": "Administrator",
+    "administratorHint": "Administrators manage the accounts.",
+    "administratorOf": "{name} is an administrator",
+    "administratorGranted": "{name} is an administrator.",
+    "administratorRevoked": "{name} is no longer an administrator.",
+    "demoteSelf": "Stop being an administrator",
+    "demoteSelfTitle": "Stop being an administrator?",
+    "demoteSelfText": "You can no longer manage the accounts. Another administrator can give you this right back.",
     "never": "Never",
     "created": "Account {name} added.",
     "passwordSet": "New password set for {name}.",
@@ -863,6 +871,7 @@
     "loadError": "Could not load the accounts: {message}",
     "headers": {
       "userName": "User name",
+      "isAdministrator": "Administrator",
       "createdAt": "Created",
       "lastSignInAt": "Last sign-in"
     }

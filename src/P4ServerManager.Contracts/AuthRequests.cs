@@ -91,10 +91,15 @@ public sealed record CreateUserRequest
     [Required]
     public string Password { get; init; } = null!;
 
+    /// <summary>
+    /// True so that the user manages the accounts. False when missing.
+    /// </summary>
+    public bool IsAdministrator { get; init; }
+
     // Keeps the password out of logs that print the record.
     public override string ToString()
     {
-        return $"CreateUserRequest {{ UserName = {UserName} }}";
+        return $"CreateUserRequest {{ UserName = {UserName}, IsAdministrator = {IsAdministrator} }}";
     }
 }
 
@@ -114,4 +119,15 @@ public sealed record SetUserPasswordRequest
     {
         return "SetUserPasswordRequest { }";
     }
+}
+
+/// <summary>
+/// Names an account administrator, or takes this right back.
+/// </summary>
+public sealed record SetUserAdministratorRequest
+{
+    /// <summary>
+    /// True so that the user manages the accounts. False when missing. The last administrator cannot lose this right.
+    /// </summary>
+    public bool IsAdministrator { get; init; }
 }
