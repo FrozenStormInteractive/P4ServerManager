@@ -41,6 +41,15 @@ The packages land in `artifacts/spk/`, named `P4ServerManager-<arch>-<version>-<
   (every p4d build, compressed with zstd), `builds/` (the builds the servers use, extracted), `instances/` (logs,
   pid files and the default roots of the servers) and `keys/`. `Daemon__ArchiveDirectory` moves the archive to another
   folder.
+- **Accounts**: the web UI and the REST API on the UI port ask to sign in. The install wizard can create the first
+  account; otherwise the web UI asks for it on the first visit, and anybody who reaches the port can create it until
+  then. Settings > Users adds the other accounts, all with the same rights. Passwords are stored as salted PBKDF2
+  hashes. The sessions are cookies signed with the keys in `keys/`: they last 14 days without a request
+  (`Authentication__SessionLifetime`) and survive a restart of the daemon. Sign-in attempts are limited to 10 per
+  minute and per address (`Authentication__SignInAttemptsPerMinute`). The CLI needs no account: a lost password is
+  reset with `sudo p4sm user set-password <name>`. The UI port serves plain HTTP, so the cookie and the passwords
+  cross the network in clear: reach it through HTTPS, with the reverse proxy of DSM (Control Panel > Login Portal >
+  Advanced > Reverse Proxy, with the WebSocket headers), from anything but a trusted network.
 - **Super users**: the daemon stores the super user of each server, to administer it, with its password encrypted by
   the keys in `keys/`, readable by the daemon only. A backup of the data directory must include `keys/`: without them,
   the stored passwords cannot be read, and each super user must be set again from the instance page or with
@@ -58,7 +67,8 @@ The packages land in `artifacts/spk/`, named `P4ServerManager-<arch>-<version>-<
   package when auto-start is on. A daemon crash or restart outside of Package Center leaves them running.
 - **CLI**: `p4sm`, linked in `/usr/local/bin`. It talks to the daemon through the Unix socket
   `/var/packages/P4ServerManager/var/daemon.sock`, open to the `Perforce` user and group only: run it with `sudo`, or
-  as a member of the `Perforce` group. `P4SM_SOCKET` or `--socket` points it to another socket.
+  as a member of the `Perforce` group. Whoever can open the socket is trusted, without an account. `P4SM_SOCKET` or
+  `--socket` points it to another socket.
 - **Uninstallation**: the wizard keeps the data by default. Deleting it removes the database, `archive/`, `builds/`,
   `instances/`, `import/` and `keys/`. The shared folder and the roots chosen outside of it are always kept.
 - **HelixCoreServer package**: at each start, the package copies the p4dctl-ng profiles of the

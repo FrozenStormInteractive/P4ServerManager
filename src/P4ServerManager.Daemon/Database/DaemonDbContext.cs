@@ -26,9 +26,12 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
 
     public DbSet<RestoreRun> RestoreRuns => Set<RestoreRun>();
 
+    public DbSet<User> Users => Set<User>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Only what data annotations cannot express lives here: enums stored as text and the owned super user.
+        // Only what data annotations cannot express lives here: enums stored as text, the owned super user and the
+        // case-insensitive user names.
         modelBuilder.Entity<P4ServerInstance>(instance =>
         {
             instance.Property(i => i.State).HasConversion<string>();
@@ -70,5 +73,8 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
             run.Property(r => r.Target).HasConversion<string>();
             run.Property(r => r.Status).HasConversion<string>();
         });
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.UserName).UseCollation("NOCASE");
     }
 }

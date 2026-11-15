@@ -1,5 +1,16 @@
 #!/bin/sh
-# After the files of the package are installed, on an installation and an upgrade. Nothing to do: the profiles of
-# the HelixCoreServer package are copied when the package starts.
+# After the files of the package are installed, on an installation and an upgrade. The profiles of the HelixCoreServer
+# package are copied when the package starts.
+
+. "$(dirname "$0")/common"
+
+# The account of the install wizard, for the daemon to create at its first start: the user name on the first line,
+# the password on the rest. Readable by the package user only; the daemon deletes it once read.
+if [ -n "$wizard_admin_password" ]; then
+    (
+        umask 077
+        printf '%s\n%s\n' "$wizard_admin_user" "$wizard_admin_password" >"$INITIAL_USER_FILE"
+    ) || report "The administrator account could not be saved. Create it from the web interface."
+fi
 
 exit 0

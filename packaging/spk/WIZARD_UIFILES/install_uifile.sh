@@ -49,7 +49,7 @@ cat >"$SYNOPKG_TEMP_LOGFILE" <<EOF
         "items": [
             {
                 "type": "singleselect",
-                "desc": "P4 Server Manager is not affiliated with Perforce Software, nor is it an official P4 tool. It downloads the p4d builds you choose from Perforce.<br><br>The P4ServerManager shared folder will hold its database, the p4d builds and the P4 servers you create in their default location.<br><br>The web interface listens on port @UI_PORT@: keep that port closed to untrusted networks.$legacy_note",
+                "desc": "P4 Server Manager is not affiliated with Perforce Software, nor is it an official P4 tool. It downloads the p4d builds you choose from Perforce.<br><br>The P4ServerManager shared folder will hold its database, the p4d builds and the P4 servers you create in their default location.<br><br>The web interface listens on port @UI_PORT@ and asks to sign in. Keep that port closed to untrusted networks, or reach it through HTTPS (Control Panel > Login Portal > Reverse Proxy).$legacy_note",
                 "subitems": [
                     {
                         "key": "wizard_understood",
@@ -59,9 +59,59 @@ cat >"$SYNOPKG_TEMP_LOGFILE" <<EOF
                 ]
             }
         ]
-    }
+    },
 EOF
 
+# The first account of the web interface. Left empty, the web interface asks for it on the first visit. The account
+# is created by the daemon at its first start; preinst checks that both passwords match.
+cat >>"$SYNOPKG_TEMP_LOGFILE" <<'EOF'
+    {
+        "step_title": "Administrator account",
+        "items": [
+            {
+                "type": "textfield",
+                "desc": "The account that signs in to the web interface. It can add other accounts. Leave the password empty to create the account from the web interface on the first visit: until then, anybody who reaches the port can create it.",
+                "subitems": [
+                    {
+                        "key": "wizard_admin_user",
+                        "desc": "User name",
+                        "defaultValue": "admin",
+                        "validator": {
+                            "allowBlank": false,
+                            "regex": {
+                                "expr": "/^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$/",
+                                "errorText": "A letter or a digit, then up to 63 letters, digits, '.', '-', '_' or '@'."
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "type": "password",
+                "subitems": [
+                    {
+                        "key": "wizard_admin_password",
+                        "desc": "Password",
+                        "validator": {
+                            "allowBlank": true,
+                            "regex": {
+                                "expr": "/^.{10,128}$/",
+                                "errorText": "Between 10 and 128 characters."
+                            }
+                        }
+                    },
+                    {
+                        "key": "wizard_admin_password_confirm",
+                        "desc": "Confirm the password",
+                        "validator": {
+                            "allowBlank": true
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+EOF
 
 echo "]" >>"$SYNOPKG_TEMP_LOGFILE"
 exit 0

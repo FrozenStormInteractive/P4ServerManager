@@ -1,4 +1,12 @@
 #!/bin/sh
-# Before the files of the package are installed. Nothing to check: INFO sets the DSM version and the architecture.
+# Before the files of the package are installed. INFO sets the DSM version and the architecture. Checks the account
+# of the install wizard, so that a typo stops the installation before anything is installed.
+
+if [ -n "$wizard_admin_password" ] || [ -n "$wizard_admin_password_confirm" ]; then
+    if [ "$wizard_admin_password" != "$wizard_admin_password_confirm" ]; then
+        echo "The two passwords of the administrator account do not match." >>"$SYNOPKG_TEMP_LOGFILE"
+        exit 1
+    fi
+fi
 
 exit 0

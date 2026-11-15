@@ -15,6 +15,7 @@ using P4ServerManager.Daemon.Hosting;
 using P4ServerManager.Daemon.Hubs;
 using P4ServerManager.Daemon.Options;
 using P4ServerManager.Daemon.Services;
+using P4ServerManager.Daemon.Services.Authentication;
 using P4ServerManager.Daemon.Services.Backups;
 using P4ServerManager.Daemon.Services.Builds;
 using P4ServerManager.Daemon.Services.Instances;
@@ -32,6 +33,7 @@ builder.Services.AddOptions<DaemonOptions>()
     .ValidateOnStart();
 builder.Services.AddSingleton<DaemonPaths>();
 builder.AddCliSocket();
+builder.AddDaemonAuthentication();
 builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddDbContextFactory<DaemonDbContext>((services, options) =>
@@ -82,36 +84,38 @@ builder.Services.AddSignalR()
     .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<SessionCookieDocumentTransformer>());
 
 var app = builder.Build();
 
 await PrepareDataDirectoryAsync(app.Services);
 
 app.UseDefaultFiles();
-app.MapStaticAssets();
+// The web interface loads without a session: it shows the sign-in page by itself.
+app.MapStaticAssets().AllowAnonymous();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
 }
 
 // The CLI talks plain HTTP through its socket: redirecting it to the HTTPS port would send it off the socket.
 app.UseWhen(context => !CliSocket.IsCliSocketRequest(context), branch => branch.UseHttpsRedirection());
 
-app.UseAuthorization();
-
+app.UseDaemonAuthentication();
 
 app.MapControllers();
-app.MapHub<InstancesHub>(InstancesHub.Path);
-app.MapHub<BuildsHub>(BuildsHub.Path);
+// A hub connection ends with the session it was opened with.
+app.MapHub<InstancesHub>(InstancesHub.Path, options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<BuildsHub>(BuildsHub.Path, options => options.CloseOnAuthenticationExpiration = true);
 
-app.MapFallbackToFile("/index.html");
+app.MapFallbackToFile("/index.html").AllowAnonymous();
 
 app.Run();
 
-// Creates the data directory and brings the database schema up to date, before the hosted services read it.
+// Creates the data directory, brings the database schema up to date and creates the first account from the file of the
+// install wizard, before the hosted services read the database and before the daemon listens.
 static async Task PrepareDataDirectoryAsync(IServiceProvider services)
 {
     DaemonPaths paths = services.GetRequiredService<DaemonPaths>();
@@ -127,8 +131,12 @@ static async Task PrepareDataDirectoryAsync(IServiceProvider services)
 
     IDbContextFactory<DaemonDbContext> dbContextFactory =
         services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
-    await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync();
-    await db.Database.MigrateAsync();
+    await using (DaemonDbContext db = await dbContextFactory.CreateDbContextAsync())
+    {
+        await db.Database.MigrateAsync();
+    }
+
+    await services.GetRequiredService<InitialUserBootstrapper>().RunAsync(CancellationToken.None);
 }
 
 /// <summary>

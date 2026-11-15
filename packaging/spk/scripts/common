@@ -17,6 +17,8 @@ DAEMON_LOG_FILE="$VAR_DIR/daemon.log"
 # Socket of the CLI, only open to the Perforce user and group. bin/p4sm has the same path: keep both in sync.
 DAEMON_SOCKET="$VAR_DIR/daemon.sock"
 DATA_DIR_FILE="$ETC_DIR/data-dir"
+# First account of the web interface, written by postinst from the install wizard and deleted by the daemon once read.
+INITIAL_USER_FILE="$VAR_DIR/initial-user"
 
 # Package whose p4dctl-ng profiles the daemon offers to import.
 LEGACY_PACKAGE="HelixCoreServer"
@@ -94,7 +96,7 @@ start_daemon() {
     ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_URLS="http://+:$UI_PORT" \
     Daemon__DataDirectory="$data_dir" \
-    Daemon__SocketPath="$DAEMON_SOCKET" \
+    Daemon__SocketPath="$DAEMON_SOCKET"     Authentication__InitialUserFile="$INITIAL_USER_FILE" \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
         nohup "$DAEMON_BIN" >>"$DAEMON_LOG_FILE" 2>&1 </dev/null &
     echo $! >"$DAEMON_PID_FILE"
@@ -119,7 +121,8 @@ start_daemon() {
 
 daemon_listens() {
     if command -v curl >/dev/null 2>&1; then
-        curl -fs -o /dev/null --max-time 2 "http://127.0.0.1:$UI_PORT/api/instances"
+        # The only endpoint of the API that needs no session.
+        curl -fs -o /dev/null --max-time 2 "http://127.0.0.1:$UI_PORT/api/auth/session"
     else
         # Without curl, a daemon that ran a few seconds is taken as started.
         [ "$waited" -ge 5 ]

@@ -4,9 +4,9 @@ using P4ServerManager.Daemon.Services;
 namespace P4ServerManager.Daemon.Hosting;
 
 /// <summary>
-/// The Unix domain socket the CLI reaches the API through, next to the TCP port of the web UI. The API has no
-/// authentication: the socket is only open to the user and the group of the daemon, and whoever can open it can
-/// manage the servers.
+/// The Unix domain socket the CLI reaches the API through, next to the TCP port of the web UI. Its requests need no
+/// sign-in (<see cref="CliSocketAuthenticationHandler"/>): the socket is only open to the user and the group of the
+/// daemon, and whoever can open it can manage the servers and the accounts of the web interface.
 /// </summary>
 public static class CliSocket
 {
