@@ -26,13 +26,12 @@ public static partial class UserRuleExtensions
     }
 
     /// <summary>
-    /// A well-formed user name that no account has, whatever its case.
+    /// A well-formed user name that no account has. The user names are case-sensitive.
     /// </summary>
     public static IRuleBuilderOptions<T, string> MustBeNewAccountName<T>(
         this IRuleBuilder<T, string> rule,
         DaemonDbContext db)
     {
-        // The user names are compared with the NOCASE collation of their column.
         return rule
             .MustBeAccountName()
             .MustAsync(async (name, cancellationToken) =>

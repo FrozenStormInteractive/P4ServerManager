@@ -79,8 +79,8 @@ public sealed record ChangePasswordRequest
 public sealed record CreateUserRequest
 {
     /// <summary>
-    /// Name to sign in with: a letter or a digit, then up to 63 letters, digits, '.', '-', '_' or '@'. Unique whatever
-    /// its case.
+    /// Name to sign in with: a letter or a digit, then up to 63 letters, digits, '.', '-', '_' or '@'. Unique and
+    /// case-sensitive.
     /// </summary>
     [Required]
     public string UserName { get; init; } = null!;

@@ -15,7 +15,7 @@ public sealed class User
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Name the user signs in with, unique whatever its case.
+    /// Name the user signs in with, unique. Case-sensitive: <c>admin</c> and <c>Admin</c> are two accounts.
     /// </summary>
     [MaxLength(64)]
     public required string UserName { get; set; }

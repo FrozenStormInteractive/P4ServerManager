@@ -139,12 +139,12 @@ public sealed class AuthApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Login_SignsIn_WithTheRightPassword_WhateverTheCaseOfTheName()
+    public async Task Login_SignsIn_WithTheRightPassword()
     {
         await CreateAccountAsync("admin");
         HttpClient client = CreateBrowserClient();
 
-        HttpResponseMessage response = await LoginAsync(client, "ADMIN", Password);
+        HttpResponseMessage response = await LoginAsync(client, "admin", Password);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         JsonElement session = await client.GetFromJsonAsync<JsonElement>(
@@ -157,6 +157,7 @@ public sealed class AuthApiTests : IAsyncLifetime
     [Theory]
     [InlineData("admin", "wrong password")]
     [InlineData("nobody", Password)]
+    [InlineData("ADMIN", Password)]
     public async Task Login_Fails_WithTheSameMessage_ForAWrongPasswordOrAnUnknownName(string userName, string password)
     {
         await CreateAccountAsync("admin");
@@ -314,7 +315,7 @@ public sealed class AuthApiTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
         HttpResponseMessage duplicate = await client.PostAsJsonAsync(
             "api/users",
-            new { userName = "JANE", password = Password },
+            new { userName = "jane", password = Password },
             TestContext.Current.CancellationToken);
         JsonElement jane = await created.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         HttpResponseMessage reset = await client.PutAsJsonAsync(
@@ -332,6 +333,31 @@ public sealed class AuthApiTests : IAsyncLifetime
         users[0].TryGetProperty("passwordHash", out _).ShouldBeFalse();
         (await LoginAsync(CreateBrowserClient(), "jane", "a brand new password")).StatusCode
             .ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task UserNames_AreCaseSensitive()
+    {
+        await CreateAccountAsync("admin");
+        HttpClient client = CreateBrowserClient();
+        await LoginAsync(client, "admin", Password);
+
+        HttpResponseMessage created = await client.PostAsJsonAsync(
+            "api/users",
+            new { userName = "Admin", password = "another long password" },
+            TestContext.Current.CancellationToken);
+        await client.PostAsJsonAsync(
+            "api/users",
+            new { userName = "Bob", password = Password },
+            TestContext.Current.CancellationToken);
+        JsonElement users = await client.GetFromJsonAsync<JsonElement>("api/users", TestContext.Current.CancellationToken);
+
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        users.EnumerateArray().Select(u => u.GetProperty("userName").GetString()).ShouldBe(["Admin", "admin", "Bob"]);
+        (await LoginAsync(CreateBrowserClient(), "Admin", "another long password")).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+        (await LoginAsync(CreateBrowserClient(), "Admin", Password)).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

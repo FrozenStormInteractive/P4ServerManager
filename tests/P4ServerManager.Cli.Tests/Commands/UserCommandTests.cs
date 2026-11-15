@@ -133,19 +133,18 @@ public sealed class UserCommandTests
     }
 
     [Fact]
-    public async Task SetPassword_FindsTheAccountWhateverTheCaseOfItsName()
+    public async Task SetPassword_FindsTheAccountByItsExactName()
     {
         SetUpList();
-        _cli.Daemon.On(HttpMethod.Put, $"/api/users/{Admin.Id}/password", StubDaemon.Status(HttpStatusCode.NoContent));
         _cli.Prompter.IsInteractive = true;
         _cli.Prompter.Secrets.Enqueue(Password);
         _cli.Prompter.Secrets.Enqueue(Password);
 
         CliResult result = await _cli.RunAsync("user", "set-password", "ADMIN");
 
-        result.ExitCode.ShouldBe(0);
-        result.Output.ShouldContain("Set the password of admin.");
-        _cli.Daemon.RequestsTo(HttpMethod.Put, $"/api/users/{Admin.Id}/password").Single().Body!.ShouldContain(Password);
+        result.ExitCode.ShouldBe(1);
+        result.Error.ShouldContain("No account is named ADMIN.");
+        _cli.Daemon.RequestsTo(HttpMethod.Put, $"/api/users/{Admin.Id}/password").ShouldBeEmpty();
     }
 
     [Fact]

@@ -58,13 +58,13 @@ internal sealed partial class DaemonClient
     }
 
     /// <summary>
-    /// Finds an account by its name, whatever its case.
+    /// Finds an account by its name, which is case-sensitive.
     /// </summary>
     /// <exception cref="CliException">No account has this name.</exception>
     public async Task<UserDto> ResolveUserAsync(string userName, CancellationToken cancellationToken)
     {
         IReadOnlyList<UserDto> users = await GetUsersAsync(cancellationToken);
-        return users.FirstOrDefault(u => string.Equals(u.UserName, userName, StringComparison.OrdinalIgnoreCase))
+        return users.FirstOrDefault(u => string.Equals(u.UserName, userName, StringComparison.Ordinal))
             ?? throw new CliException($"No account is named {userName}. List them with 'p4sm user list'.");
     }
 }

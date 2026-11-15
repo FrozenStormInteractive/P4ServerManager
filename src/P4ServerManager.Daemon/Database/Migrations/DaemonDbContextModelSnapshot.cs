@@ -558,8 +558,7 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.Property<string>("UserName")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("NOCASE");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 

@@ -39,12 +39,16 @@ public sealed class UserService(
     }
 
     /// <summary>
-    /// The accounts, by name.
+    /// The accounts, by name. The names are case-sensitive, but sorted regardless of their case, as people read them.
     /// </summary>
     public async Task<List<User>> ListAsync(CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Users.AsNoTracking().OrderBy(u => u.UserName).ToListAsync(cancellationToken);
+        return await db.Users
+            .AsNoTracking()
+            .OrderBy(u => EF.Functions.Collate(u.UserName, "NOCASE"))
+            .ThenBy(u => u.UserName)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<User?> FindAsync(Guid id, CancellationToken cancellationToken)
@@ -102,7 +106,6 @@ public sealed class UserService(
             {
                 throw new UserConflictException("The first account already exists. Sign in instead.");
             }
-            // The user names are compared with the NOCASE collation of their column.
             if (await db.Users.AnyAsync(u => u.UserName == userName, cancellationToken))
             {
                 throw new UserConflictException($"An account named {userName} already exists.");

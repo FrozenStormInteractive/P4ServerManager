@@ -16,7 +16,7 @@ namespace P4ServerManager.Daemon.Database.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserName = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false, collation: "NOCASE"),
+                    UserName = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     PasswordHash = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
                     SecurityStamp = table.Column<Guid>(type: "TEXT", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "TEXT", nullable: false),
