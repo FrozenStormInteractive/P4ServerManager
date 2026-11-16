@@ -42,6 +42,38 @@ if [ -n "$profile_list" ]; then
     legacy_note="<br><br>This NAS has server profiles of the <i>Perforce P4 Server (p4d)</i> package (HelixCoreServer):<ul>$profile_list</ul>The Instances page of the web interface will list them, and imports only the ones you choose. Stop the HelixCoreServer package before you start an imported server on the same port."
 fi
 
+PKG_NAME="${SYNOPKG_PKGNAME:-P4ServerManager}"
+SHARE_NAME="P4ServerManager"
+
+# Data folders a previous installation may have left: DSM keeps the shared folder when the package is uninstalled with
+# its data. Its path was saved in etc/data-dir (see scripts/common), which DSM keeps under @appconf; the shared folder
+# is also looked for at its default place.
+previous_data_dirs() {
+    for file in "/var/packages/$PKG_NAME/etc/data-dir" /volume*/@appconf/"$PKG_NAME"/data-dir; do
+        [ -r "$file" ] && cat "$file"
+    done
+    for dir in /volume*/"$SHARE_NAME"; do
+        echo "$dir"
+    done
+}
+
+# True when one of those folders holds accounts. The daemon keeps the has-accounts file next to its database while the
+# database has accounts (DaemonPaths.AccountsMarkerPath), so that the wizard needs not know the schema. When it cannot
+# tell, the wizard asks for the account as on a first installation; the daemon ignores it if accounts exist.
+previous_accounts_exist() {
+    previous_data_dirs | while IFS= read -r dir; do
+        if [ -f "$dir/has-accounts" ] && [ -f "$dir/p4servermanager.db" ]; then
+            echo found
+            break
+        fi
+    done | grep -q found
+}
+
+account_note=""
+if previous_accounts_exist; then
+    account_note="<br><br>The P4ServerManager shared folder holds the accounts of a previous installation: sign in with one of them. A lost password is reset over SSH with <i>sudo p4sm user set-password &lt;name&gt;</i>."
+fi
+
 cat >"$SYNOPKG_TEMP_LOGFILE" <<EOF
 [
     {
@@ -49,7 +81,7 @@ cat >"$SYNOPKG_TEMP_LOGFILE" <<EOF
         "items": [
             {
                 "type": "singleselect",
-                "desc": "P4 Server Manager is not affiliated with Perforce Software, nor is it an official P4 tool. It downloads the p4d builds you choose from Perforce.<br><br>The P4ServerManager shared folder will hold its database, the p4d builds and the P4 servers you create in their default location.<br><br>The web interface listens on port @UI_PORT@ and asks to sign in. Keep that port closed to untrusted networks, or reach it through HTTPS (Control Panel > Login Portal > Reverse Proxy).$legacy_note",
+                "desc": "P4 Server Manager is not affiliated with Perforce Software, nor is it an official P4 tool. It downloads the p4d builds you choose from Perforce.<br><br>The P4ServerManager shared folder will hold its database, the p4d builds and the P4 servers you create in their default location.<br><br>The web interface listens on port @UI_PORT@ and asks to sign in. Keep that port closed to untrusted networks, or reach it through HTTPS (Control Panel > Login Portal > Reverse Proxy).$account_note$legacy_note",
                 "subitems": [
                     {
                         "key": "wizard_understood",
@@ -59,12 +91,15 @@ cat >"$SYNOPKG_TEMP_LOGFILE" <<EOF
                 ]
             }
         ]
-    },
+    }
 EOF
 
-# The first account of the web interface. Left empty, the web interface asks for it on the first visit. The account
-# is created by the daemon at its first start; preinst checks that both passwords match.
-cat >>"$SYNOPKG_TEMP_LOGFILE" <<'EOF'
+# The first account of the web interface, unless a previous installation left accounts: the daemon would ignore it.
+# Left empty, the web interface asks for it on the first visit. The account is created by the daemon at its first
+# start; preinst checks that both passwords match.
+if [ -z "$account_note" ]; then
+    cat >>"$SYNOPKG_TEMP_LOGFILE" <<'EOF'
+    ,
     {
         "step_title": "Administrator account",
         "items": [
@@ -112,6 +147,7 @@ cat >>"$SYNOPKG_TEMP_LOGFILE" <<'EOF'
         ]
     }
 EOF
+fi
 
 echo "]" >>"$SYNOPKG_TEMP_LOGFILE"
 exit 0

@@ -137,6 +137,7 @@ static async Task PrepareDataDirectoryAsync(IServiceProvider services)
     }
 
     await services.GetRequiredService<InitialUserBootstrapper>().RunAsync(CancellationToken.None);
+    await services.GetRequiredService<UserService>().UpdateAccountsMarkerAsync(CancellationToken.None);
 }
 
 /// <summary>

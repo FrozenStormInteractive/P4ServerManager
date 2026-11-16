@@ -96,7 +96,8 @@ start_daemon() {
     ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_URLS="http://+:$UI_PORT" \
     Daemon__DataDirectory="$data_dir" \
-    Daemon__SocketPath="$DAEMON_SOCKET"     Authentication__InitialUserFile="$INITIAL_USER_FILE" \
+    Daemon__SocketPath="$DAEMON_SOCKET" \
+    Authentication__InitialUserFile="$INITIAL_USER_FILE" \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
         nohup "$DAEMON_BIN" >>"$DAEMON_LOG_FILE" 2>&1 </dev/null &
     echo $! >"$DAEMON_PID_FILE"

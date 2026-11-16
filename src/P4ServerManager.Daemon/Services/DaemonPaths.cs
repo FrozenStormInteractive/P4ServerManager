@@ -22,6 +22,13 @@ public sealed class DaemonPaths
     public string DatabasePath => Path.Combine(DataDirectory, "p4servermanager.db");
 
     /// <summary>
+    /// Exists while the database has accounts of the web interface. The install wizard of the Synology package reads
+    /// it, rather than the database, to skip the account step when a previous installation left accounts: keep its
+    /// name in sync with <c>packaging/spk/WIZARD_UIFILES/install_uifile.sh</c> and <c>packaging/spk/scripts/postuninst</c>.
+    /// </summary>
+    public string AccountsMarkerPath => Path.Combine(DataDirectory, "has-accounts");
+
+    /// <summary>
     /// Extracted p4d builds, ready to run. p4d is recognized as such by its executable under this folder.
     /// </summary>
     public string BuildsDirectory => Path.Combine(DataDirectory, "builds");

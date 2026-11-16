@@ -12,9 +12,14 @@ namespace P4ServerManager.Daemon.Services.Authentication;
 /// </summary>
 public sealed class UserService(
     IDbContextFactory<DaemonDbContext> dbContextFactory,
+    DaemonPaths paths,
     TimeProvider timeProvider,
     ILogger<UserService> logger)
 {
+    private const string AccountsMarkerContent =
+        "Accounts of the web interface exist in the database of this folder. Written by P4 Server Manager, and read by "
+        + "the install wizard of its Synology package, which then asks for no account.\n";
+
     private readonly PasswordHasher<User> hasher = new();
 
     // Serializes the changes that depend on the other accounts: two first accounts, or no administrator left.
@@ -64,6 +69,38 @@ public sealed class UserService(
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         return await db.Users.AnyAsync(u => u.Id == id && u.IsAdministrator, cancellationToken);
+    }
+
+    /// <summary>
+    /// Makes <see cref="DaemonPaths.AccountsMarkerPath"/> tell whether accounts exist. Called when an account is
+    /// created, and at the start of the daemon: there, the marker is written when it is missing, such as after an
+    /// upgrade from a version without it, and deleted when the database has no account, such as when it was replaced.
+    /// Accounts never go back to none through the API, since the last administrator cannot be deleted.
+    /// </summary>
+    public async Task UpdateAccountsMarkerAsync(CancellationToken cancellationToken)
+    {
+        bool hasAccounts = await AnyAsync(cancellationToken);
+        if (hasAccounts == File.Exists(paths.AccountsMarkerPath))
+        {
+            return;
+        }
+        try
+        {
+            if (hasAccounts)
+            {
+                await File.WriteAllTextAsync(paths.AccountsMarkerPath, AccountsMarkerContent, cancellationToken);
+            }
+            else
+            {
+                File.Delete(paths.AccountsMarkerPath);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Only the install wizard reads it: when it is wrong, the wizard asks for an account that the daemon
+            // ignores, or the web interface asks for the first account instead of the wizard.
+            logger.LogWarning(exception, "Could not update {Path}", paths.AccountsMarkerPath);
+        }
     }
 
     /// <summary>
@@ -128,6 +165,7 @@ public sealed class UserService(
             logger.LogInformation(
                 user.IsAdministrator ? "Created administrator account {User}" : "Created account {User}",
                 user.UserName);
+            await UpdateAccountsMarkerAsync(cancellationToken);
             return user;
         }
         finally
