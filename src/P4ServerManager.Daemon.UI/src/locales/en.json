@@ -30,7 +30,8 @@
     "import": "Import",
     "dismiss": "Dismiss",
     "save": "Save",
-    "checkNow": "Check now"
+    "checkNow": "Check now",
+    "signOut": "Sign out"
   },
   "status": {
     "provisioning": "Provisioning",
@@ -487,7 +488,8 @@
     "openSections": "Settings sections",
     "sections": {
       "builds": "p4d builds",
-      "backups": "Backup destinations"
+      "backups": "Backup destinations",
+      "users": "Users"
     }
   },
   "builds": {
@@ -803,6 +805,75 @@
       "Failed": "Restore of {name} failed.",
       "Canceled": "Restore of {name} canceled.",
       "Interrupted": "Restore of {name} interrupted."
+    }
+  },
+  "auth": {
+    "userName": "User name",
+    "password": "Password",
+    "confirmPassword": "Confirm the password",
+    "passwordHint": "Between 10 and 128 characters.",
+    "login": {
+      "subtitle": "Sign in to manage your P4 servers",
+      "rememberMe": "Keep me signed in",
+      "submit": "Sign in"
+    },
+    "setup": {
+      "title": "Create the administrator account",
+      "intro": "No account exists yet. Create the first one: it can manage the P4 servers and add other accounts. Until then, anybody who reaches this page can create it.",
+      "submit": "Create the account"
+    },
+    "changePassword": {
+      "title": "Change password",
+      "intro": "Your other sessions end. This one goes on.",
+      "current": "Current password",
+      "new": "New password",
+      "done": "Your password is changed."
+    },
+    "menu": {
+      "label": "Account",
+      "signedInAs": "Signed in as"
+    },
+    "rules": {
+      "required": "Required.",
+      "userNameFormat": "Starts with a letter or a digit, then up to 63 letters, digits, '.', '-', '_' or '@'.",
+      "passwordLength": "Between {min} and {max} characters.",
+      "passwordsDiffer": "The passwords do not match."
+    },
+    "errors": {
+      "tooManyAttempts": "Too many attempts. Wait a minute, then try again.",
+      "unreachable": "The server cannot be reached. Check that P4 Server Manager runs, then try again."
+    }
+  },
+  "users": {
+    "text": "Accounts that sign in to the web interface. Every account has all rights on the servers; only administrators manage the accounts. The command line needs no account: run 'p4sm user set-password' on the server to reset a lost password.",
+    "add": "Add account",
+    "createTitle": "Add an account",
+    "passwordTitle": "New password for {name}",
+    "passwordIntro": "The sessions of this account end.",
+    "setPassword": "Set a new password",
+    "remove": "Delete account",
+    "removeTitle": "Delete the account {name}?",
+    "removeText": "Its user can no longer sign in, and its sessions end.",
+    "removeSelfText": "This is your account: you are signed out.",
+    "you": "You",
+    "administrator": "Administrator",
+    "administratorHint": "Administrators manage the accounts.",
+    "administratorOf": "{name} is an administrator",
+    "administratorGranted": "{name} is an administrator.",
+    "administratorRevoked": "{name} is no longer an administrator.",
+    "demoteSelf": "Stop being an administrator",
+    "demoteSelfTitle": "Stop being an administrator?",
+    "demoteSelfText": "You can no longer manage the accounts. Another administrator can give you this right back.",
+    "never": "Never",
+    "created": "Account {name} added.",
+    "passwordSet": "New password set for {name}.",
+    "removed": "Account {name} deleted.",
+    "loadError": "Could not load the accounts: {message}",
+    "headers": {
+      "userName": "User name",
+      "isAdministrator": "Administrator",
+      "createdAt": "Created",
+      "lastSignInAt": "Last sign-in"
     }
   }
 }

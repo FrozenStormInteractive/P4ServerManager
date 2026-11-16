@@ -37,6 +37,9 @@
   import { useRoute } from 'vue-router'
   import { useDisplay } from 'vuetify'
 
+  // Stores
+  import { useAuthStore } from '@/stores/auth'
+
   /**
    * Lists the sections of the settings, each a child route, in a drawer of its own beside the navigation of the app.
    * On small screens the drawer is temporary and opens from the button before the title.
@@ -44,14 +47,24 @@
   const { t } = useI18n()
   const { mobile } = useDisplay()
   const route = useRoute()
+  const auth = useAuthStore()
 
   // Left null, the drawer opens on wide screens and stays closed on small ones.
   const drawer = ref<boolean | null>(null)
 
-  const sections = [
+  const allSections = [
     { name: 'settings-builds', title: 'settings.sections.builds', icon: 'mdi-package-variant-closed' },
     { name: 'settings-backups', title: 'settings.sections.backups', icon: 'mdi-cloud-upload-outline' },
-  ] as const
+    {
+      name: 'settings-users',
+      title: 'settings.sections.users',
+      icon: 'mdi-account-multiple-outline',
+      administrator: true,
+    },
+  ]
 
-  const current = computed(() => sections.find(section => section.name === route.name))
+  // Only the administrators manage the accounts.
+  const sections = computed(() => allSections.filter(section => !section.administrator || auth.isAdministrator))
+
+  const current = computed(() => sections.value.find(section => section.name === route.name))
 </script>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace P4ServerManager.Daemon.Tests.Hosting;
 
@@ -67,6 +68,17 @@ internal sealed class DaemonProcess : IDisposable
                 throw new InvalidOperationException($"The daemon did not answer on its socket. Its output:\n{Output}", exception);
             }
         }
+    }
+
+    /// <summary>
+    /// The address of the TCP port the daemon listens on, read from its output once it listens.
+    /// </summary>
+    public Uri GetTcpAddress()
+    {
+        Match match = Regex.Match(Output, @"Now listening on: (http://127\.0\.0\.1:\d+)");
+        return match.Success
+            ? new Uri(match.Groups[1].Value)
+            : throw new InvalidOperationException($"The daemon did not tell its TCP port. Its output:\n{Output}");
     }
 
     public void Dispose()

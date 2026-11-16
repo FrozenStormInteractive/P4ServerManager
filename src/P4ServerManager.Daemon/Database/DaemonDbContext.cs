@@ -26,6 +26,8 @@ public sealed class DaemonDbContext(DbContextOptions<DaemonDbContext> options) :
 
     public DbSet<RestoreRun> RestoreRuns => Set<RestoreRun>();
 
+    public DbSet<User> Users => Set<User>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Only what data annotations cannot express lives here: enums stored as text and the owned super user.

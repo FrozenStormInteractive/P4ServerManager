@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -55,6 +56,26 @@ public sealed class CliSocketTests : IAsyncLifetime
         {
             File.GetUnixFileMode(SocketPath).ShouldBe(SocketMode);
         }
+    }
+
+    [Fact]
+    public async Task Api_AsksTheTcpPortForASession_ButNotTheSocket()
+    {
+        using DaemonProcess daemon = DaemonProcess.Start(dataDirectory);
+        using HttpClient socketClient = CreateSocketClient(SocketPath);
+        HttpResponseMessage socketResponse = await daemon.WaitForSocketAsync(
+            () => socketClient.GetAsync("api/users", TestContext.Current.CancellationToken),
+            TestContext.Current.CancellationToken);
+        using HttpClient tcpClient = new() { BaseAddress = daemon.GetTcpAddress() };
+
+        HttpResponseMessage tcpResponse = await tcpClient.GetAsync("api/users", TestContext.Current.CancellationToken);
+        HttpResponseMessage sessionResponse = await tcpClient.GetAsync(
+            "api/auth/session",
+            TestContext.Current.CancellationToken);
+
+        socketResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        tcpResponse.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        sessionResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]

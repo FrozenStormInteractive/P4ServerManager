@@ -717,3 +717,67 @@ export interface DirectoryListing {
    */
   roots: DirectoryEntry[]
 }
+
+/**
+ * An account of the web interface. The password is never returned.
+ */
+export interface User {
+  id: string
+  userName: string
+  /**
+   * Whether the user manages the accounts.
+   */
+  isAdministrator: boolean
+  createdAt: string
+  /**
+   * When the user last signed in, or null if never.
+   */
+  lastSignInAt: string | null
+}
+
+/**
+ * Whether a user is signed in, and whether the daemon still waits for its first account.
+ */
+export interface AuthSession {
+  /**
+   * No account exists yet: the first one is created from the setup page.
+   */
+  setupRequired: boolean
+  /**
+   * The signed-in user, or null.
+   */
+  user: User | null
+}
+
+export interface SetupRequest {
+  userName: string
+  password: string
+}
+
+export interface LoginRequest {
+  userName: string
+  password: string
+  /**
+   * Keeps the session after the browser closes.
+   */
+  rememberMe: boolean
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
+export interface CreateUserRequest {
+  userName: string
+  password: string
+  isAdministrator?: boolean
+}
+
+export interface SetUserAdministratorRequest {
+  isAdministrator: boolean
+}
+
+export interface SetUserPasswordRequest {
+  password: string
+}

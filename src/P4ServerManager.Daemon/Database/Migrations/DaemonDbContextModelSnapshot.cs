@@ -532,6 +532,42 @@ namespace P4ServerManager.Daemon.Database.Migrations
                     b.ToTable("RestoreRuns");
                 });
 
+            modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsAdministrator")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("LastSignInAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SecurityStamp")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserName")
+                        .IsUnique();
+
+                    b.ToTable("Users");
+                });
+
             modelBuilder.Entity("P4ServerManager.Daemon.Database.Entities.BackupRunDestination", b =>
                 {
                     b.HasOne("P4ServerManager.Daemon.Database.Entities.BackupRun", "Run")

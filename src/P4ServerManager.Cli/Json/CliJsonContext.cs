@@ -40,5 +40,9 @@ namespace P4ServerManager.Cli.Json;
 [JsonSerializable(typeof(IReadOnlyList<RestoreRunDto>))]
 [JsonSerializable(typeof(RestoreBackupRequest))]
 [JsonSerializable(typeof(RestoreInstanceRequest))]
+[JsonSerializable(typeof(IReadOnlyList<UserDto>))]
+[JsonSerializable(typeof(CreateUserRequest))]
+[JsonSerializable(typeof(SetUserPasswordRequest))]
+[JsonSerializable(typeof(SetUserAdministratorRequest))]
 [JsonSerializable(typeof(ApiProblem))]
 internal sealed partial class CliJsonContext : JsonSerializerContext;

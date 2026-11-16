@@ -4,6 +4,7 @@ import type { HubConnection } from '@microsoft/signalr'
 
 // Utilities
 import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr'
+import { REQUEST_HEADER } from './client'
 
 export interface InstancesHubHandlers {
   onInstanceUpdated: (instance: Instance) => void
@@ -64,8 +65,8 @@ export function connectBuildsHub (handlers: BuildsHubHandlers): BuildsHub {
 }
 
 /**
- * Connects to a hub of the daemon. Connecting is retried until it succeeds, and again whenever SignalR gives up
- * reconnecting, for example while the daemon restarts.
+ * Connects to a hub of the daemon, with the session cookie of the user. Connecting is retried until it succeeds, and
+ * again whenever SignalR gives up reconnecting, for example while the daemon restarts or after the session ended.
  */
 function connectHub (
   url: string,
@@ -73,7 +74,7 @@ function connectHub (
   subscribe: (connection: HubConnection) => void,
 ): InstancesHub {
   const connection = new HubConnectionBuilder()
-    .withUrl(url)
+    .withUrl(url, { headers: { [REQUEST_HEADER]: '1' } })
     .withAutomaticReconnect()
     .configureLogging(LogLevel.Warning)
     .build()

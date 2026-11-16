@@ -23,15 +23,30 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Header the daemon asks of the requests that change something, so that pages of other origins cannot send them with
+ * the session of the user.
+ */
+export const REQUEST_HEADER = 'X-P4SM-Request'
+
+let unauthorizedHandler: (() => void) | null = null
+
+/**
+ * Sets what to do when the session ends: a request outside of `/api/auth` answered 401.
+ */
+export function setUnauthorizedHandler (handler: (() => void) | null) {
+  unauthorizedHandler = handler
+}
+
 export async function request<T> (method: string, url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, {
     method,
     headers: body === undefined
-      ? { Accept: 'application/json' }
-      : { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      ? { Accept: 'application/json', [REQUEST_HEADER]: '1' }
+      : { 'Accept': 'application/json', 'Content-Type': 'application/json', [REQUEST_HEADER]: '1' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  return readResponse<T>(response)
+  return readResponse<T>(url, response)
 }
 
 /**
@@ -40,16 +55,19 @@ export async function request<T> (method: string, url: string, body?: unknown): 
 export async function upload<T> (url: string, form: FormData): Promise<T> {
   const response = await fetch(url, {
     method: 'POST',
-    headers: { Accept: 'application/json' },
+    headers: { Accept: 'application/json', [REQUEST_HEADER]: '1' },
     body: form,
   })
-  return readResponse<T>(response)
+  return readResponse<T>(url, response)
 }
 
-async function readResponse<T> (response: Response): Promise<T> {
+async function readResponse<T> (url: string, response: Response): Promise<T> {
   const isJson = response.headers.get('Content-Type')?.includes('json') ?? false
   const content: unknown = isJson ? await response.json() : null
   if (!response.ok) {
+    if (response.status === 401 && !url.startsWith('/api/auth/')) {
+      unauthorizedHandler?.()
+    }
     throw new ApiError(response.status, content as ProblemDetails | null)
   }
   return content as T
