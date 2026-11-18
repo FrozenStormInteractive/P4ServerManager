@@ -148,8 +148,8 @@ def build_spk(arch: str, version: str, ui_port: int, beta: bool, placeholders: d
         add_bytes(spk, "INFO", info.encode())
         add_bytes(spk, "package.tgz", package_tgz)
         add_bytes(spk, "LICENSE", text_bytes(REPO_ROOT / "LICENSE.md", placeholders))
-        add_file(spk, SPK_DIR / "PACKAGE_ICON.PNG", "PACKAGE_ICON.PNG", placeholders)
-        add_file(spk, SPK_DIR / "PACKAGE_ICON_256.PNG", "PACKAGE_ICON_256.PNG", placeholders)
+        add_file(spk, SPK_DIR / "PACKAGE_ICON.png", "PACKAGE_ICON.PNG", placeholders)
+        add_file(spk, SPK_DIR / "PACKAGE_ICON_256.png", "PACKAGE_ICON_256.PNG", placeholders)
         add_tree(spk, SPK_DIR / "conf", "conf", placeholders)
         add_tree(spk, SPK_DIR / "scripts", "scripts", placeholders, executable=lambda path: True)
         add_tree(spk, SPK_DIR / "WIZARD_UIFILES", "WIZARD_UIFILES", placeholders,
