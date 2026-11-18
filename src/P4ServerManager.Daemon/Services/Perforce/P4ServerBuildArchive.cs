@@ -44,7 +44,10 @@ public sealed class P4ServerBuildArchive(
     /// Compresses p4d and p4 of <paramref name="sourceDirectory"/> into the archive of the build, replacing any
     /// previous archive. The archive only appears once complete.
     /// </summary>
+    /// <param name="build">Build to archive.</param>
+    /// <param name="sourceDirectory">Directory that holds p4d and p4 of the build.</param>
     /// <param name="progress">Share of p4d and p4 compressed so far, in percent.</param>
+    /// <param name="cancellationToken">Cancels the compression.</param>
     /// <returns>Size of the archive in bytes.</returns>
     public async Task<long> CreateAsync(
         P4ServerBuild build,
@@ -78,7 +81,10 @@ public sealed class P4ServerBuildArchive(
     /// Extracts p4d and p4 of the archive of the build into <paramref name="targetDirectory"/>, which must not exist,
     /// and checks them against the hashes of the build. The directory only appears once complete and checked.
     /// </summary>
+    /// <param name="build">Build to extract.</param>
+    /// <param name="targetDirectory">Directory to create with p4d and p4 of the build.</param>
     /// <param name="progress">Share of the archive read so far, in percent.</param>
+    /// <param name="cancellationToken">Cancels the extraction.</param>
     /// <exception cref="P4ServerBuildException">The archive is missing, damaged, or does not match the build.</exception>
     public async Task ExtractAsync(
         P4ServerBuild build,

@@ -71,7 +71,7 @@ public sealed class FileSystemApiTests : IAsyncLifetime
         JsonElement ancestors = listing.GetProperty("ancestors");
         ancestors[ancestors.GetArrayLength() - 1].GetProperty("path").GetString().ShouldBe(ApiPath(_browsedDirectory));
         ancestors[0].GetProperty("path").GetString().ShouldBe(ApiPath(Path.GetPathRoot(_browsedDirectory)!));
-        listing.GetProperty("path").GetString().ShouldNotContain('\\');
+        listing.GetProperty("path").GetString()!.ShouldNotContain('\\');
         listing.GetProperty("roots").GetArrayLength().ShouldBeGreaterThan(0);
     }
 

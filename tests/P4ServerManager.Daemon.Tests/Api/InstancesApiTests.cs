@@ -457,7 +457,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
         problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).ShouldBe([field]);
         // The placeholders of the messages, such as {MinLength}, are filled in.
-        problem.GetProperty("errors").GetProperty(field)[0].GetString().ShouldNotContain("{");
+        problem.GetProperty("errors").GetProperty(field)[0].GetString()!.ShouldNotContain("{");
     }
 
     [Theory]
@@ -860,7 +860,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
             TestContext.Current.CancellationToken);
-        problem.GetProperty("detail").GetString().ShouldContain("of another instance");
+        problem.GetProperty("detail").GetString()!.ShouldContain("of another instance");
         Directory.Exists(Path.Combine(serverDirectory, "root", "inner", "root")).ShouldBeTrue();
         (await _client.GetAsync($"/api/instances/{outer}", TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
