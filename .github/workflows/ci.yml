@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  NODE_VERSION: "24"
+  DOTNET_VERSION: "10.0.x"
+
+jobs:
+  ui:
+    name: UI (lint, type-check, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/P4ServerManager.Daemon.UI
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/P4ServerManager.Daemon.UI/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm run test:unit
+      - run: npm run build-only
+
+  dotnet:
+    name: .NET (build, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # The restore of the .esproj runs npm install.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/P4ServerManager.Daemon.UI/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - run: dotnet restore P4ServerManager.slnx
+      - run: dotnet build P4ServerManager.slnx --configuration Release --no-restore
+
+      # Docker is available on the runner: the backup target tests run against their emulators.
+      - run: dotnet test --solution P4ServerManager.slnx --configuration Release --no-build
+
+  package:
+    name: Synology packages
+    needs: [ui, dotnet]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/P4ServerManager.Daemon.UI/package-lock.json
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Build the packages
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          args=(--build-number "$RUN_NUMBER")
+          if [ "$REF_TYPE" = "tag" ]; then
+            args+=(--version "${REF_NAME#v}")
+          else
+            args+=(--beta)
+          fi
+          python packaging/spk/build.py "${args[@]}"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: spk
+          path: artifacts/spk/*.spk
+          if-no-files-found: error
