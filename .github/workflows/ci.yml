@@ -72,7 +72,7 @@ jobs:
       # Docker is available on the runner: the backup target tests run against their emulators.
       - run: dotnet test --solution P4ServerManager.slnx --configuration Release --no-build
 
-  package:
+  spk-packages:
     name: Synology packages
     needs: [ui, dotnet]
     runs-on: ubuntu-latest
