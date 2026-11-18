@@ -62,10 +62,10 @@ public sealed class ConfigureRestoredServerStep(
         // Relative to the root. One argument each: p4d reads "-c" followed by the command.
         Dictionary<string, string> layout = new(StringComparer.Ordinal)
         {
-            ["P4JOURNAL"] = $"../{ServerLayout.JournalsFolder}/journal",
-            ["P4LOG"] = $"../{ServerLayout.LogsFolder}/{ServerLayout.LogFile}",
-            ["journalPrefix"] = $"../{ServerLayout.JournalsFolder}/{serverId}",
-            ["server.depot.root"] = $"../{ServerLayout.ArchivesFolder}",
+            [ServerConfigurables.Journal] = $"../{ServerLayout.JournalsFolder}/journal",
+            [ServerConfigurables.Log] = $"../{ServerLayout.LogsFolder}/{ServerLayout.LogFile}",
+            [ServerConfigurables.JournalPrefix] = $"../{ServerLayout.JournalsFolder}/{serverId}",
+            [ServerConfigurables.DepotRoot] = $"../{ServerLayout.ArchivesFolder}",
         };
         HashSet<string> ownerIds = [serverId];
         if (context.OldServerId is { } oldId)

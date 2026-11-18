@@ -107,6 +107,8 @@
             :rules="rules.serverDirectory"
           />
 
+          <ServerDirectoryCaseWarning :name="fields.name" :server-directory="fields.serverDirectory" />
+
           <v-row density="compact">
             <v-col cols="12" sm="4">
               <v-switch
@@ -255,6 +257,7 @@
   // Components, stores and utilities
   import { ApiError } from '@/api/client'
   import { listVersions } from '@/api/p4d'
+  import ServerDirectoryCaseWarning from '@/components/filesystem/ServerDirectoryCaseWarning.vue'
   import ServerDirectoryField from '@/components/filesystem/ServerDirectoryField.vue'
   import { useInstancesStore } from '@/stores/instances'
 

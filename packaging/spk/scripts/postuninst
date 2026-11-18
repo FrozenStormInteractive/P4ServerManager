@@ -3,22 +3,17 @@
 
 . "$(dirname "$0")/common"
 
-# Only on an uninstallation, when the wizard asked for it. The shared folder itself is kept, as are the roots
-# chosen outside of it.
+# Only on an uninstallation, when the wizard asked for it. DSM keeps the var folder, so its content is deleted here. The
+# shared folder is not touched: the servers it holds are kept.
 delete_data() {
-    data_dir=$(saved_data_dir)
-    if [ -z "$data_dir" ] || [ "$data_dir" = "/" ] || [ ! -d "$data_dir" ]; then
-        report "The data of P4 Server Manager was not found. Nothing was deleted."
-        return 0
-    fi
     if [ -n "$(running_p4d_pids)" ]; then
-        report "P4 servers still run from $data_dir. Nothing was deleted."
+        report "P4 servers still run. Nothing was deleted."
         return 0
     fi
 
-    rm -rf "$data_dir/builds" "$data_dir/archive" "$data_dir/instances" "$data_dir/import" "$data_dir/keys"
-    rm -f "$data_dir"/p4servermanager.db "$data_dir"/p4servermanager.db-* "$data_dir/has-accounts"
-    rm -f "$DATA_DIR_FILE"
+    rm -rf "$VAR_DIR/builds" "$VAR_DIR/archive" "$VAR_DIR/instances" "$VAR_DIR/import" "$VAR_DIR/keys" "$VAR_DIR/tmp"
+    rm -f "$VAR_DIR"/p4servermanager.db "$VAR_DIR"/p4servermanager.db-* \
+        "$INITIAL_USER_FILE" "$DAEMON_LOG_FILE" "$DAEMON_LOG_FILE.1"
 }
 
 if [ "$SYNOPKG_PKG_STATUS" = "UNINSTALL" ] && [ "$wizard_delete_data" = "true" ]; then

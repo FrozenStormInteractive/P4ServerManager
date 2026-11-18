@@ -55,10 +55,12 @@ describe('DeleteInstanceDialog', () => {
 
   beforeEach(() => {
     requests = []
-    server.use(http.delete(`/api/instances/${instance.id}`, ({ request }) => {
-      requests.push(new URL(request.url))
-      return new HttpResponse(null, { status: 204 })
-    }))
+    server.use(
+      http.delete(`/api/instances/${instance.id}`, ({ request }) => {
+        requests.push(new URL(request.url))
+        return HttpResponse.json({ ...instance, runtimeStatus: 'Deleting' }, { status: 202 })
+      }),
+    )
   })
 
   afterEach(() => {
@@ -73,7 +75,7 @@ describe('DeleteInstanceDialog', () => {
     expect(deleteButton().disabled).toBe(true)
   })
 
-  it('keeps the files when asked', async () => {
+  it('keeps the files when asked, and shows the instance being deleted', async () => {
     const { wrapper, pinia } = await mountDialog()
 
     await chooseFiles(false)
@@ -82,7 +84,8 @@ describe('DeleteInstanceDialog', () => {
     await flushPromises()
 
     expect(requests.map(url => url.searchParams.get('deleteFiles'))).toEqual(['false'])
-    expect(useInstancesStore(pinia).getInstance(instance.id)).toBeUndefined()
+    // The deletion goes on in the daemon: the hub tells once the instance is gone.
+    expect(useInstancesStore(pinia).getInstance(instance.id)?.runtimeStatus).toBe('Deleting')
     expect(wrapper.emitted('deleted')).toHaveLength(1)
   })
 
@@ -102,9 +105,33 @@ describe('DeleteInstanceDialog', () => {
     expect(wrapper.emitted('deleted')).toHaveLength(1)
   })
 
+  it('shows no list of files, only what deleting them means', async () => {
+    await mountDialog()
+
+    await chooseFiles(true)
+
+    expect(document.body.textContent).toContain('Deletes what the server uses, wherever its folder is')
+    expect(document.querySelector('.deleted-files')).toBeNull()
+  })
+
+  it('shows why the daemon refuses to delete the files', async () => {
+    server.use(http.delete(`/api/instances/${instance.id}`, () => HttpResponse.json(
+      { detail: 'The files of instance main cannot be deleted. /volume1 is a root of the file system.' },
+      { status: 409 })))
+    const { wrapper } = await mountDialog()
+
+    await chooseFiles(true)
+    await typeName(instance.name)
+    deleteButton().click()
+    await flushPromises()
+
+    expect(document.body.textContent).toContain('The server could not be deleted: The files of instance main cannot be deleted.')
+    expect(wrapper.emitted('deleted')).toBeUndefined()
+  })
+
   it('shows why the daemon could not delete the instance', async () => {
     server.use(http.delete(`/api/instances/${instance.id}`, () =>
-      HttpResponse.json({ detail: 'p4d did not stop.' }, { status: 500 })))
+      HttpResponse.json({ detail: 'Another operation is in progress on this instance.' }, { status: 409 })))
     const { wrapper, pinia } = await mountDialog()
 
     await chooseFiles(false)
@@ -112,7 +139,7 @@ describe('DeleteInstanceDialog', () => {
     deleteButton().click()
     await flushPromises()
 
-    expect(document.body.textContent).toContain('The server could not be deleted: p4d did not stop.')
+    expect(document.body.textContent).toContain('The server could not be deleted: Another operation is in progress')
     expect(useInstancesStore(pinia).getInstance(instance.id)).toBeDefined()
     expect(wrapper.emitted('deleted')).toBeUndefined()
   })

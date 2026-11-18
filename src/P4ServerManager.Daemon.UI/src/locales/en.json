@@ -299,6 +299,7 @@
     },
     "skipped": "Skipped"
   },
+  "serverDirectoryCaseWarning": "{variant} already exists, and only the case of its name tells it from {path}. Both folders are kept apart, but they are easy to mix up, especially from Windows.",
   "createInstance": {
     "title": "New server",
     "name": "Name",
@@ -310,7 +311,7 @@
     "cached": "cached",
     "port": "Port",
     "serverDirectory": "Server directory",
-    "serverDirectoryHint": "Empty or missing. Holds the root, the journals, the logs and the depot files. Leave empty to let the manager choose a folder.",
+    "serverDirectoryHint": "Empty or missing. Holds the root, the journals, the logs and the depot files. Leave empty for a folder named after the instance in the servers folder.",
     "ssl": "SSL",
     "sslHint": "Encrypts the connections. Clients trust the server once.",
     "caseSensitive": "Case-sensitive",
@@ -474,12 +475,12 @@
   },
   "deleteInstance": {
     "title": "Delete {name}?",
-    "text": "The server is stopped if it runs, then removed from the manager. This cannot be undone.",
+    "text": "The server is stopped if it runs, then removed from the manager with what the manager keeps for it. This cannot be undone.",
     "filesChoice": "Files of the server",
     "keepFiles": "Keep the files",
     "deleteFiles": "Delete the files",
-    "deleteFilesHint": "Deletes the logs and, when the manager chose it, the server directory with the root, the journals and the depots. A server directory you gave at creation is kept.",
-    "keptFiles": "The files stay on disk, in {path}.",
+    "deleteFilesHint": "Deletes what the server uses, wherever its folder is: its root, depots, checkpoints, journals and logs. A folder that holds other files is kept.",
+    "keptFiles": "The files of the server stay on disk, in {path}. A log the manager kept for it is moved to the logs folder there.",
     "confirmName": "Type {name} to confirm",
     "error": "The server could not be deleted: {message}"
   },

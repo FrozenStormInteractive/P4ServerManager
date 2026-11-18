@@ -8,11 +8,29 @@ using P4ServerManager.Daemon.Services.Instances;
 namespace P4ServerManager.Daemon.Services;
 
 /// <summary>
-/// Absolute paths inside the data directory.
+/// Absolute paths of the files of the daemon. They fall in four folders, so that a package puts each where its platform
+/// keeps that kind of file: the data directory (what cannot be rebuilt), the cache directory (what can), the runtime
+/// directory (what only matters while the daemon and the servers run) and the servers directory (the default server
+/// directories). The last three default to the data directory, or a folder of it.
 /// </summary>
 public sealed class DaemonPaths
 {
     public string DataDirectory { get; }
+
+    /// <summary>
+    /// Folder of the extracted p4d builds, which the daemon extracts again from the archive.
+    /// </summary>
+    public string CacheDirectory { get; }
+
+    /// <summary>
+    /// Folder of the pid files, the start output of p4d and the temporary files.
+    /// </summary>
+    public string RuntimeDirectory { get; }
+
+    /// <summary>
+    /// Folder of the default server directories, one per instance, named after the instance at its creation.
+    /// </summary>
+    public string ServersDirectory { get; }
 
     /// <summary>
     /// Unix domain socket of the CLI, or null when the daemon listens on none.
@@ -22,30 +40,31 @@ public sealed class DaemonPaths
     public string DatabasePath => Path.Combine(DataDirectory, "p4servermanager.db");
 
     /// <summary>
-    /// Exists while the database has accounts of the web interface. The install wizard of the Synology package reads
-    /// it, rather than the database, to skip the account step when a previous installation left accounts: keep its
-    /// name in sync with <c>packaging/spk/WIZARD_UIFILES/install_uifile.sh</c> and <c>packaging/spk/scripts/postuninst</c>.
-    /// </summary>
-    public string AccountsMarkerPath => Path.Combine(DataDirectory, "has-accounts");
-
-    /// <summary>
     /// Extracted p4d builds, ready to run. p4d is recognized as such by its executable under this folder.
     /// </summary>
-    public string BuildsDirectory => Path.Combine(DataDirectory, "builds");
+    public string BuildsDirectory => Path.Combine(CacheDirectory, "builds");
 
     /// <summary>
     /// Compressed p4d builds.
     /// </summary>
     public string ArchiveDirectory { get; }
 
+    /// <summary>
+    /// The files the daemon keeps for each instance, one folder per instance. Never a server directory.
+    /// </summary>
     public string InstancesDirectory => Path.Combine(DataDirectory, "instances");
+
+    /// <summary>
+    /// The runtime files of each instance, one folder per instance.
+    /// </summary>
+    public string RuntimeInstancesDirectory => Path.Combine(RuntimeDirectory, "instances");
 
     /// <summary>
     /// Keys of ASP.NET Core Data Protection, which encrypt the stored passwords. Without them, the passwords cannot be
     /// read: a backup of the data directory must include them.
     /// </summary>
     public string KeysDirectory => Path.Combine(DataDirectory, "keys");
-    
+
     /// <summary>
     /// Profiles of the p4dctl-ng servers of the HelixCoreServer Synology package, copied there by the package of the
     /// daemon, to be imported.
@@ -61,20 +80,33 @@ public sealed class DaemonPaths
         : this(
             Path.GetFullPath(options.Value.DataDirectory, environment.ContentRootPath),
             options.Value.SocketPath,
-            options.Value.ArchiveDirectory)
+            options.Value.ArchiveDirectory,
+            options.Value.CacheDirectory,
+            options.Value.RuntimeDirectory,
+            options.Value.ServersDirectory)
     {
     }
 
     public DaemonPaths(
         string dataDirectory,
         string? socketPath = DaemonOptions.DefaultSocketPath,
-        string? archiveDirectory = null)
+        string? archiveDirectory = null,
+        string? cacheDirectory = null,
+        string? runtimeDirectory = null,
+        string? serversDirectory = null)
     {
         DataDirectory = dataDirectory;
-        SocketPath = string.IsNullOrEmpty(socketPath) ? null : Path.GetFullPath(socketPath, dataDirectory);
-        ArchiveDirectory = Path.GetFullPath(
-            string.IsNullOrEmpty(archiveDirectory) ? "archive" : archiveDirectory,
-            dataDirectory);
+        ArchiveDirectory = Resolve(archiveDirectory, "archive");
+        CacheDirectory = Resolve(cacheDirectory, ".");
+        RuntimeDirectory = Resolve(runtimeDirectory, ".");
+        ServersDirectory = Resolve(serversDirectory, "servers");
+        SocketPath = string.IsNullOrEmpty(socketPath) ? null : Path.GetFullPath(socketPath, RuntimeDirectory);
+    }
+
+    private string Resolve(string? path, string defaultPath)
+    {
+        return Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(string.IsNullOrEmpty(path) ? defaultPath : path, DataDirectory));
     }
 
     public string GetBuildDirectory(string platform, string version, string build)
@@ -87,21 +119,41 @@ public sealed class DaemonPaths
         return Path.Combine(ArchiveDirectory, platform, version, build + ".tar.zst");
     }
 
+    /// <summary>
+    /// The files the daemon keeps for an instance, in the data directory.
+    /// </summary>
     public string GetInstanceDirectory(Guid instanceId)
     {
         return Path.Combine(InstancesDirectory, instanceId.ToString("N"));
     }
 
     /// <summary>
-    /// Root of an instance created without a server directory: the folder of the instance is its server directory.
+    /// The runtime files of an instance, in the runtime directory.
     /// </summary>
-    public string GetDefaultRootPath(Guid instanceId)
+    public string GetRuntimeInstanceDirectory(Guid instanceId)
     {
-        return ServerLayout.GetRootPath(GetInstanceDirectory(instanceId));
+        return Path.Combine(RuntimeInstancesDirectory, instanceId.ToString("N"));
     }
 
     /// <summary>
-    /// Log of a p4d whose server directory has no logs folder, such as an imported server.
+    /// Server directory of an instance created without one: the folder of the servers directory named after it.
+    /// </summary>
+    public string GetDefaultServerDirectory(string instanceName)
+    {
+        return Path.Combine(ServersDirectory, instanceName);
+    }
+
+    /// <summary>
+    /// Root of an instance created without a server directory, in <see cref="GetDefaultServerDirectory"/>.
+    /// </summary>
+    public string GetDefaultRootPath(string instanceName)
+    {
+        return ServerLayout.GetRootPath(GetDefaultServerDirectory(instanceName));
+    }
+
+    /// <summary>
+    /// Log of a p4d whose server directory has no logs folder, such as an imported server. When the instance is deleted
+    /// and its files are kept, the folder of this log is moved to the <c>logs</c> folder of the root.
     /// </summary>
     public string GetLogPath(Guid instanceId)
     {
@@ -113,7 +165,7 @@ public sealed class DaemonPaths
     /// </summary>
     public string GetStartOutputPath(Guid instanceId)
     {
-        return Path.Combine(GetInstanceDirectory(instanceId), "logs", "p4d-start.log");
+        return Path.Combine(GetRuntimeInstanceDirectory(instanceId), "p4d-start.log");
     }
 
     /// <summary>
@@ -145,7 +197,7 @@ public sealed class DaemonPaths
     /// <summary>
     /// Where the objects of a backup are encrypted before they are uploaded. Emptied when the daemon starts.
     /// </summary>
-    public string BackupTemporaryDirectory => Path.Combine(DataDirectory, "tmp", "backups");
+    public string BackupTemporaryDirectory => Path.Combine(RuntimeDirectory, "tmp", "backups");
 
     /// <summary>
     /// Size, date and SHA-256 of the files of an instance at its last backup, so that only the files that changed are
@@ -165,9 +217,17 @@ public sealed class DaemonPaths
         return Path.Combine(GetInstanceDirectory(instanceId), "restore-state.json");
     }
 
+    /// <summary>
+    /// A deletion of the instance that has begun: a later daemon process carries it on when it did not end.
+    /// </summary>
+    public string GetDeletionStatePath(Guid instanceId)
+    {
+        return Path.Combine(GetInstanceDirectory(instanceId), "deletion.json");
+    }
+
     public string GetPidFilePath(Guid instanceId)
     {
-        return Path.Combine(GetInstanceDirectory(instanceId), "p4d.pid");
+        return Path.Combine(GetRuntimeInstanceDirectory(instanceId), "p4d.pid");
     }
 
     /// <summary>

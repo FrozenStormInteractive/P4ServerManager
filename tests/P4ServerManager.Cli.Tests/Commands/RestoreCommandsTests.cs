@@ -134,6 +134,13 @@ public sealed class RestoreCommandsTests
         _cli.Input = "weak\n";
         InstanceDto copy = CliRunner.Instance("copy");
         _cli.Daemon.On(
+            HttpMethod.Get,
+            "/api/instances/server-directory?name=copy",
+            StubDaemon.Json(
+                HttpStatusCode.OK,
+                new ServerDirectoryPreviewDto("/volume1/P4ServerManager/copy", true, null),
+                CliJsonContext.Default.ServerDirectoryPreviewDto));
+        _cli.Daemon.On(
             HttpMethod.Post,
             "/api/instances/restore",
             StubDaemon.Json(HttpStatusCode.Accepted, copy, CliJsonContext.Default.InstanceDto));

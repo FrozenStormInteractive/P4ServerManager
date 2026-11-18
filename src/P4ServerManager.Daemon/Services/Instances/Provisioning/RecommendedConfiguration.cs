@@ -1,4 +1,5 @@
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services.Perforce;
 
 namespace P4ServerManager.Daemon.Services.Instances.Provisioning;
 
@@ -73,15 +74,15 @@ public static class RecommendedConfiguration
             ("filesys.P4ROOT.min", "2G"),
             ("filesys.depot.min", "2G"),
             ("filesys.P4JOURNAL.min", "2G"),
-            ("server.depot.root", $"../{ServerLayout.ArchivesFolder}"),
-            ("journalPrefix", $"../{ServerLayout.JournalsFolder}/{instance.Name}"),
+            (ServerConfigurables.DepotRoot, $"../{ServerLayout.ArchivesFolder}"),
+            (ServerConfigurables.JournalPrefix, $"../{ServerLayout.JournalsFolder}/{instance.Name}"),
         ];
 
         // Structured logs.
         string[] serverLogs = ["commands", "errors", "events", "integrity", "auth"];
         for (int i = 0; i < serverLogs.Length; i++)
         {
-            configurables.Add(($"serverlog.file.{i + 1}", $"{logs}/{serverLogs[i]}.csv"));
+            configurables.Add(($"{ServerConfigurables.StructuredLogFilePrefix}{i + 1}", $"{logs}/{serverLogs[i]}.csv"));
             configurables.Add(($"serverlog.retain.{i + 1}", "10"));
         }
         return configurables;

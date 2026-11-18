@@ -689,6 +689,16 @@ export interface DirectoryEntry {
 }
 
 /**
+ * The server directory a new instance would get. `caseVariant` is an existing entry next to it whose name differs by its
+ * case only: the creation is not refused, but the two are easy to mix up.
+ */
+export interface ServerDirectoryPreview {
+  path: string
+  isDefault: boolean
+  caseVariant: string | null
+}
+
+/**
  * The subfolders of a folder of the machine of the daemon, to pick a path.
  */
 export interface DirectoryListing {

@@ -5,6 +5,8 @@ using P4ServerManager.Contracts;
 using P4ServerManager.Daemon.Contracts;
 using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
+using P4ServerManager.Daemon.Services;
+using P4ServerManager.Daemon.Services.FileSystem;
 using P4ServerManager.Daemon.Services.Instances;
 using P4ServerManager.Daemon.Services.Instances.PortChange;
 using P4ServerManager.Daemon.Services.Instances.Provisioning;
@@ -104,6 +106,32 @@ public sealed class InstancesController(
         }
 
         return AcceptedAtAction(nameof(GetInstance), new { id = instance.Id }, await ToDtoAsync(instance));
+    }
+
+    /// <summary>
+    /// Tells where a new instance would keep its server, before it is created: the server directory given, or the
+    /// default one named after the instance in the servers directory. It warns of an existing folder whose name differs
+    /// by its case only, which the creation does not refuse. Nothing is created.
+    /// </summary>
+    /// <param name="request">The name and the server directory of the new instance.</param>
+    /// <param name="paths">Paths of the daemon, with the servers directory.</param>
+    /// <response code="200">The server directory.</response>
+    /// <response code="400">The name or the server directory is not valid. The errors are keyed by field.</response>
+    [HttpGet("server-directory")]
+    [ProducesResponseType<ServerDirectoryPreviewDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    public ActionResult<ServerDirectoryPreviewDto> PreviewServerDirectory(
+        [FromQuery] ServerDirectoryPreviewRequest request,
+        [FromServices] DaemonPaths paths)
+    {
+        bool isDefault = string.IsNullOrWhiteSpace(request.ServerDirectory);
+        string path = DirectoryBrowser.Normalize(
+            isDefault ? paths.GetDefaultServerDirectory(request.Name!) : request.ServerDirectory!);
+        string? caseVariant = DirectoryBrowser.FindCaseVariant(path);
+        return new ServerDirectoryPreviewDto(
+            DirectoryBrowser.ToApiPath(path),
+            isDefault,
+            caseVariant is null ? null : DirectoryBrowser.ToApiPath(caseVariant));
     }
 
     /// <summary>
@@ -594,40 +622,45 @@ public sealed class InstancesController(
     }
 
     /// <summary>
-    /// Deletes an instance: stops its p4d if it runs, then removes it from the daemon. The instance is
-    /// <c>Deleting</c> meanwhile, and the <c>InstanceDeleted</c> event of the <c>/hubs/instances</c> hub tells the
-    /// clients once it is gone. A failed instance can be deleted too.
+    /// Begins the deletion of an instance. It runs in the background: p4d is stopped if it runs, the files of its server
+    /// are deleted when asked, then the instance is removed with the folders the daemon keeps for it, whatever is asked
+    /// for the files. The instance is <c>Deleting</c> meanwhile, and the <c>InstanceDeleted</c> event of the
+    /// <c>/hubs/instances</c> hub tells the clients once it is gone; <c>GET /api/instances/{id}</c> then answers 404. A
+    /// failure leaves the instance, with the error as its <c>lastError</c>. A daemon that restarts in the middle carries
+    /// the deletion on. A failed instance can be deleted too.
     /// </summary>
     /// <param name="id">Identifier of the instance.</param>
     /// <param name="deleteFiles">
-    /// Also deletes the files of the instance in the data directory: its logs and, when the daemon chose it, its server
-    /// directory with the root, the journals and the depots. A server directory given at creation is always kept.
-    /// False by default: the files stay on disk.
+    /// Also deletes the files of its server, read from its configuration, wherever its server directory is: its root,
+    /// the folders of its depots, its checkpoints, journals and logs, then their folders and the server directory once
+    /// nothing else is left in them. False by default: they stay on disk, and the log of a p4d without a logs folder,
+    /// kept by the daemon, is moved to the <c>logs</c> folder of its root.
     /// </param>
     /// <param name="supervisor">Stops the process and deletes the instance.</param>
     /// <param name="cancellationToken">
-    /// Aborts the request. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
+    /// Aborts the request. Once begun, the deletion runs to its end: only the shutdown of the daemon pauses it.
     /// </param>
-    /// <response code="204">The instance is deleted.</response>
+    /// <response code="202">The deletion has begun. The body is the instance, <c>Deleting</c>.</response>
     /// <response code="404">No instance has this identifier.</response>
-    /// <response code="409">The instance is being provisioned, or another operation is in progress.</response>
-    /// <response code="500">p4d did not stop, or the files could not be deleted. The instance is kept.</response>
+    /// <response code="409">
+    /// The instance is being provisioned, another operation is in progress, or its files cannot be deleted: a folder is
+    /// a root of the file system or right under it, holds the files of the daemon or reaches the root of another
+    /// instance. The detail says why. Nothing is begun.
+    /// </response>
     [HttpDelete("{id:guid}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<InstanceDto>(StatusCodes.Status202Accepted)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
-    public Task<ActionResult> DeleteInstance(
+    public async Task<ActionResult<InstanceDto>> DeleteInstance(
         Guid id,
         [FromServices] InstanceSupervisor supervisor,
         CancellationToken cancellationToken,
         [FromQuery] bool deleteFiles = false)
     {
-        return HandleOperationErrorsAsync(async () =>
-        {
-            await supervisor.DeleteInstanceAsync(id, deleteFiles, cancellationToken);
-            return NoContent();
-        });
+        // Mapped as it was when the deletion began: the files and the status may be gone by now.
+        return await HandleOperationErrorsAsync(async () => Accepted(
+            (await supervisor.DeleteInstanceAsync(id, deleteFiles, cancellationToken))
+                .ToDto(InstanceRuntimeStatus.Deleting, serverId: null)));
     }
 
     private async Task<ActionResult<IReadOnlyList<InstanceActionResult>>> RunBatchAsync(

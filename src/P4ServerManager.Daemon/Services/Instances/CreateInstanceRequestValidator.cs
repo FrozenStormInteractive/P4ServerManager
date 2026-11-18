@@ -14,12 +14,16 @@ public sealed class CreateInstanceRequestValidator : AbstractValidator<CreateIns
     public CreateInstanceRequestValidator(
         DaemonDbContext db,
         IP4ServerReleaseCatalog releaseCatalog,
-        IValidator<SuperUserRequest> superUserValidator)
+        IValidator<SuperUserRequest> superUserValidator,
+        DaemonPaths paths)
     {
         // One error per field: the checks against the database or the machine only run on a well-formed value.
         RuleLevelCascadeMode = CascadeMode.Stop;
 
-        RuleFor(r => r.Name).MustBeNewInstanceName(db);
+        RuleFor(r => r.Name)
+            .MustBeNewInstanceName(db)
+            .MustHaveFreeDefaultServerDirectory(paths)
+            .When(r => string.IsNullOrWhiteSpace(r.ServerDirectory), ApplyConditionTo.CurrentValidator);
         RuleFor(r => r.Description).MustBeInstanceDescription();
         RuleFor(r => r.Port).MustBeFreeInstancePort(db);
         RuleFor(r => r.Release).MustBeAvailableRelease(releaseCatalog, db);

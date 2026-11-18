@@ -38,8 +38,8 @@ public sealed class InitializeDatabaseStep(IP4ServerBuildCache buildCache, IProc
         // Relative to the root. One argument each: p4d reads "-c" followed by the command.
         string[] settings =
         [
-            $"P4JOURNAL=../{ServerLayout.JournalsFolder}/journal",
-            $"P4LOG=../{ServerLayout.LogsFolder}/{ServerLayout.LogFile}",
+            $"{ServerConfigurables.Journal}=../{ServerLayout.JournalsFolder}/journal",
+            $"{ServerConfigurables.Log}=../{ServerLayout.LogsFolder}/{ServerLayout.LogFile}",
         ];
         foreach (string setting in settings)
         {

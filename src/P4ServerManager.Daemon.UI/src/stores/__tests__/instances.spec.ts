@@ -193,12 +193,35 @@ describe('instances store', () => {
     expect(store.operations.a).toBeUndefined()
   })
 
-  it('forgets an instance once the daemon has deleted it', async () => {
-    server.use(http.delete('/api/instances/a', () => new HttpResponse(null, { status: 204 })))
+  it('shows an instance being deleted until the daemon tells that it is gone', async () => {
+    server.use(http.delete('/api/instances/a', () =>
+      HttpResponse.json(createInstance({ id: 'a', name: 'alpha', runtimeStatus: 'Deleting' }), { status: 202 })))
     const store = useInstancesStore()
     store.upsertInstance(createInstance({ id: 'a', name: 'alpha' }))
 
     await store.remove('a', false)
+    expect(store.getInstance('a')?.runtimeStatus).toBe('Deleting')
+
+    store.removeInstance('a')
+    expect(store.getInstance('a')).toBeUndefined()
+  })
+
+  it('does not bring back an instance deleted before the answer to its deletion', async () => {
+    let answer!: () => void
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
+    server.use(http.delete('/api/instances/a', async () => {
+      await answered
+      return HttpResponse.json(createInstance({ id: 'a', name: 'alpha', runtimeStatus: 'Deleting' }), { status: 202 })
+    }))
+    const store = useInstancesStore()
+    store.upsertInstance(createInstance({ id: 'a', name: 'alpha' }))
+
+    const removing = store.remove('a', false)
+    store.removeInstance('a')
+    answer()
+    await removing
 
     expect(store.getInstance('a')).toBeUndefined()
   })

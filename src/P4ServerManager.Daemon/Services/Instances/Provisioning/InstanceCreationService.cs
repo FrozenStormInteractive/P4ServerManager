@@ -79,7 +79,7 @@ public sealed class InstanceCreationService(
             Port = settings.Port,
             Ssl = settings.Ssl,
             RootPath = string.IsNullOrWhiteSpace(settings.ServerDirectory)
-                ? paths.GetDefaultRootPath(id)
+                ? paths.GetDefaultRootPath(settings.Name)
                 : ServerLayout.GetRootPath(Path.GetFullPath(settings.ServerDirectory)),
             Release = release,
             BuildId = buildId,

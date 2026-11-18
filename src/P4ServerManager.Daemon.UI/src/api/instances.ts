@@ -8,6 +8,7 @@ import type {
   InstanceActionResult,
   InstanceSelection,
   OperationSnapshot,
+  ServerDirectoryPreview,
   SetSuperUserRequest,
   UpdateInstanceRequest,
   UpgradeInstanceRequest,
@@ -22,6 +23,24 @@ export function listInstances (): Promise<Instance[]> {
 
 export function createInstance (body: CreateInstanceRequest): Promise<Instance> {
   return request('POST', '/api/instances', body)
+}
+
+/**
+ * Where a new instance would keep its server: the server directory given, or without one the default folder named
+ * after the instance. Nothing is created.
+ */
+export function previewServerDirectory (
+  name: string,
+  serverDirectory?: string | null,
+): Promise<ServerDirectoryPreview> {
+  const query = new URLSearchParams()
+  if (name) {
+    query.set('name', name)
+  }
+  if (serverDirectory) {
+    query.set('serverDirectory', serverDirectory)
+  }
+  return request('GET', `/api/instances/server-directory?${query.toString()}`)
 }
 
 export function updateInstance (id: string, body: UpdateInstanceRequest): Promise<Instance> {
@@ -69,8 +88,14 @@ export function stopInstance (id: string): Promise<Instance> {
  * Deletes the instance. With `deleteFiles`, its logs and the root the daemon chose for it are deleted too; a root
  * directory given at creation is always kept.
  */
-export async function deleteInstance (id: string, deleteFiles: boolean): Promise<void> {
-  await request('DELETE', `/api/instances/${encodeURIComponent(id)}?deleteFiles=${deleteFiles}`)
+/**
+ * What deleting the instance with its files would remove. Nothing is deleted.
+ */
+/**
+ * Begins the deletion of an instance, which goes on in the daemon. Returns the instance, `Deleting`.
+ */
+export function deleteInstance (id: string, deleteFiles: boolean): Promise<Instance> {
+  return request('DELETE', `/api/instances/${encodeURIComponent(id)}?deleteFiles=${deleteFiles}`)
 }
 
 export function restartInstance (id: string): Promise<Instance> {

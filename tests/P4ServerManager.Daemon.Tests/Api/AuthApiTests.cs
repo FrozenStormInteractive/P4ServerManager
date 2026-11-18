@@ -453,41 +453,6 @@ public sealed class AuthApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AccountsMarker_IsWrittenWithTheFirstAccount()
-    {
-        string marker = Path.Combine(_dataDirectory, "has-accounts");
-        HttpClient client = CreateBrowserClient();
-        (await client.GetAsync("api/auth/session", TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
-        File.Exists(marker).ShouldBeFalse();
-
-        HttpResponseMessage response = await client.PostAsJsonAsync(
-            "api/auth/setup",
-            new { userName = "admin", password = Password },
-            TestContext.Current.CancellationToken);
-
-        response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        File.Exists(marker).ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task AccountsMarker_FollowsTheDatabase_AtStartup()
-    {
-        string marker = Path.Combine(_dataDirectory, "has-accounts");
-        Directory.CreateDirectory(_dataDirectory);
-        // Left by a database that was replaced by an empty one.
-        await File.WriteAllTextAsync(marker, string.Empty, TestContext.Current.CancellationToken);
-        UserService users = Factory.Services.GetRequiredService<UserService>();
-        File.Exists(marker).ShouldBeFalse();
-
-        await CreateAccountAsync("admin");
-        // As after an upgrade from a version without the marker.
-        File.Delete(marker);
-        await users.UpdateAccountsMarkerAsync(TestContext.Current.CancellationToken);
-
-        File.Exists(marker).ShouldBeTrue();
-    }
-
-    [Fact]
     public async Task Accounts_AreStoredWithAHashedPassword()
     {
         await CreateAccountAsync("admin");

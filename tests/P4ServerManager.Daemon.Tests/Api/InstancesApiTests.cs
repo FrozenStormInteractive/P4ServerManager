@@ -17,6 +17,7 @@ using P4ServerManager.Daemon.Database;
 using P4ServerManager.Daemon.Database.Entities;
 using P4ServerManager.Daemon.Services;
 using P4ServerManager.Daemon.Services.Instances;
+using P4ServerManager.Daemon.Services.Instances.Deletion;
 using P4ServerManager.Daemon.Services.Perforce;
 using P4ServerManager.Daemon.Services.Processes;
 
@@ -96,7 +97,7 @@ public sealed class InstancesApiTests : IAsyncLifetime
         response.Headers.Location!.ToString().ShouldEndWith($"/api/instances/{id}");
         instance.GetProperty("state").GetString().ShouldBe("Provisioning");
         instance.GetProperty("runtimeStatus").GetString().ShouldBe("Unknown");
-        instance.GetProperty("rootPath").GetString().ShouldStartWith(_dataDirectory);
+        instance.GetProperty("rootPath").GetString().ShouldBe(Path.Combine(_dataDirectory, "servers", "main", "root"));
         instance.GetProperty("ssl").GetBoolean().ShouldBeFalse();
         // p4d has not set the server ID yet: the provisioning does not run in these tests.
         instance.GetProperty("serverId").ValueKind.ShouldBe(JsonValueKind.Null);
@@ -653,10 +654,15 @@ public sealed class InstancesApiTests : IAsyncLifetime
     public async Task DeleteInstance_RemovesAFailedInstanceAndItsFilesOnlyWhenAsked(bool deleteFiles)
     {
         Guid id = await CreateFailedInstanceAsync("main");
-        string directory = _factory.Services.GetRequiredService<DaemonPaths>().GetInstanceDirectory(id);
-        Directory.CreateDirectory(Path.Combine(directory, "root"));
+        DaemonPaths paths = _factory.Services.GetRequiredService<DaemonPaths>();
+        string directory = paths.GetInstanceDirectory(id);
+        string runtimeDirectory = paths.GetRuntimeInstanceDirectory(id);
+        Directory.CreateDirectory(runtimeDirectory);
+        // The default server directory, as the provisioning lays it out.
+        string serverDirectory = paths.GetDefaultServerDirectory("main");
+        Directory.CreateDirectory(Path.Combine(serverDirectory, "root"));
         await File.WriteAllTextAsync(
-            Path.Combine(directory, "root", "db.counters"),
+            Path.Combine(serverDirectory, "root", "db.counters"),
             "data",
             TestContext.Current.CancellationToken);
         // p4 makes its tickets file read-only.
@@ -665,35 +671,304 @@ public sealed class InstancesApiTests : IAsyncLifetime
         await File.WriteAllTextAsync(tickets, "ticket", TestContext.Current.CancellationToken);
         File.SetAttributes(tickets, FileAttributes.ReadOnly);
 
-        HttpResponseMessage response = await _client.DeleteAsync(
-            $"/api/instances/{id}?deleteFiles={deleteFiles}",
-            TestContext.Current.CancellationToken);
+        (await DeleteAndWaitAsync(id, deleteFiles)).ShouldBeNull();
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await _client.GetAsync($"/api/instances/{id}", TestContext.Current.CancellationToken))
-            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        Directory.Exists(directory).ShouldBe(!deleteFiles);
-        if (!deleteFiles)
-        {
-            // Lets DisposeAsync delete the kept files.
-            File.SetAttributes(tickets, FileAttributes.Normal);
-        }
+        // What the daemon keeps for the instance goes whatever is asked for the files.
+        Directory.Exists(directory).ShouldBeFalse();
+        Directory.Exists(runtimeDirectory).ShouldBeFalse();
+        Directory.Exists(serverDirectory).ShouldBe(!deleteFiles);
     }
 
     [Fact]
-    public async Task DeleteInstance_KeepsAServerDirectoryChosenAtCreation()
+    public async Task DeleteInstance_AnswersWithTheInstanceBeingDeleted()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+
+        HttpResponseMessage response = await _client.DeleteAsync(
+            $"/api/instances/{id}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        JsonElement instance = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        instance.GetProperty("id").GetGuid().ShouldBe(id);
+        instance.GetProperty("runtimeStatus").GetString().ShouldBe("Deleting");
+        (await WaitForDeletionAsync(id)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteInstance_KeepingTheFiles_MovesTheLogTheDaemonKeptToTheLogsFolderOfTheRoot()
+    {
+        // An imported server: its root is not named root, so p4d logs in the folder of the instance.
+        string rootPath = Path.Combine(_dataDirectory, "imported", "P4ROOT");
+        Guid id = await CreateFailedInstanceAsync("main");
+        await SetRootPathAsync(id, rootPath);
+        Directory.CreateDirectory(rootPath);
+        DaemonPaths paths = _factory.Services.GetRequiredService<DaemonPaths>();
+        string log = paths.GetLogPath(id);
+        Directory.CreateDirectory(Path.GetDirectoryName(log)!);
+        await File.WriteAllTextAsync(log, "the log", TestContext.Current.CancellationToken);
+        // A log of the same name already in the root keeps its name.
+        Directory.CreateDirectory(Path.Combine(rootPath, "logs"));
+        await File.WriteAllTextAsync(
+            Path.Combine(rootPath, "logs", "p4d.log"),
+            "older log",
+            TestContext.Current.CancellationToken);
+
+        (await DeleteAndWaitAsync(id, deleteFiles: false)).ShouldBeNull();
+
+        string[] logs = Directory.GetFiles(Path.Combine(rootPath, "logs")).Select(f => Path.GetFileName(f)).ToArray();
+        logs.Length.ShouldBe(2);
+        (await File.ReadAllTextAsync(Path.Combine(rootPath, "logs", "p4d.log"), TestContext.Current.CancellationToken))
+            .ShouldBe("older log");
+        string moved = logs.Single(l => l != "p4d.log");
+        moved.ShouldMatch(@"^p4d\.\d{8}T\d{6}Z\.log$");
+        (await File.ReadAllTextAsync(Path.Combine(rootPath, "logs", moved), TestContext.Current.CancellationToken))
+            .ShouldBe("the log");
+        Directory.Exists(paths.GetInstanceDirectory(id)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task DeleteInstance_ReportsAFailureAsTheLastErrorOfTheInstance()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+        DaemonPaths paths = _factory.Services.GetRequiredService<DaemonPaths>();
+        string root = Path.Combine(paths.GetDefaultServerDirectory("main"), "root");
+        Directory.CreateDirectory(root);
+        string locked = Path.Combine(root, "db.counters");
+        // A file held open without sharing cannot be deleted on Windows; elsewhere, a folder the daemon may not write.
+        FileStream? handle = null;
+        if (OperatingSystem.IsWindows())
+        {
+            handle = new FileStream(locked, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+        }
+        else
+        {
+            await File.WriteAllTextAsync(locked, "data", TestContext.Current.CancellationToken);
+            File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+
+        JsonElement? left;
+        try
+        {
+            left = await DeleteAndWaitAsync(id, deleteFiles: true);
+        }
+        finally
+        {
+            handle?.Dispose();
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+
+        Assert.SkipWhen(left is null, "The daemon runs with the rights to delete anything, as root does.");
+        left!.Value.GetProperty("lastError").GetString().ShouldNotBeNull().ShouldContain("could not be deleted");
+        left.Value.GetProperty("runtimeStatus").GetString().ShouldBe("Stopped");
+        File.Exists(paths.GetDeletionStatePath(id)).ShouldBeFalse();
+        // Deleting it again begins anew.
+        (await DeleteAndWaitAsync(id, deleteFiles: true)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteInstance_CarriesOnADeletionLeftUnfinished()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+        DaemonPaths paths = _factory.Services.GetRequiredService<DaemonPaths>();
+        string serverDirectory = paths.GetDefaultServerDirectory("main");
+        Directory.CreateDirectory(Path.Combine(serverDirectory, "root"));
+        Directory.CreateDirectory(Path.Combine(serverDirectory, "archives", "depot"));
+        // The deletion as a previous daemon process saved it before it stopped.
+        InstanceFilePlan plan = InstanceFilePlanner.Plan(
+            Path.Combine(serverDirectory, "root"),
+            description: null,
+            Path.Combine(serverDirectory, "logs", "log"),
+            [paths.GetInstanceDirectory(id)],
+            [],
+            [paths.DataDirectory]);
+        await new InstanceDeletionState(plan).SaveAsync(
+            paths.GetDeletionStatePath(id),
+            TestContext.Current.CancellationToken);
+        // An instance already removed, whose folder was left.
+        Guid removed = Guid.NewGuid();
+        await new InstanceDeletionState(null).SaveAsync(
+            paths.GetDeletionStatePath(removed),
+            TestContext.Current.CancellationToken);
+
+        InstanceSupervisor supervisor = _factory.Services.GetRequiredService<InstanceSupervisor>();
+        await supervisor.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            (await WaitForDeletionAsync(id)).ShouldBeNull();
+        }
+        finally
+        {
+            await supervisor.StopAsync(CancellationToken.None);
+        }
+
+        Directory.Exists(serverDirectory).ShouldBeFalse();
+        Directory.Exists(paths.GetInstanceDirectory(id)).ShouldBeFalse();
+        Directory.Exists(paths.GetInstanceDirectory(removed)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task DeleteInstance_RemovesTheDefaultServerDirectoryOfARenamedInstance()
+    {
+        Guid id = await CreateFailedInstanceAsync("main");
+        string serverDirectory = _factory.Services.GetRequiredService<DaemonPaths>().GetDefaultServerDirectory("main");
+        Directory.CreateDirectory(Path.Combine(serverDirectory, "root"));
+        (await _client.PatchAsJsonAsync(
+            $"/api/instances/{id}",
+            new { name = "renamed" },
+            TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await DeleteAndWaitAsync(id, deleteFiles: true)).ShouldBeNull();
+
+        Directory.Exists(serverDirectory).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task DeleteInstance_DeletesTheFilesOfAServerDirectoryChosenAtCreationButNotTheOthers()
     {
         string serverDirectory = Path.Combine(_dataDirectory, "custom-server");
         Guid id = await CreateFailedInstanceAsync("main", serverDirectory);
         string rootPath = Path.Combine(serverDirectory, "root");
         Directory.CreateDirectory(rootPath);
+        Directory.CreateDirectory(Path.Combine(serverDirectory, "journals"));
+        string notes = Path.Combine(serverDirectory, "notes.txt");
+        await File.WriteAllTextAsync(notes, "mine", TestContext.Current.CancellationToken);
+
+        (await DeleteAndWaitAsync(id, deleteFiles: true)).ShouldBeNull();
+
+        Directory.Exists(rootPath).ShouldBeFalse();
+        Directory.Exists(Path.Combine(serverDirectory, "journals")).ShouldBeFalse();
+        File.Exists(notes).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task DeleteInstance_RefusesFilesThatHoldTheRootOfAnotherInstance()
+    {
+        string serverDirectory = Path.Combine(_dataDirectory, "outer");
+        Guid outer = await CreateFailedInstanceAsync("outer", serverDirectory);
+        await CreateFailedInstanceAsync("inner", Path.Combine(serverDirectory, "root", "inner"));
+        Directory.CreateDirectory(Path.Combine(serverDirectory, "root", "inner", "root"));
 
         HttpResponseMessage response = await _client.DeleteAsync(
-            $"/api/instances/{id}?deleteFiles=true",
+            $"/api/instances/{outer}?deleteFiles=true",
             TestContext.Current.CancellationToken);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        Directory.Exists(rootPath).ShouldBeTrue();
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("detail").GetString().ShouldContain("of another instance");
+        Directory.Exists(Path.Combine(serverDirectory, "root", "inner", "root")).ShouldBeTrue();
+        (await _client.GetAsync($"/api/instances/{outer}", TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task CreateInstance_RejectsADefaultServerDirectoryThatIsNotEmpty()
+    {
+        string serverDirectory = Path.Combine(_dataDirectory, "servers", "main");
+        Directory.CreateDirectory(serverDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(serverDirectory, "notes.txt"),
+            "mine",
+            TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            "/api/instances",
+            ValidRequest("main", GetFreePort()),
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").GetProperty("name")[0].GetString()
+            .ShouldBe($"The folder {serverDirectory} is already used: choose another name, or a server directory.");
+    }
+
+    [Fact]
+    public async Task CreateInstance_AcceptsAnEmptyDefaultServerDirectory()
+    {
+        Directory.CreateDirectory(Path.Combine(_dataDirectory, "servers", "main"));
+
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            "/api/instances",
+            ValidRequest("main", GetFreePort()),
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task PreviewServerDirectory_GivesTheDefaultServerDirectoryNamedAfterTheInstance()
+    {
+        JsonElement preview = await _client.GetFromJsonAsync<JsonElement>(
+            "/api/instances/server-directory?name=Main",
+            TestContext.Current.CancellationToken);
+
+        preview.GetProperty("path").GetString().ShouldBe(ApiPath(Path.Combine(_dataDirectory, "servers", "Main")));
+        preview.GetProperty("isDefault").GetBoolean().ShouldBeTrue();
+        preview.GetProperty("caseVariant").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task PreviewServerDirectory_WarnsOfAFolderWhoseNameDiffersByItsCaseOnly()
+    {
+        Assert.SkipWhen(
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
+            "The file system ignores the case: both names are the same folder.");
+        string variant = Path.Combine(_dataDirectory, "servers", "main");
+        Directory.CreateDirectory(variant);
+
+        JsonElement preview = await _client.GetFromJsonAsync<JsonElement>(
+            "/api/instances/server-directory?name=Main",
+            TestContext.Current.CancellationToken);
+
+        preview.GetProperty("path").GetString().ShouldBe(Path.Combine(_dataDirectory, "servers", "Main"));
+        preview.GetProperty("caseVariant").GetString().ShouldBe(variant);
+    }
+
+    [Fact]
+    public async Task PreviewServerDirectory_ReportsNoVariantForTheFolderItself()
+    {
+        Directory.CreateDirectory(Path.Combine(_dataDirectory, "servers", "Main"));
+
+        JsonElement preview = await _client.GetFromJsonAsync<JsonElement>(
+            "/api/instances/server-directory?name=Main",
+            TestContext.Current.CancellationToken);
+
+        preview.GetProperty("caseVariant").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task PreviewServerDirectory_TakesTheServerDirectoryGiven()
+    {
+        string serverDirectory = Path.Combine(_dataDirectory, "custom-server");
+
+        JsonElement preview = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/instances/server-directory?serverDirectory={Uri.EscapeDataString(serverDirectory)}",
+            TestContext.Current.CancellationToken);
+
+        preview.GetProperty("path").GetString().ShouldBe(ApiPath(serverDirectory));
+        preview.GetProperty("isDefault").GetBoolean().ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("", "name")]
+    [InlineData("?name=1-bad", "name")]
+    [InlineData("?name=main&serverDirectory=relative/path", "serverDirectory")]
+    public async Task PreviewServerDirectory_RejectsAnInvalidField(string query, string field)
+    {
+        HttpResponseMessage response = await _client.GetAsync(
+            $"/api/instances/server-directory{query}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonElement problem = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).ShouldBe([field]);
     }
 
     [Theory]
@@ -1673,6 +1948,60 @@ public sealed class InstancesApiTests : IAsyncLifetime
                 setters => setters.SetProperty(i => i.State, P4ServerInstanceState.Failed),
                 TestContext.Current.CancellationToken);
         return id;
+    }
+
+    /// <summary>
+    /// Deletes an instance, then waits for the end of the deletion, which goes on in the daemon.
+    /// </summary>
+    /// <returns>Null once the instance is gone, otherwise the instance the failed deletion left.</returns>
+    private async Task<JsonElement?> DeleteAndWaitAsync(Guid id, bool deleteFiles)
+    {
+        HttpResponseMessage response = await _client.DeleteAsync(
+            $"/api/instances/{id}?deleteFiles={(deleteFiles ? "true" : "false")}",
+            TestContext.Current.CancellationToken);
+        response.StatusCode.ShouldBe(
+            HttpStatusCode.Accepted,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        return await WaitForDeletionAsync(id);
+    }
+
+    private async Task<JsonElement?> WaitForDeletionAsync(Guid id)
+    {
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        while (true)
+        {
+            HttpResponseMessage response = await _client.GetAsync($"/api/instances/{id}", timeout.Token);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+            JsonElement instance = await response.Content.ReadFromJsonAsync<JsonElement>(timeout.Token);
+            if (instance.GetProperty("runtimeStatus").GetString() != "Deleting")
+            {
+                return instance;
+            }
+            await Task.Delay(50, timeout.Token);
+        }
+    }
+
+    private async Task SetRootPathAsync(Guid id, string rootPath)
+    {
+        IDbContextFactory<DaemonDbContext> dbContextFactory =
+            _factory.Services.GetRequiredService<IDbContextFactory<DaemonDbContext>>();
+        await using DaemonDbContext db = await dbContextFactory.CreateDbContextAsync(
+            TestContext.Current.CancellationToken);
+        await db.Instances
+            .Where(i => i.Id == id)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(i => i.RootPath, rootPath),
+                TestContext.Current.CancellationToken);
+    }
+
+    private static string ApiPath(string path)
+    {
+        return OperatingSystem.IsWindows() ? path.Replace('\\', '/') : path;
     }
 
     private static object ValidRequest(string name, int port, string? build = null)

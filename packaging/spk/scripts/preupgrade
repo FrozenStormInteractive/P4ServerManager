@@ -1,5 +1,5 @@
 #!/bin/sh
-# Before an upgrade. Nothing to save: the database lives in the shared folder, and the daemon migrates it when it
-# starts.
+# Before an upgrade. Nothing to save: the database lives in the var folder, which DSM keeps, and the daemon migrates it
+# when it starts. DSM empties the tmp folder, which only holds runtime files: the package is stopped by then.
 
 exit 0

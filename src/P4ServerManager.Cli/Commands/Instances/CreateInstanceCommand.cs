@@ -110,6 +110,7 @@ internal static class CreateInstanceCommand
             };
 
             using DaemonClient client = invocation.CreateClient();
+            await ServerDirectoryWarning.WriteAsync(invocation, client, request.Name, request.ServerDirectory, cancellationToken);
             InstanceDto instance = await client.CreateInstanceAsync(request, cancellationToken);
 
             if (invocation.GetValue(noWaitOption))

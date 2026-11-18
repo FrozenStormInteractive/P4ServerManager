@@ -471,7 +471,8 @@ public sealed class HealthChecksApiTests : IAsyncLifetime
         await StartAndWaitAsync(id, HealthCheckKind.Validate);
 
         (await _client.DeleteAsync($"/api/instances/{id}", TestContext.Current.CancellationToken))
-            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        await WaitForDeletionAsync(id);
 
         await using DaemonDbContext db = await CreateDbContextAsync();
         (await db.HealthCheckRuns.CountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
@@ -694,6 +695,18 @@ public sealed class HealthChecksApiTests : IAsyncLifetime
                 return run;
             }
             await Task.Delay(10, timeout.Token);
+        }
+    }
+
+    // The deletion of an instance goes on in the daemon.
+    private async Task WaitForDeletionAsync(Guid id)
+    {
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        while ((await _client.GetAsync($"/api/instances/{id}", timeout.Token)).StatusCode != HttpStatusCode.NotFound)
+        {
+            await Task.Delay(50, timeout.Token);
         }
     }
 

@@ -10,6 +10,7 @@ using P4ServerManager.Daemon.Services.Backups.Destinations;
 using P4ServerManager.Daemon.Services.Backups.Restore;
 using P4ServerManager.Daemon.Services.Backups.Verification;
 using P4ServerManager.Daemon.Services.Instances.Admin;
+using P4ServerManager.Daemon.Services.Instances.Deletion;
 using P4ServerManager.Daemon.Services.Instances.HealthChecks;
 using P4ServerManager.Daemon.Services.Instances.PortChange;
 using P4ServerManager.Daemon.Services.Instances.ServerIdAssignment;
@@ -45,6 +46,7 @@ public sealed partial class InstanceSupervisor(
     OperationTracker operationTracker,
     InstanceNotifier notifier,
     DaemonPaths paths,
+    InstanceFilePlanner filePlanner,
     TimeProvider timeProvider,
     IHostApplicationLifetime lifetime,
     ILogger<InstanceSupervisor> logger) : BackgroundService
@@ -63,6 +65,7 @@ public sealed partial class InstanceSupervisor(
         await EndLeftRestoresAsync(cancellationToken);
         serversLeftStopped = await healthCheckRunner.EndLeftRunsAsync(cancellationToken);
         await EndLeftBackupsAsync(cancellationToken);
+        await ResumeDeletionsAsync(cancellationToken);
         await base.StartAsync(cancellationToken);
     }
 
@@ -235,67 +238,6 @@ public sealed partial class InstanceSupervisor(
             }
             instanceLock?.Release();
         }
-    }
-
-    /// <summary>
-    /// Stops the p4d of an instance if it runs, then removes the instance. The instance stays
-    /// <see cref="InstanceRuntimeStatus.Deleting"/> meanwhile. A failed instance can be deleted, but not one that is
-    /// being provisioned. Once begun, the operation runs to its end: only the shutdown of the daemon cancels it.
-    /// </summary>
-    /// <param name="instanceId">Identifier of the instance.</param>
-    /// <param name="deleteFiles">
-    /// Also deletes the directory of the instance in the data directory: its logs, its client state and the default
-    /// root. A root chosen at creation is always kept: it may hold files the daemon did not create.
-    /// </param>
-    /// <param name="cancellationToken">Aborts the wait for the instance to be free.</param>
-    /// <returns>The instance as it was before it was deleted.</returns>
-    public async Task<P4ServerInstance> DeleteInstanceAsync(
-        Guid instanceId,
-        bool deleteFiles,
-        CancellationToken cancellationToken)
-    {
-        return await RunExclusiveAsync(instanceId, cancellationToken, async (db, instance) =>
-        {
-            if (instance.State == P4ServerInstanceState.Provisioning)
-            {
-                throw new InstanceConflictException($"Instance {instance.Name} is being provisioned.");
-            }
-
-            runtimeRegistry.Set(instance.Id, InstanceRuntimeStatus.Deleting);
-            await notifier.InstanceChangedAsync(instance);
-            bool deleted = false;
-            try
-            {
-                await launcher.StopAsync(instance, lifetime.ApplicationStopping);
-                if (deleteFiles)
-                {
-                    DeleteFiles(instance);
-                }
-
-                // Out of the change tracker, so that a failure here leaves the entity as it was.
-                await db.Instances.Where(i => i.Id == instance.Id).ExecuteDeleteAsync(CancellationToken.None);
-                deleted = true;
-            }
-            catch (InstanceOperationException exception)
-            {
-                instance.LastError = exception.Message;
-                throw;
-            }
-            finally
-            {
-                if (!deleted)
-                {
-                    runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
-                    await db.SaveChangesAsync(CancellationToken.None);
-                    await notifier.InstanceChangedAsync(instance);
-                }
-            }
-
-            runtimeRegistry.Remove(instance.Id);
-            operationTracker.Remove(instance.Id);
-            await notifier.InstanceDeletedAsync(instance.Id);
-            logger.LogInformation("Deleted instance {Name}", instance.Name);
-        });
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -629,40 +571,6 @@ public sealed partial class InstanceSupervisor(
         if (instance.State != P4ServerInstanceState.Ready)
         {
             throw new InstanceConflictException($"Instance {instance.Name} is not ready.");
-        }
-    }
-
-    private void DeleteFiles(P4ServerInstance instance)
-    {
-        string directory = paths.GetInstanceDirectory(instance.Id);
-        try
-        {
-            if (Directory.Exists(directory))
-            {
-                if (OperatingSystem.IsWindows())
-                {
-                    // p4 makes its tickets file read-only, and Windows does not delete a read-only file.
-                    foreach (string file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
-                    {
-                        File.SetAttributes(file, FileAttributes.Normal);
-                    }
-                }
-                Directory.Delete(directory, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            throw new InstanceOperationException(
-                $"The files of instance {instance.Name} could not be deleted: {exception.Message}",
-                exception);
-        }
-
-        if (instance.RootPath != paths.GetDefaultRootPath(instance.Id))
-        {
-            logger.LogInformation(
-                "Kept the root {RootPath} of instance {Name}: it was chosen at creation",
-                instance.RootPath,
-                instance.Name);
         }
     }
 

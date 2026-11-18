@@ -37,6 +37,28 @@ public static partial class InstanceRuleExtensions
     }
 
     /// <summary>
+    /// A well-formed name whose default server directory, in the servers directory, is missing or empty. Only for a
+    /// request without a server directory.
+    /// </summary>
+    public static IRuleBuilderOptions<T, string> MustHaveFreeDefaultServerDirectory<T>(
+        this IRuleBuilder<T, string> rule,
+        DaemonPaths paths)
+    {
+        return rule
+            .Must(name => IsFreeServerDirectory(paths.GetDefaultServerDirectory(name)))
+            .WithMessage((_, name) =>
+                $"The folder {paths.GetDefaultServerDirectory(name)} is already used: choose another name, or a server directory.");
+    }
+
+    /// <summary>
+    /// Whether a server directory can be created there: nothing, or an empty folder.
+    /// </summary>
+    public static bool IsFreeServerDirectory(string path)
+    {
+        return !File.Exists(path) && (!Directory.Exists(path) || !Directory.EnumerateFileSystemEntries(path).Any());
+    }
+
+    /// <summary>
     /// A well-formed name, whether another instance has it or not.
     /// </summary>
     public static IRuleBuilderOptions<T, string> MustBeInstanceName<T>(this IRuleBuilder<T, string> rule)

@@ -12,8 +12,9 @@ public sealed class DaemonOptions
     public const string DefaultSocketPath = "daemon.sock";
 
     /// <summary>
-    /// Folder that holds the database, the cached p4d builds and the instances. A relative path is resolved against
-    /// the content root.
+    /// Folder of what the daemon cannot rebuild: the database, the keys that encrypt the stored passwords, the archive
+    /// of the p4d builds and the files of each instance it keeps for itself. A relative path is resolved against the
+    /// content root.
     /// </summary>
     [Required]
     public string DataDirectory { get; set; } = "data";
@@ -25,8 +26,28 @@ public sealed class DaemonOptions
     public string? ArchiveDirectory { get; set; }
 
     /// <summary>
+    /// Folder of what the daemon can rebuild: the extracted p4d builds, from the archive. A relative path is resolved
+    /// against the data directory. Defaults to the data directory.
+    /// </summary>
+    public string? CacheDirectory { get; set; }
+
+    /// <summary>
+    /// Folder of what only matters while the daemon and the servers run: the pid files of p4d, the start output of p4d
+    /// and the temporary files of the backups. A relative path is resolved against the data directory. Defaults to the
+    /// data directory.
+    /// </summary>
+    public string? RuntimeDirectory { get; set; }
+
+    /// <summary>
+    /// Folder that holds the server directory of each instance created without one, named after the instance. A
+    /// relative path is resolved against the data directory. Defaults to the <c>servers</c> folder of the data
+    /// directory.
+    /// </summary>
+    public string? ServersDirectory { get; set; }
+
+    /// <summary>
     /// Unix domain socket the CLI reaches the API through, next to the TCP port of the web UI. A relative path is
-    /// resolved against the data directory. Empty to listen on no socket.
+    /// resolved against the runtime directory. Empty to listen on no socket.
     /// </summary>
     public string? SocketPath { get; set; } = DefaultSocketPath;
 

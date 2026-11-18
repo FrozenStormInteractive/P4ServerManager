@@ -19,11 +19,17 @@ public sealed class CreateInstanceCommandTests
 
     private string InstancePath => $"/api/instances/{_provisioning.Id}";
 
+    public CreateInstanceCommandTests()
+    {
+        SetPreview("?name=main", "/volume1/P4ServerManager/main", null);
+    }
+
     [Fact]
     public async Task Create_SendsTheSettings()
     {
         _cli.Input = Password + "\n";
         SetCreated();
+        SetPreview("?name=main&serverDirectory=%2Fvolume1%2Fp4%2Fmain", "/volume1/p4/main", null);
 
         CliResult result = await _cli.RunAsync(
             "instance", "create", "main",
@@ -54,6 +60,39 @@ public sealed class CreateInstanceCommandTests
         request.RootElement.GetProperty("superUser").GetProperty("password").GetString().ShouldBe(Password);
         result.Output.ShouldNotContain(Password);
         result.Output.ShouldContain("instance operation main --follow");
+        result.Output.ShouldNotContain("Warning");
+    }
+
+    [Fact]
+    public async Task Create_WarnsOfAFolderWhoseNameDiffersByItsCaseOnly()
+    {
+        _cli.Input = Password + "\n";
+        SetCreated();
+        SetPreview("?name=main", "/volume1/P4ServerManager/main", "/volume1/P4ServerManager/Main");
+
+        CliResult result = await RunCreateAsync("--password-stdin", "--no-wait");
+
+        result.ExitCode.ShouldBe(0, result.Error);
+        result.Output.ShouldContain(
+            "Warning: /volume1/P4ServerManager/Main already exists, and only the case of its name tells it from the "
+            + "server directory /volume1/P4ServerManager/main.");
+        _cli.Daemon.RequestsTo(HttpMethod.Post, "/api/instances").ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task Create_GoesOnWhenTheServerDirectoryCannotBePreviewed()
+    {
+        _cli.Input = Password + "\n";
+        SetCreated();
+        _cli.Daemon.On(
+            HttpMethod.Get,
+            "/api/instances/server-directory?name=main",
+            StubDaemon.Status(HttpStatusCode.BadRequest));
+
+        CliResult result = await RunCreateAsync("--password-stdin", "--no-wait");
+
+        result.ExitCode.ShouldBe(0, result.Error);
+        _cli.Daemon.RequestsTo(HttpMethod.Post, "/api/instances").ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -202,6 +241,17 @@ public sealed class CreateInstanceCommandTests
         [
             "instance", "create", "main", "--release", "r25.1", "--port", "1666", "--super-user", "admin", .. options,
         ]);
+    }
+
+    private void SetPreview(string query, string path, string? caseVariant)
+    {
+        _cli.Daemon.On(
+            HttpMethod.Get,
+            "/api/instances/server-directory" + query,
+            StubDaemon.Json(
+                HttpStatusCode.OK,
+                new ServerDirectoryPreviewDto(path, !query.Contains("serverDirectory"), caseVariant),
+                CliJsonContext.Default.ServerDirectoryPreviewDto));
     }
 
     private void SetCreated()

@@ -4,19 +4,17 @@ PKG_NAME="${SYNOPKG_PKGNAME:-P4ServerManager}"
 PKG_DIR="/var/packages/$PKG_NAME"
 TARGET_DIR="${SYNOPKG_PKGDEST:-$PKG_DIR/target}"
 VAR_DIR="${SYNOPKG_PKGVAR:-$PKG_DIR/var}"
-# Kept by DSM after an uninstallation, unlike the var folder.
-ETC_DIR="$PKG_DIR/etc"
+TMP_DIR="${SYNOPKG_PKGTMP:-$PKG_DIR/tmp}"
 
 SHARE_NAME="P4ServerManager"
 UI_PORT="@UI_PORT@"
 
 APP_DIR="$TARGET_DIR/app"
 DAEMON_BIN="$APP_DIR/P4ServerManager.Daemon"
-DAEMON_PID_FILE="$VAR_DIR/daemon.pid"
+DAEMON_PID_FILE="$TMP_DIR/daemon.pid"
 DAEMON_LOG_FILE="$VAR_DIR/daemon.log"
 # Socket of the CLI, only open to the Perforce user and group. bin/p4sm has the same path: keep both in sync.
-DAEMON_SOCKET="$VAR_DIR/daemon.sock"
-DATA_DIR_FILE="$ETC_DIR/data-dir"
+DAEMON_SOCKET="$TMP_DIR/daemon.sock"
 # First account of the web interface, written by postinst from the install wizard and deleted by the daemon once read.
 INITIAL_USER_FILE="$VAR_DIR/initial-user"
 
@@ -35,21 +33,14 @@ report() {
     return 0
 }
 
-# Path of the shared folder, through the link DSM makes for the data-share resource. It is saved, so that
-# postuninst still finds it once the link is gone.
-resolve_data_dir() {
-    data_dir=$(readlink -f "$PKG_DIR/shares/$SHARE_NAME" 2>/dev/null)
-    if [ -z "$data_dir" ] || [ ! -d "$data_dir" ]; then
+# Path of the shared folder, the servers directory of the daemon, through the link DSM makes for the data-share
+# resource.
+resolve_servers_dir() {
+    servers_dir=$(readlink -f "$PKG_DIR/shares/$SHARE_NAME" 2>/dev/null)
+    if [ -z "$servers_dir" ] || [ ! -d "$servers_dir" ]; then
         return 1
     fi
-    if [ -d "$ETC_DIR" ] && [ "$(cat "$DATA_DIR_FILE" 2>/dev/null)" != "$data_dir" ]; then
-        echo "$data_dir" >"$DATA_DIR_FILE"
-    fi
-    echo "$data_dir"
-}
-
-saved_data_dir() {
-    resolve_data_dir || cat "$DATA_DIR_FILE" 2>/dev/null
+    echo "$servers_dir"
 }
 
 # True when the pid runs the given executable. The pid may have been reused since the pid file was written.
@@ -79,13 +70,14 @@ start_daemon() {
         return 0
     fi
 
-    data_dir=$(resolve_data_dir)
-    if [ -z "$data_dir" ]; then
+    servers_dir=$(resolve_servers_dir)
+    if [ -z "$servers_dir" ]; then
         report "The shared folder $SHARE_NAME is missing. Check it in Control Panel > Shared Folder, then repair the package."
         return 1
     fi
+    mkdir -p "$TMP_DIR" || return 1
 
-    copy_legacy_profiles "$data_dir"
+    copy_legacy_profiles "$VAR_DIR"
 
     # One previous log is kept.
     [ -f "$DAEMON_LOG_FILE" ] && mv -f "$DAEMON_LOG_FILE" "$DAEMON_LOG_FILE.1"
@@ -95,7 +87,9 @@ start_daemon() {
     HOME="$VAR_DIR" \
     ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_URLS="http://+:$UI_PORT" \
-    Daemon__DataDirectory="$data_dir" \
+    Daemon__DataDirectory="$VAR_DIR" \
+    Daemon__RuntimeDirectory="$TMP_DIR" \
+    Daemon__ServersDirectory="$servers_dir" \
     Daemon__SocketPath="$DAEMON_SOCKET" \
     Authentication__InitialUserFile="$INITIAL_USER_FILE" \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
@@ -144,11 +138,9 @@ stop_daemon() {
     rm -f "$DAEMON_PID_FILE" "$DAEMON_SOCKET"
 }
 
-# Pids of the p4d servers that run, one per line, read from the pid files the daemon keeps.
+# Pids of the p4d servers that run, one per line, read from the pid files the daemon keeps in its runtime directory.
 running_p4d_pids() {
-    data_dir=$(saved_data_dir)
-    [ -n "$data_dir" ] || return 0
-    for pid_file in "$data_dir"/instances/*/p4d.pid; do
+    for pid_file in "$TMP_DIR"/instances/*/p4d.pid; do
         [ -f "$pid_file" ] || continue
         pid=$(cat "$pid_file" 2>/dev/null)
         pid_runs "$pid" "p4d" && echo "$pid"

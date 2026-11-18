@@ -51,8 +51,8 @@ public sealed record RestoreInstanceRequest
     public string? Build { get; init; }
 
     /// <summary>
-    /// Empty or missing folder that holds the root, the journals, the archives and the logs. Null for the folder of
-    /// the instance in the data of the daemon.
+    /// Empty or missing folder that holds the root, the journals, the archives and the logs. Null for the folder named
+    /// after the instance in the servers directory of the daemon, which must then be missing or empty.
     /// </summary>
     public string? ServerDirectory { get; init; }
 

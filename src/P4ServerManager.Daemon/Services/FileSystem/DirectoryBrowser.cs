@@ -75,6 +75,50 @@ public static class DirectoryBrowser
     }
 
     /// <summary>
+    /// An entry next to the path whose name differs from the name of the path by its case only, such as <c>main</c>
+    /// for <c>/srv/Main</c>. Both can live side by side on a file system that tells the case apart, but they are easy to
+    /// mix up, and a client that ignores the case, such as Windows over SMB, may open one for the other. On a file system
+    /// that ignores the case, the path names that entry itself: it is not reported.
+    /// </summary>
+    /// <param name="path">Absolute path, which may not exist.</param>
+    /// <returns>The path of the entry, or null when there is none or the parent folder cannot be read.</returns>
+    public static string? FindCaseVariant(string path)
+    {
+        string fullPath = Normalize(path);
+        string? parent = Path.GetDirectoryName(fullPath);
+        string name = Path.GetFileName(fullPath);
+        if (parent is null || name.Length == 0 || !Directory.Exists(parent))
+        {
+            return null;
+        }
+
+        List<string> matches;
+        try
+        {
+            matches = Directory.EnumerateFileSystemEntries(
+                    parent,
+                    name,
+                    new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, MatchType = MatchType.Simple })
+                // The name may hold the wildcards of the pattern, '*' and '?'.
+                .Where(m => string.Equals(Path.GetFileName(m), name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        bool exact = matches.Any(m => string.Equals(Path.GetFileName(m), name, StringComparison.Ordinal));
+        string? variant = matches.FirstOrDefault(m => !string.Equals(Path.GetFileName(m), name, StringComparison.Ordinal));
+        // Without an entry of the exact name, a path that exists resolves to the variant: they are the same entry.
+        if (variant is null || (!exact && Path.Exists(fullPath)))
+        {
+            return null;
+        }
+        return variant;
+    }
+
+    /// <summary>
     /// The path as the API gives it, with '/' as the separator on every platform: the web UI handles a single kind of
     /// path. Windows reads it back as it is. Elsewhere, '\' is a character of a name and is kept.
     /// </summary>

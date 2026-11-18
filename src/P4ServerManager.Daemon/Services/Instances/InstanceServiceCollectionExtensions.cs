@@ -1,4 +1,5 @@
 using P4ServerManager.Daemon.Services.Instances.Admin;
+using P4ServerManager.Daemon.Services.Instances.Deletion;
 using P4ServerManager.Daemon.Services.Instances.HealthChecks;
 using P4ServerManager.Daemon.Services.Instances.Import;
 using P4ServerManager.Daemon.Services.Instances.PortChange;
@@ -38,6 +39,7 @@ public static class InstanceServiceCollectionExtensions
         services.AddSingleton<InstanceRuntimeRegistry>();
         services.AddSingleton<InstanceNotifier>();
         services.AddSingleton<P4ServerLauncher>();
+        services.AddSingleton<InstanceFilePlanner>();
         services.AddSingleton<ServerConfigurationReader>();
         services.AddSingleton<InstanceSupervisor>();
         services.AddHostedService(provider => provider.GetRequiredService<InstanceSupervisor>());

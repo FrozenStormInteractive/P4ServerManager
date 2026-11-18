@@ -54,7 +54,7 @@ public sealed class PrepareDirectoriesStep(DaemonPaths paths) : IOperationStep<I
         }
 
         Directory.CreateDirectory(paths.GetInstanceDirectory(instance.Id));
-        Directory.CreateDirectory(Path.GetDirectoryName(paths.GetStartOutputPath(instance.Id))!);
+        Directory.CreateDirectory(paths.GetRuntimeInstanceDirectory(instance.Id));
         Directory.CreateDirectory(paths.GetClientStateDirectory(instance.Id));
         return Task.FromResult<string?>(serverDirectory);
     }

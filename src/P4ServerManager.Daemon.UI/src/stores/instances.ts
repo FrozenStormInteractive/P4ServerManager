@@ -70,6 +70,8 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   function removeInstance (id: string) {
+    // Counted as a push: the answer to a request sent before must not bring the instance back.
+    pushes[id] = (pushes[id] ?? 0) + 1
     delete instances.value[id]
     delete operations.value[id]
     useHealthChecksStore().removeInstance(id)
@@ -349,9 +351,12 @@ export const useInstancesStore = defineStore('instances', () => {
     return results
   }
 
+  /**
+   * Begins the deletion of an instance. It goes on in the daemon: the instance stays, `Deleting`, until the hub tells
+   * that it is gone, or pushes it back with its last error when the deletion fails.
+   */
   async function remove (id: string, deleteFiles: boolean) {
-    await api.deleteInstance(id, deleteFiles)
-    removeInstance(id)
+    await applyResponse(id, () => api.deleteInstance(id, deleteFiles))
   }
 
   function connect () {

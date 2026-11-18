@@ -13,6 +13,7 @@ namespace P4ServerManager.Cli.Json;
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, UseStringEnumConverter = true, WriteIndented = true)]
 [JsonSerializable(typeof(IReadOnlyList<InstanceDto>))]
 [JsonSerializable(typeof(CreateInstanceRequest))]
+[JsonSerializable(typeof(ServerDirectoryPreviewDto))]
 [JsonSerializable(typeof(UpdateInstanceRequest))]
 [JsonSerializable(typeof(SetSuperUserRequest))]
 [JsonSerializable(typeof(UpgradeInstanceRequest))]

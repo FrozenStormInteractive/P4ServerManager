@@ -55,6 +55,14 @@ describe('CreateInstanceDialog', () => {
     requests = []
     server.use(
       http.get('/api/p4d/versions', () => HttpResponse.json(versions)),
+      http.get('/api/instances/server-directory', ({ request }) => {
+        const name = new URL(request.url).searchParams.get('name')
+        return HttpResponse.json({
+          path: `/volume1/P4ServerManager/${name}`,
+          isDefault: true,
+          caseVariant: name === 'Main' ? '/volume1/P4ServerManager/main' : null,
+        })
+      }),
       http.post('/api/instances', async ({ request }) => {
         const body = await request.json() as CreateInstanceRequest
         requests.push(body)
@@ -65,6 +73,16 @@ describe('CreateInstanceDialog', () => {
 
   afterEach(() => {
     document.body.innerHTML = ''
+  })
+
+  it('warns of an existing folder whose name differs from the default server directory by its case only', async () => {
+    await mountDialog()
+
+    await type('name', 'Main')
+
+    await vi.waitFor(() => expect(document.querySelector('.server-directory-case-warning')).not.toBeNull())
+    expect(document.querySelector('.server-directory-case-warning')!.textContent)
+      .toContain('/volume1/P4ServerManager/main already exists')
   })
 
   it('selects the newest p4d version by default', async () => {

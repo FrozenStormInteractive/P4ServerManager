@@ -61,7 +61,9 @@ public sealed record CreateInstanceRequest
 
     /// <summary>
     /// Absolute folder of the server, empty or missing. The P4ROOT is its <c>root</c> subfolder, next to the
-    /// <c>journals</c>, <c>logs</c> and <c>archives</c> folders. Defaults to a folder of the instance.
+    /// <c>journals</c>, <c>logs</c> and <c>archives</c> folders. Defaults to the folder named after the instance in the
+    /// servers directory of the daemon, which must then be missing or empty. <c>GET /api/instances/server-directory</c>
+    /// tells it before the creation.
     /// </summary>
     public string? ServerDirectory { get; init; }
 

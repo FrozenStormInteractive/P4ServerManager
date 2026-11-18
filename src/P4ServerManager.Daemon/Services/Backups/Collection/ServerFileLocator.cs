@@ -110,7 +110,7 @@ public sealed partial class ServerFileLocator(
     {
         string journalDirectory = rootPath;
         string? journalPrefix = null;
-        if (configurables.TryGetValue("journalPrefix", out string? prefix) && !string.IsNullOrWhiteSpace(prefix))
+        if (configurables.TryGetValue(ServerConfigurables.JournalPrefix, out string? prefix) && !string.IsNullOrWhiteSpace(prefix))
         {
             string resolved = ResolvePath(rootPath, prefix);
             journalDirectory = Path.GetDirectoryName(resolved) ?? rootPath;
@@ -118,7 +118,7 @@ public sealed partial class ServerFileLocator(
         }
 
         // Without server.depot.root, p4d places the depots in its root.
-        string depotRoot = configurables.TryGetValue("server.depot.root", out string? configured)
+        string depotRoot = configurables.TryGetValue(ServerConfigurables.DepotRoot, out string? configured)
             && !string.IsNullOrWhiteSpace(configured)
                 ? ResolvePath(rootPath, configured)
                 : rootPath;

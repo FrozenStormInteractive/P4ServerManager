@@ -51,7 +51,14 @@ public sealed class SetAsideServerFilesStep(
             }
         }
 
-        string[] protectedFolders = [paths.GetInstanceDirectory(context.Instance.Id), paths.DataDirectory];
+        string[] protectedFolders =
+        [
+            paths.GetInstanceDirectory(context.Instance.Id),
+            paths.GetRuntimeInstanceDirectory(context.Instance.Id),
+            paths.DataDirectory,
+            paths.CacheDirectory,
+            paths.RuntimeDirectory,
+        ];
         foreach (string folder in folders)
         {
             if (protectedFolders.FirstOrDefault(p => ServerFileLocator.Contains(folder, p)) is { } held)

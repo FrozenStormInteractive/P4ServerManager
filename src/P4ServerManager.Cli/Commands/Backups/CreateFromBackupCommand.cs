@@ -4,6 +4,7 @@ using P4ServerManager.Cli.Api;
 using P4ServerManager.Cli.Commands.Instances;
 using P4ServerManager.Cli.Json;
 using P4ServerManager.Cli.Operations;
+using P4ServerManager.Cli.Output;
 using P4ServerManager.Cli.Prompts;
 using P4ServerManager.Contracts;
 
@@ -126,6 +127,12 @@ internal static class CreateFromBackupCommand
                     ?? throw new CliException($"{destination.Name} holds no backup point of {from}.");
 
             string password = await ReadPasswordAsync(invocation, invocation.GetValue(passwordStdinOption), cancellationToken);
+            await ServerDirectoryWarning.WriteAsync(
+                invocation,
+                client,
+                invocation.GetValue(nameArgument),
+                invocation.GetValue(directoryOption),
+                cancellationToken);
             InstanceDto instance = await client.RestoreInstanceAsync(
                 new RestoreInstanceRequest
                 {

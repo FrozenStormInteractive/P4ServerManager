@@ -5,7 +5,7 @@ import type { RestoreSource } from '@/utils/restore'
 // Utilities
 import { flushPromises } from '@vue/test-utils'
 import { http, HttpResponse } from 'msw'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { VApp } from 'vuetify/components'
 import RestoreDialog from '@/components/backups/RestoreDialog.vue'
@@ -46,6 +46,14 @@ async function mountDialog (instance: Instance | null, onStarted = vi.fn()) {
 }
 
 describe('RestoreDialog', () => {
+  beforeEach(() => {
+    server.use(http.get('/api/instances/server-directory', () => HttpResponse.json({
+      path: '/volume1/P4ServerManager/restored',
+      isDefault: true,
+      caseVariant: null,
+    })))
+  })
+
   afterEach(() => {
     document.body.innerHTML = ''
   })

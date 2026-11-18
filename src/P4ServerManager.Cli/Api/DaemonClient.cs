@@ -38,6 +38,31 @@ internal sealed partial class DaemonClient(HttpClient httpClient, string socketP
             JsonContent.Create(request, Json.CreateInstanceRequest));
     }
 
+    /// <summary>
+    /// Gets the server directory a new instance would get, with the folder next to it whose name differs by its case
+    /// only.
+    /// </summary>
+    public Task<ServerDirectoryPreviewDto> PreviewServerDirectoryAsync(
+        string? name,
+        string? serverDirectory,
+        CancellationToken cancellationToken)
+    {
+        List<string> query = [];
+        if (!string.IsNullOrEmpty(name))
+        {
+            query.Add($"name={Uri.EscapeDataString(name)}");
+        }
+        if (!string.IsNullOrEmpty(serverDirectory))
+        {
+            query.Add($"serverDirectory={Uri.EscapeDataString(serverDirectory)}");
+        }
+        return SendAsync(
+            HttpMethod.Get,
+            $"api/instances/server-directory?{string.Join('&', query)}",
+            Json.ServerDirectoryPreviewDto,
+            cancellationToken);
+    }
+
     public Task<InstanceDto> UpdateInstanceAsync(
         Guid id,
         UpdateInstanceRequest request,
@@ -185,11 +210,33 @@ internal sealed partial class DaemonClient(HttpClient httpClient, string socketP
             JsonContent.Create(selection, Json.InstanceSelectionRequest));
     }
 
-    public async Task DeleteInstanceAsync(Guid id, bool deleteFiles, CancellationToken cancellationToken)
+    /// <summary>
+    /// Begins the deletion of an instance, which goes on in the daemon.
+    /// </summary>
+    /// <returns>The instance, being deleted.</returns>
+    public Task<InstanceDto> DeleteInstanceAsync(Guid id, bool deleteFiles, CancellationToken cancellationToken)
     {
-        string uri = $"api/instances/{id}?deleteFiles={(deleteFiles ? "true" : "false")}";
-        using HttpResponseMessage response = await SendAsync(new HttpRequestMessage(HttpMethod.Delete, uri), cancellationToken);
+        return SendAsync(
+            HttpMethod.Delete,
+            $"api/instances/{id}?deleteFiles={(deleteFiles ? "true" : "false")}",
+            Json.InstanceDto,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets an instance, or null when it does not exist, as once it is deleted.
+    /// </summary>
+    public async Task<InstanceDto?> FindInstanceAsync(Guid id, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(
+            new HttpRequestMessage(HttpMethod.Get, $"api/instances/{id}"),
+            cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
         await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadAsync(response, Json.InstanceDto, cancellationToken);
     }
 
     /// <summary>

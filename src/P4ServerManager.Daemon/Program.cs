@@ -74,6 +74,7 @@ builder.Services.AddControllers(options =>
     {
         // Keys the validation errors by the JSON names, as RequestValidationFilter does.
         options.ModelMetadataDetailsProviders.Add(new SystemTextJsonValidationMetadataProvider());
+        options.ModelMetadataDetailsProviders.Add(new ContractQueryNameMetadataProvider());
         options.Filters.Add<RequestValidationFilter>(RequestValidationFilter.Order);
         options.Filters.Add<PerforceFtpExceptionFilter>();
     })
@@ -120,6 +121,7 @@ static async Task PrepareDataDirectoryAsync(IServiceProvider services)
 {
     DaemonPaths paths = services.GetRequiredService<DaemonPaths>();
     Directory.CreateDirectory(paths.DataDirectory);
+    Directory.CreateDirectory(paths.RuntimeDirectory);
     if (OperatingSystem.IsWindows())
     {
         Directory.CreateDirectory(paths.KeysDirectory);
@@ -137,7 +139,6 @@ static async Task PrepareDataDirectoryAsync(IServiceProvider services)
     }
 
     await services.GetRequiredService<InitialUserBootstrapper>().RunAsync(CancellationToken.None);
-    await services.GetRequiredService<UserService>().UpdateAccountsMarkerAsync(CancellationToken.None);
 }
 
 /// <summary>

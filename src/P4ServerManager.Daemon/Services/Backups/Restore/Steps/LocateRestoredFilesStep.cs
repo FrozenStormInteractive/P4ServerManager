@@ -46,10 +46,11 @@ public sealed class LocateRestoredFilesStep(ServerFileLocator locator, DaemonPat
         foreach (var other in others)
         {
             forbidden.Add(other.RootPath);
-            string instanceDirectory = paths.GetInstanceDirectory(other.Id);
-            if (ServerFileLocator.Contains(instanceDirectory, other.RootPath))
+            forbidden.Add(paths.GetInstanceDirectory(other.Id));
+            // The usual folders next to the root of another instance are that server's.
+            if (ServerLayout.GetServerDirectory(other.RootPath) is { } serverDirectory)
             {
-                forbidden.Add(instanceDirectory);
+                forbidden.AddRange(ServerLayout.SiblingFolders.Select(name => Path.Combine(serverDirectory, name)));
             }
         }
 

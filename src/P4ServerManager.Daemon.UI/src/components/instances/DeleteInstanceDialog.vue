@@ -70,7 +70,7 @@
   import { computed, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
 
-  // Stores
+  // Utilities and stores
   import { useInstancesStore } from '@/stores/instances'
 
   const props = defineProps<{
@@ -92,7 +92,10 @@
   const submitting = ref(false)
   const submitError = ref<string | null>(null)
 
-  const canSubmit = computed(() => deleteFiles.value !== null && confirmation.value === props.instance.name)
+  // When the files cannot be deleted, such as a folder that holds the root of another instance, the daemon refuses the
+  // deletion and says why: the error is shown, and nothing is deleted.
+  const canSubmit = computed(() => deleteFiles.value !== null
+    && confirmation.value === props.instance.name)
 
   watch(open, value => {
     if (value) {
@@ -109,6 +112,7 @@
 
     submitting.value = true
     submitError.value = null
+    // The deletion goes on in the daemon: the instance shows it until it is gone.
     try {
       await instances.remove(props.instance.id, deleteFiles.value)
     } catch (error) {
