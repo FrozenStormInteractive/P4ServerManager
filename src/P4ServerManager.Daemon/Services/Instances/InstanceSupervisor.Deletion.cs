@@ -185,8 +185,15 @@ public sealed partial class InstanceSupervisor
             }
             else if (!stoppingToken.IsCancellationRequested)
             {
-                runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
-                await db.SaveChangesAsync(CancellationToken.None);
+                // Saved before the status leaves the deletion: whoever sees it end also sees its last error.
+                try
+                {
+                    await db.SaveChangesAsync(CancellationToken.None);
+                }
+                finally
+                {
+                    runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
+                }
                 await notifier.InstanceChangedAsync(instance);
             }
         }

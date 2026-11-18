@@ -358,13 +358,23 @@ public sealed partial class InstanceSupervisor(
 
         try
         {
-            runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
+            // Saved before the status leaves the operation: whoever sees the operation end also sees its outcome,
+            // such as its last error.
             await db.SaveChangesAsync(CancellationToken.None);
-            await notifier.InstanceChangedAsync(instance);
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Could not save instance {Name} after its operation", instance.Name);
+        }
+
+        try
+        {
+            runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
+            await notifier.InstanceChangedAsync(instance);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Could not report instance {Name} after its operation", instance.Name);
         }
         finally
         {
@@ -510,8 +520,15 @@ public sealed partial class InstanceSupervisor(
         }
         finally
         {
-            runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
-            await db.SaveChangesAsync(CancellationToken.None);
+            // Saved before the status leaves the transition: whoever sees it end also sees its last error.
+            try
+            {
+                await db.SaveChangesAsync(CancellationToken.None);
+            }
+            finally
+            {
+                runtimeRegistry.Set(instance.Id, ReadRuntimeStatus(instance));
+            }
             await notifier.InstanceChangedAsync(instance);
         }
     }
