@@ -27,6 +27,7 @@ src/
   P4ServerManager.Daemon.UI/    SPA UI (Vue 3 + Vuetify 4 + Vite) wrapped as an .esproj
 packaging/
   spk/                          INFO, scripts, conf, wizard files, icons
+  publish.py                    Publishes the daemon and the CLI, builds the zip archives; used by spk/build.py
 tests/                          Tests
   P4ServerManager.Cli.Tests/
   P4ServerManager.Daemon.Tests/

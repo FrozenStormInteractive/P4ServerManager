@@ -78,11 +78,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      # CI uploads each package as its own artifact, named after the file.
       - uses: actions/download-artifact@v8
         with:
-          pattern: "*.spk"
-          path: artifacts/spk
+          path: artifacts/release
           merge-multiple: true
 
       - name: Create the tag
@@ -99,15 +97,14 @@ jobs:
             echo "Created the tag $TAG on $SHA."
           fi
 
-      # Idempotent, so that a re-run can finish a release: it replaces the files of a draft that already exists.
       - name: Create or update the draft release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "$TAG" artifacts/spk/*.spk --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" artifacts/release/* --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" artifacts/spk/*.spk --repo "$GITHUB_REPOSITORY" \
+            gh release create "$TAG" artifacts/release/* --repo "$GITHUB_REPOSITORY" \
               --verify-tag --draft --title "$TAG" --generate-notes
           fi

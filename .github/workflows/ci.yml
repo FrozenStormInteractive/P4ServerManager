@@ -77,10 +77,14 @@ jobs:
       # Docker is available on the runner: the backup target tests run against their emulators.
       - run: dotnet test --solution P4ServerManager.slnx --configuration Release --no-build
 
+  # One job per architecture of packaging/spk/build.py.
   spk-packages:
-    name: Synology packages
+    name: Synology package (${{ matrix.arch }})
     needs: [ui, dotnet]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64, armv8]
     steps:
       - uses: actions/checkout@v7
 
@@ -104,12 +108,13 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
-      - name: Build the packages
+      - name: Build the Synology package
         env:
+          ARCH: ${{ matrix.arch }}
           VERSION: ${{ inputs.version }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
-          args=(--build-number "$RUN_NUMBER")
+          args=(--arch "$ARCH" --build-number "$RUN_NUMBER")
           if [ -n "$VERSION" ]; then
             args+=(--version "$VERSION")
           else
@@ -117,17 +122,58 @@ jobs:
           fi
           python packaging/spk/build.py "${args[@]}"
 
-      # Without an archive, an artifact holds a single file: one step per architecture of build.py.
-      - name: Upload the x86_64 package
+      - name: Upload the Synology package
         uses: actions/upload-artifact@v7
         with:
-          path: artifacts/spk/*-x86_64-*.spk
+          path: artifacts/spk/*-${{ matrix.arch }}-*.spk
           archive: false
           if-no-files-found: error
 
-      - name: Upload the armv8 package
+  zip-packages:
+    name: Zip (${{ matrix.rid }})
+    needs: [ui, dotnet]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [linux-x64, linux-arm64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/P4ServerManager.Daemon.UI/package-lock.json
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Build the zip
+        env:
+          RID: ${{ matrix.rid }}
+          VERSION: ${{ inputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          args=(--rid "$RID" --build-number "$RUN_NUMBER")
+          if [ -n "$VERSION" ]; then
+            args+=(--version "$VERSION")
+          fi
+          python packaging/publish.py "${args[@]}"
+
+      - name: Upload the zip
         uses: actions/upload-artifact@v7
         with:
-          path: artifacts/spk/*-armv8-*.spk
+          path: artifacts/zip/*.zip
           archive: false
           if-no-files-found: error
