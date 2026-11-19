@@ -3,15 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Version of the packages, x.y.z. Empty builds beta packages.
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -29,9 +34,9 @@ jobs:
       run:
         working-directory: src/P4ServerManager.Daemon.UI
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -47,20 +52,20 @@ jobs:
     name: .NET (build, tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       # The restore of the .esproj runs npm install.
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: src/P4ServerManager.Daemon.UI/package-lock.json
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
@@ -77,23 +82,23 @@ jobs:
     needs: [ui, dotnet]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: src/P4ServerManager.Daemon.UI/package-lock.json
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
@@ -101,20 +106,28 @@ jobs:
 
       - name: Build the packages
         env:
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
+          VERSION: ${{ inputs.version }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
           args=(--build-number "$RUN_NUMBER")
-          if [ "$REF_TYPE" = "tag" ]; then
-            args+=(--version "${REF_NAME#v}")
+          if [ -n "$VERSION" ]; then
+            args+=(--version "$VERSION")
           else
             args+=(--beta)
           fi
           python packaging/spk/build.py "${args[@]}"
 
-      - uses: actions/upload-artifact@v5
+      # Without an archive, an artifact holds a single file: one step per architecture of build.py.
+      - name: Upload the x86_64 package
+        uses: actions/upload-artifact@v7
         with:
-          name: spk
-          path: artifacts/spk/*.spk
+          path: artifacts/spk/*-x86_64-*.spk
+          archive: false
+          if-no-files-found: error
+
+      - name: Upload the armv8 package
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts/spk/*-armv8-*.spk
+          archive: false
           if-no-files-found: error
