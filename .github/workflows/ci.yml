@@ -51,6 +51,10 @@ jobs:
   dotnet:
     name: .NET (build, tests)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v7
 
@@ -58,7 +62,6 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # The restore of the .esproj runs npm install.
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -74,10 +77,16 @@ jobs:
       - run: dotnet restore P4ServerManager.slnx
       - run: dotnet build P4ServerManager.slnx --configuration Release --no-restore
 
-      # Docker is available on the runner: the backup target tests run against their emulators.
-      - run: dotnet test --solution P4ServerManager.slnx --configuration Release --no-build
+      - run: >-
+          dotnet test --solution P4ServerManager.slnx --configuration Release --no-build
+          --report-xunit-trx --results-directory "$GITHUB_WORKSPACE/TestResults"
 
-  # One job per architecture of packaging/spk/build.py.
+      - uses: EnricoMi/publish-unit-test-result-action@v2
+        if: ${{ !cancelled() }}
+        with:
+          trx_files: TestResults/**/*.trx
+          check_name: .NET test results
+
   spk-packages:
     name: Synology package (${{ matrix.arch }})
     needs: [ui, dotnet]
