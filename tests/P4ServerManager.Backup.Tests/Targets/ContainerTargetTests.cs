@@ -10,6 +10,7 @@ using Azure.Storage;
 using Azure.Storage.Blobs;
 
 using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
 
 using Google.Cloud.Storage.V1;
@@ -125,7 +126,7 @@ public sealed class SeaweedFsFixture : StorageContainerFixture
             "actions":["Admin","Read","Write","List","Tagging"]}]}
             """;
         return new ContainerBuilder("chrislusf/seaweedfs:4.48")
-            .WithResourceMapping(System.Text.Encoding.UTF8.GetBytes(identities), "/etc/seaweedfs/s3.json")
+            .WithResourceMapping(System.Text.Encoding.UTF8.GetBytes(identities), FilePath.Of("/etc/seaweedfs/s3.json"))
             .WithCommand("server", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-dir=/data", "-ip.bind=0.0.0.0")
             .WithPortBinding(8333, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(8333))
