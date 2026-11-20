@@ -137,6 +137,7 @@ jobs:
           name: release-spk-${{ matrix.arch }}
           path: artifacts/spk/*-${{ matrix.arch }}-*.spk
           if-no-files-found: error
+          archive: false
 
   deb-packages:
     name: Debian package (${{ matrix.arch }})
@@ -194,6 +195,7 @@ jobs:
           name: release-deb-${{ matrix.arch }}
           path: artifacts/deb/*_${{ matrix.arch }}.deb
           if-no-files-found: error
+          archive: false
 
   zip-packages:
     name: Zip (${{ matrix.rid }})
@@ -243,3 +245,4 @@ jobs:
           name: release-zip-${{ matrix.rid }}
           path: artifacts/zip/*-${{ matrix.rid }}-*.zip
           if-no-files-found: error
+          archive: false
