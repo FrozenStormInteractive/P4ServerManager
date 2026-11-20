@@ -38,6 +38,8 @@ public sealed class InstancesController(
     [ProducesResponseType<IReadOnlyList<InstanceDto>>(StatusCodes.Status200OK)]
     public async Task<IReadOnlyList<InstanceDto>> GetInstances(CancellationToken cancellationToken)
     {
+        // Read before the instances, as in GetInstance. An instance created since has no status in it yet.
+        IReadOnlyDictionary<Guid, InstanceRuntimeStatus> statuses = runtimeRegistry.Snapshot();
         List<P4ServerInstance> instances = await db.Instances
             .AsNoTracking()
             .Include(i => i.Build)
@@ -46,7 +48,10 @@ public sealed class InstancesController(
         List<InstanceDto> dtos = new(instances.Count);
         foreach (P4ServerInstance instance in instances)
         {
-            dtos.Add(await instance.ToDtoAsync(runtimeRegistry.Get(instance.Id), cancellationToken));
+            InstanceRuntimeStatus status = statuses.TryGetValue(instance.Id, out InstanceRuntimeStatus known)
+                ? known
+                : runtimeRegistry.Get(instance.Id);
+            dtos.Add(await instance.ToDtoAsync(status, cancellationToken));
         }
         return dtos;
     }
@@ -63,13 +68,16 @@ public sealed class InstancesController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     public async Task<ActionResult<InstanceDto>> GetInstance(Guid id, CancellationToken cancellationToken)
     {
+        // Read before the instance: an operation saves its outcome before its status changes, so the instance read after
+        // is at least as recent as the status.
+        InstanceRuntimeStatus status = runtimeRegistry.Get(id);
         P4ServerInstance? instance = await db.Instances
             .AsNoTracking()
             .Include(i => i.Build)
             .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
         return instance is null
             ? Problem(statusCode: StatusCodes.Status404NotFound)
-            : await ToDtoAsync(instance);
+            : await instance.ToDtoAsync(status, cancellationToken);
     }
 
     /// <summary>

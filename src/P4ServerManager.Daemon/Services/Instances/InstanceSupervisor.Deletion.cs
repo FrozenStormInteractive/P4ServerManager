@@ -14,12 +14,6 @@ namespace P4ServerManager.Daemon.Services.Instances;
 public sealed partial class InstanceSupervisor
 {
     /// <summary>
-    /// How long a deleted instance keeps its <c>Deleting</c> status, for the requests that read it just before it
-    /// was removed.
-    /// </summary>
-    private static readonly TimeSpan DeletedStatusRetention = TimeSpan.FromSeconds(30);
-
-    /// <summary>
     /// Begins the deletion of an instance. It runs in the background, once this returns: p4d is stopped if it runs, the
     /// files of the server are deleted when asked, the instance is removed, then the folders the daemon keeps for it.
     /// The instance stays <see cref="InstanceRuntimeStatus.Deleting"/> meanwhile, and the clients are told once it is
@@ -184,8 +178,8 @@ public sealed partial class InstanceSupervisor
         {
             if (deleted)
             {
+                runtimeRegistry.Remove(instance.Id);
                 operationTracker.Remove(instance.Id);
-                _ = ForgetDeletedStatusAsync(instance.Id, stoppingToken);
                 await notifier.InstanceDeletedAsync(instance.Id);
                 logger.LogInformation("Deleted instance {Name}", instance.Name);
             }
@@ -283,24 +277,6 @@ public sealed partial class InstanceSupervisor
             File.Move(file, destination);
         }
         logger.LogInformation("Moved the log of instance {Name} to {Target}", instance.Name, target);
-    }
-
-    /// <summary>
-    /// Removes the status of a deleted instance, once the requests that read the instance just before it was removed
-    /// have read its status too: until then they read <c>Deleting</c>, not <c>Unknown</c>.
-    /// </summary>
-    private async Task ForgetDeletedStatusAsync(Guid instanceId, CancellationToken stoppingToken)
-    {
-        try
-        {
-            await Task.Delay(DeletedStatusRetention, timeProvider, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // The daemon stops: the registry goes with it.
-            return;
-        }
-        runtimeRegistry.Remove(instanceId);
     }
 
     private void TryDeleteDaemonFolders(Guid instanceId)

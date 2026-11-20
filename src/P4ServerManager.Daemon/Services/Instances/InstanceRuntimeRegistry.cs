@@ -17,6 +17,14 @@ public sealed class InstanceRuntimeRegistry
     }
 
     /// <summary>
+    /// The statuses of all the instances, as they are now.
+    /// </summary>
+    public IReadOnlyDictionary<Guid, InstanceRuntimeStatus> Snapshot()
+    {
+        return statuses.ToDictionary();
+    }
+
+    /// <summary>
     /// Raised when the p4d of an instance is found running and was not before: started, restarted, or adopted. The
     /// handlers run on the caller of <see cref="Set"/> and must return at once.
     /// </summary>
