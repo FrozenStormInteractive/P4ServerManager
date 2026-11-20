@@ -84,7 +84,7 @@ jobs:
       - uses: EnricoMi/publish-unit-test-result-action@v2
         if: ${{ !cancelled() }}
         with:
-          trx_files: TestResults/**/*.trx
+          files: TestResults/**/*.trx
           check_name: .NET test results
 
   spk-packages:
