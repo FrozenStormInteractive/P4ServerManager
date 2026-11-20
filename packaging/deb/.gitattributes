@@ -1,0 +1,2 @@
+# Shell scripts and systemd units: keep LF line endings, whatever the checkout settings. build.py forces LF too.
+* text eol=lf

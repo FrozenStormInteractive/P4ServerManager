@@ -26,8 +26,9 @@ src/
   P4ServerManager.Daemon/       ASP.NET Core host: REST API, SignalR hub, serves the UI
   P4ServerManager.Daemon.UI/    SPA UI (Vue 3 + Vuetify 4 + Vite) wrapped as an .esproj
 packaging/
+  deb/                          Debian package: systemd unit, maintainer scripts, build.py
   spk/                          INFO, scripts, conf, wizard files, icons
-  publish.py                    Publishes the daemon and the CLI, builds the zip archives; used by spk/build.py
+  publish.py                    Publishes the daemon and the CLI, builds the zip archives
 tests/                          Tests
   P4ServerManager.Cli.Tests/
   P4ServerManager.Daemon.Tests/

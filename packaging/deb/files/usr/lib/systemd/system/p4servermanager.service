@@ -1,0 +1,52 @@
+[Unit]
+Description=P4 Server Manager
+Documentation=https://github.com/FrozenStormInteractive/P4ServerManager
+Wants=network-online.target
+# Also orders the stop at shutdown: the servers stop before the file systems they use are unmounted.
+After=network-online.target local-fs.target remote-fs.target
+
+[Service]
+Type=exec
+User=p4servermanager
+Group=p4servermanager
+UMask=0027
+# The content root is the folder of the app: it holds the static files of the UI.
+WorkingDirectory=/usr/lib/p4servermanager/app
+ExecStart=/usr/lib/p4servermanager/app/P4ServerManager.Daemon
+# Stops the p4d servers only when the system shuts down. A stop or a restart of the service leaves them running.
+ExecStopPost=/usr/lib/p4servermanager/stop-servers --on-shutdown
+
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://+:@UI_PORT@
+Environment=Daemon__DataDirectory=/var/lib/p4servermanager
+Environment=Daemon__RuntimeDirectory=/run/p4servermanager
+# The CLI looks for the socket there by default.
+Environment=Daemon__SocketPath=/run/p4servermanager/daemon.sock
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+Environment=Logging__Console__FormatterName=systemd
+# Overrides the variables above.
+EnvironmentFile=-/etc/default/p4servermanager
+
+StateDirectory=p4servermanager
+StateDirectoryMode=0750
+# The pid files of the p4d servers live there: they must survive a restart of the service.
+RuntimeDirectory=p4servermanager
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
+
+# Servers outlive the daemon: only the daemon is signalled when the service stops, never the p4d servers it started.
+KillMode=process
+Restart=on-failure
+RestartSec=5
+# The daemon migrates the database and adopts the running servers before it listens.
+TimeoutStartSec=120
+# Each p4d gets 60 seconds to stop at shutdown, as in the daemon.
+TimeoutStopSec=90
+# Inherited by the p4d servers.
+LimitNOFILE=65536
+
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

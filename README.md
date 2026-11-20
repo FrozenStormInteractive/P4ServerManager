@@ -6,10 +6,11 @@
 
 **Create, run and maintain your Perforce P4 servers from a web UI or the command line.**
 
-[![CI](https://github.com/FrozenStormInteractive/P4ServerManager/actions/workflows/ci.yml/badge.svg)](https://github.com/FrozenStormInteractive/P4ServerManager/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/FrozenStormInteractive/P4ServerManager?include_prereleases&sort=semver)](https://github.com/FrozenStormInteractive/P4ServerManager/releases)
-[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE.md)
-![Platforms](https://img.shields.io/badge/platforms-linux--x64%20%7C%20linux--arm64%20%7C%20Synology%20DSM%207.2-informational)
+[![CI](https://github.com/FrozenStormInteractive/P4ServerManager/actions/workflows/ci.yml/badge.svg?style=flat-square)](https://github.com/FrozenStormInteractive/P4ServerManager/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/FrozenStormInteractive/P4ServerManager?include_prereleases&sort=semver&style=flat-square)](https://github.com/FrozenStormInteractive/P4ServerManager/releases)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg?style=flat-square)](LICENSE.md)
+![Platforms](https://img.shields.io/badge/platforms-linux--x64%20%7C%20linux--arm64%20%7C%20Synology%20DSM%207.2-informational?style=flat-square)
+![OSS Hosting](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=flat-square&link=https%3A%2F%2Fcloudsmith.com)
 
 </div>
 
@@ -66,6 +67,18 @@ back up.
 > [!WARNING]
 > The UI port serves plain HTTP. Outside a trusted network, put it behind HTTPS, for instance with the DSM reverse
 > proxy (with the WebSocket headers).
+
+### Debian, Ubuntu
+
+Requires systemd and glibc 2.27 or later (Debian 10, Ubuntu 18.04 or later), on `amd64` or `arm64`.
+
+1. Download `p4servermanager_<version>-<build>_<arch>.deb` from the latest release.
+2. Install it: `sudo apt install ./p4servermanager_<version>-<build>_<arch>.deb`.
+3. Browse to `http://<host>:8666` and create the administrator account.
+
+The `p4servermanager` service runs as the `p4servermanager` user and stores everything in
+`/var/lib/p4servermanager`. Settings go to `/etc/default/p4servermanager`.
+[packaging/deb/README.md](packaging/deb/README.md) describes where everything lives and what to back up.
 
 ### Linux
 
@@ -149,6 +162,10 @@ python packaging/publish.py
 python packaging/spk/build.py --version 0.1.0 --build-number 1
 ```
 
+```bash
+python packaging/deb/build.py --version 0.1.0 --build-number 1
+```
+
 The zip archives land in `artifacts/zip/`, the Synology packages in `artifacts/spk/`.
 
 ### Tests
@@ -189,3 +206,9 @@ a particular purpose, title, and non-infringement.
 
 By building, installing, or running this software, you acknowledge and accept these terms. If you do not accept them,
 do not use this software.
+
+## Thanks
+
+Package repository hosting is graciously provided by [Cloudsmith](https://cloudsmith.com). Cloudsmith is the only fully 
+hosted, cloud-native, universal package management solution, that enables your organization to create, store and share 
+packages in any format, to any place, with total confidence.

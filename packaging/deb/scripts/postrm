@@ -1,0 +1,23 @@
+#!/bin/sh
+# After the files of the package are removed, on a removal, a purge and an upgrade.
+set -e
+
+DATA_DIR=/var/lib/p4servermanager
+
+case "$1" in
+    remove)
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload >/dev/null || true
+        fi
+        ;;
+    purge)
+        rm -rf /run/p4servermanager
+        # The data directory holds the database, the keys of the stored passwords and, by default, the P4 servers
+        # themselves: a purge never deletes it. The user is kept too, as the owner of those files.
+        if [ -d "$DATA_DIR" ]; then
+            echo "P4 Server Manager: $DATA_DIR was kept. It may hold P4 servers. Delete it yourself once you no longer need it."
+        fi
+        ;;
+esac
+
+exit 0

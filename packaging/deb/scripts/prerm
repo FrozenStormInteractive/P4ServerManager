@@ -1,0 +1,24 @@
+#!/bin/sh
+# Before the files of the package are removed, on a removal and an upgrade.
+set -e
+
+SERVICE=p4servermanager.service
+
+case "$1" in
+    remove)
+        # The p4d binaries are not part of the package, but nothing would manage the servers any more.
+        if [ -d /run/systemd/system ]; then
+            systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
+        fi
+        /usr/lib/p4servermanager/stop-servers || true
+        ;;
+    upgrade|deconfigure|failed-upgrade)
+        # The daemon only: its files are about to be replaced. The service stops it alone (KillMode=process), the
+        # p4d servers keep running and postinst starts the new daemon.
+        if [ -d /run/systemd/system ]; then
+            systemctl stop "$SERVICE" || true
+        fi
+        ;;
+esac
+
+exit 0

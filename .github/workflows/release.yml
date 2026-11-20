@@ -67,6 +67,10 @@ jobs:
   build:
     name: Build
     needs: prepare
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     uses: ./.github/workflows/ci.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
@@ -78,10 +82,18 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - name: Download the release files
+        uses: actions/download-artifact@v8
         with:
+          pattern: release-*
           path: artifacts/release
           merge-multiple: true
+
+      - name: Compute the checksums
+        working-directory: artifacts/release
+        run: |
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Create the tag
         if: github.event_name == 'workflow_dispatch'

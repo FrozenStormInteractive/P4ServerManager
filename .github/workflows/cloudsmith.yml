@@ -1,0 +1,60 @@
+name: Publish to Cloudsmith
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the GitHub release to publish, vX.Y.Z.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudsmith
+  cancel-in-progress: false
+
+jobs:
+  deb:
+    name: Push the Debian packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the settings
+        env:
+          CLOUDSMITH_REPOSITORY: ${{ vars.CLOUDSMITH_REPOSITORY }}
+          HAS_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY != '' }}
+        run: |
+          if ! [[ "$CLOUDSMITH_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::Set the repository variable CLOUDSMITH_REPOSITORY to owner/repository."
+            exit 1
+          fi
+          if [ "$HAS_API_KEY" != "true" ]; then
+            echo "::error::Set the secret CLOUDSMITH_API_KEY."
+            exit 1
+          fi
+
+      - name: Download the Debian packages of the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          mkdir -p artifacts/deb
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.deb' --dir artifacts/deb
+          ls -l artifacts/deb
+
+      - name: Setup Cloudsmith CLI
+        uses: cloudsmith-io/cloudsmith-cli-action@v3
+        id: cloudsmith
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+
+      - name: Push the Debian packages
+        env:
+          CLOUDSMITH_REPOSITORY: ${{ vars.CLOUDSMITH_REPOSITORY }}
+        run: |
+          for deb in artifacts/deb/*.deb; do
+            ${{ steps.cloudsmith.outputs.cli-path }} push deb "$CLOUDSMITH_REPOSITORY/any-distro/any-version" "$deb" --republish
+          done

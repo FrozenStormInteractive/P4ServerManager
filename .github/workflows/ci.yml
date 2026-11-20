@@ -134,8 +134,65 @@ jobs:
       - name: Upload the Synology package
         uses: actions/upload-artifact@v7
         with:
+          name: release-spk-${{ matrix.arch }}
           path: artifacts/spk/*-${{ matrix.arch }}-*.spk
-          archive: false
+          if-no-files-found: error
+
+  deb-packages:
+    name: Debian package (${{ matrix.arch }})
+    needs: [ui, dotnet]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/P4ServerManager.Daemon.UI/package-lock.json
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Build the Debian package
+        env:
+          ARCH: ${{ matrix.arch }}
+          VERSION: ${{ inputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          args=(--arch "$ARCH" --build-number "$RUN_NUMBER")
+          if [ -n "$VERSION" ]; then
+            args+=(--version "$VERSION")
+          fi
+          python packaging/deb/build.py "${args[@]}"
+
+      - name: Check the Debian package
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          deb=$(ls artifacts/deb/*_"$ARCH".deb)
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb" > /dev/null
+
+      - name: Upload the Debian package
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-deb-${{ matrix.arch }}
+          path: artifacts/deb/*_${{ matrix.arch }}.deb
           if-no-files-found: error
 
   zip-packages:
@@ -183,6 +240,6 @@ jobs:
       - name: Upload the zip
         uses: actions/upload-artifact@v7
         with:
-          path: artifacts/zip/*.zip
-          archive: false
+          name: release-zip-${{ matrix.rid }}
+          path: artifacts/zip/*-${{ matrix.rid }}-*.zip
           if-no-files-found: error

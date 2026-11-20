@@ -1,0 +1,49 @@
+#!/bin/sh
+# Stops the p4d servers the daemon started, the way the daemon does: SIGTERM, which p4d handles as a clean shutdown.
+# The servers marked for auto-start start again with the daemon.
+#
+#   stop-servers                Stops them. Called by the prerm script when the package is removed.
+#   stop-servers --on-shutdown  Stops them only when the system shuts down. ExecStopPost of the service: a stop or a
+#                               restart of the service alone leaves them running.
+
+RUNTIME_DIR="${Daemon__RuntimeDirectory:-/run/p4servermanager}"
+# As long as the daemon waits for a p4d to stop. Keep TimeoutStopSec of the service above it.
+P4D_STOP_TIMEOUT=60
+
+if [ "$1" = "--on-shutdown" ]; then
+    [ "$(systemctl is-system-running 2>/dev/null)" = "stopping" ] || exit 0
+fi
+
+# True when the pid runs the given executable. The pid may have been reused since the pid file was written.
+pid_runs() {
+    [ -n "$1" ] && [ -d "/proc/$1" ] || return 1
+    [ "$(basename "$(readlink "/proc/$1/exe" 2>/dev/null)")" = "$2" ]
+}
+
+pids=""
+for pid_file in "$RUNTIME_DIR"/instances/*/p4d.pid; do
+    [ -f "$pid_file" ] || continue
+    pid=$(cat "$pid_file" 2>/dev/null)
+    pid_runs "$pid" "p4d" && pids="$pids $pid"
+done
+[ -n "$pids" ] || exit 0
+
+for pid in $pids; do
+    echo "Stopping p4d (pid $pid)."
+    kill -TERM "$pid"
+done
+
+result=0
+for pid in $pids; do
+    waited=0
+    while [ -d "/proc/$pid" ]; do
+        if [ "$waited" -ge "$P4D_STOP_TIMEOUT" ]; then
+            echo "p4d (pid $pid) did not stop within $P4D_STOP_TIMEOUT seconds. It is left running." >&2
+            result=1
+            break
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+done
+exit $result

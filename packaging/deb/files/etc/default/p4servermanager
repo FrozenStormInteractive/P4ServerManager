@@ -1,0 +1,19 @@
+# Settings of the p4servermanager service, read by systemd. They override the defaults of
+# /usr/lib/systemd/system/p4servermanager.service. Apply a change with: sudo systemctl restart p4servermanager
+#
+# Any setting of the daemon can be set here: replace each ':' of its configuration key with '__'.
+
+# Address and port of the web UI and the REST API. Plain HTTP: put it behind an HTTPS reverse proxy, with the
+# WebSocket headers, outside a trusted network.
+#ASPNETCORE_URLS=http://+:@UI_PORT@
+
+# Folder of the P4 servers created without a server directory. Defaults to /var/lib/p4servermanager/servers.
+# The daemon runs as the p4servermanager user, which must own that folder.
+#Daemon__ServersDirectory=/srv/perforce
+
+# Folder of the compressed p4d builds, to keep the archive on another volume.
+#Daemon__ArchiveDirectory=/srv/p4servermanager/archive
+
+# Sessions of the web UI: lifetime without a request, and sign-in attempts per minute and per address.
+#Authentication__SessionLifetime=14.00:00:00
+#Authentication__SignInAttemptsPerMinute=10

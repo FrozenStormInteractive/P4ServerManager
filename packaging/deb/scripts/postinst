@@ -1,0 +1,45 @@
+#!/bin/sh
+# After the files of the package are installed, on an installation and an upgrade.
+set -e
+
+USER_NAME=p4servermanager
+DATA_DIR=/var/lib/p4servermanager
+SERVICE=p4servermanager.service
+
+if [ "$1" = "configure" ]; then
+    # The daemon and the p4d servers it starts run as this user. Its group opens the socket of the CLI.
+    if ! getent group "$USER_NAME" >/dev/null; then
+        addgroup --system --quiet "$USER_NAME"
+    fi
+    if ! getent passwd "$USER_NAME" >/dev/null; then
+        adduser --system --quiet --ingroup "$USER_NAME" --home "$DATA_DIR" --no-create-home \
+            --shell /usr/sbin/nologin "$USER_NAME"
+    fi
+    # Also created by StateDirectory= of the service. Here too, so that it can be prepared before the first start.
+    if [ ! -d "$DATA_DIR" ]; then
+        install -d -o "$USER_NAME" -g "$USER_NAME" -m 0750 "$DATA_DIR"
+    fi
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload >/dev/null || true
+        if [ -z "$2" ]; then
+            # First installation.
+            systemctl enable "$SERVICE" >/dev/null 2>&1 || true
+            systemctl start "$SERVICE" || true
+        elif systemctl is-enabled --quiet "$SERVICE"; then
+            # Upgrade: prerm stopped the daemon, the p4d servers kept running and the new daemon adopts them.
+            systemctl start "$SERVICE" || true
+        fi
+    fi
+fi
+
+# A failed upgrade or removal: prerm stopped the daemon, start it again.
+case "$1" in
+    abort-upgrade|abort-remove|abort-deconfigure)
+        if [ -d /run/systemd/system ] && systemctl is-enabled --quiet "$SERVICE"; then
+            systemctl start "$SERVICE" || true
+        fi
+        ;;
+esac
+
+exit 0
